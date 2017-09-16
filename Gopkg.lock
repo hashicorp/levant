@@ -146,10 +146,10 @@
   version = "v0.6.3"
 
 [[projects]]
-  branch = "master"
+  branch = "library-v2-stage-one"
   name = "github.com/hashicorp/raft"
   packages = ["."]
-  revision = "3b4d64b29e422f04808b905005eb5a38bf9150e8"
+  revision = "c837e57a6077e74a4a3749959fb6cfefc26d7705"
 
 [[projects]]
   name = "github.com/hashicorp/serf"
@@ -262,6 +262,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "84c2c7003dac97732635a4edbc2c5ce21f2d8f0cb22d9352ad22f86780d17fd1"
+  inputs-digest = "6c88e8a6efe8de001e13bf0d178910680e0c4c4801699617afe83a5f645d137a"
   solver-name = "gps-cdcl"
   solver-version = 1
