@@ -1,0 +1,31 @@
+sudo: false
+dist: trusty
+language: go
+go:
+- 1.9
+install:
+- go get github.com/golang/lint/golint
+- go get github.com/mitchellh/gox
+script:
+- make test
+after_success:
+- make release
+notifications:
+  email: true
+deploy:
+  provider: releases
+  go: 1.9
+  api_key:
+    secure: JNEJATrWn9UJqKDG8SBORy4vJaoZmMakI0OYxbR9ScDOVfG+1Vj+EjGggkaW/oNUiPCHIdC1fu8EgYjqI/QOzbODU0rVVYgGNYsDEVamLpa5u6YpG0vyqMOMyPCV+9RxDGPGpWBP6XGo7+oitnxgo32XIPlGKG+NTODHQaOL20ZpmSG2AfyxDYXocHDUJvRZWjqN5GMId6tEqQytvE2PIueiHP6D8/btTtVjbPnPS+Q4wBDkRDzi/eYOd9UzhtswxcTTe8YBV3BnocH+n+uVj775rWSyCRQMqn1EFlK9chsAsdiVb81NtirbSVKWXKdlkyqvNHCHA1SZBZCmycKLQkJkqYFyvIa8W3I7Eoi847O3X+O8/krwPo4HNduswSRFI7ljlAaw74lbtAymGIQBusQ0QKGsBzfAVwju7WF5YwOklP7aR3pwHkQhlLqFS10l43ZPS/TAmEteAQCPNAg6BGuJ7FtkNI2lykElF+eg3DtsBxdQOLkpjM9EvuvJsk6Dgjg3A/JhWIaJBmwtJO+o+OIQyYXz0pyUn1ntJk+VBx81biqdxJMP2e8m392LalqQzucvpiSW/8u4/VGgnrPxMBQjjTEwM4i++PyiUsBpyyEORkJ6i2hGZ4HebrziZ9NjUbeClDozWph/4X0GkgiXQPxaaEz0RHD/bhYr5yMqBPU=
+  file:
+    - pkg/darwin-386-levant
+    - pkg/darwin-amd64-levant
+    - pkg/freebsd-386-levant
+    - pkg/freebsd-amd64-levant
+    - pkg/freebsd-arm-levant
+    - pkg/linux-386-levant
+    - pkg/linux-amd64-levant
+    - pkg/linux-arm-levant
+  skip_cleanup: true
+  on:
+    tags: true
