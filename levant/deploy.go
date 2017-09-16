@@ -61,7 +61,7 @@ func (c *nomadClient) Deploy(job *nomad.Job) (success bool) {
 
 	switch *job.Type {
 	case nomadStructs.JobTypeService:
-		logging.Debug("levant/deploy: begining deployment watcher for job %s", *job.Name)
+		logging.Debug("levant/deploy: beginning deployment watcher for job %s", *job.Name)
 		success = c.deploymentWatcher(eval.EvalID)
 	case nomadStructs.JobTypeBatch, nomadStructs.JobTypeSystem:
 		logging.Debug("levant/deploy: job type %s does not support Nomad deployment model", *job.Type)
@@ -116,7 +116,7 @@ func (c *nomadClient) deploymentWatcher(evalID string) (success bool) {
 	}
 }
 
-// getDeploymentID finds the Nomad deploymentID assosiated to a Nomad
+// getDeploymentID finds the Nomad deploymentID associated to a Nomad
 // evaluationID. This is only needed as sometimes Nomad initially returns eval
 // info with an empty deploymentID; and a retry is required in order to get the
 // updated response from Nomad.

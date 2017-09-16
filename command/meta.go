@@ -13,6 +13,7 @@ import (
 // default FlagSet returned by Meta.FlagSet
 type FlagSetFlags uint
 
+// Consts which helps us track meta CLI falgs.
 const (
 	FlagSetNone        FlagSetFlags = 0
 	FlagSetBuildFilter FlagSetFlags = 1 << iota
@@ -29,9 +30,7 @@ type Meta struct {
 }
 
 // FlagSet returns a FlagSet with the common flags that every
-// command implements. The exact behavior of FlagSet can be configured
-// using the flags as the second parameter, for example to disable
-// build settings on the commands that don't handle builds.
+// command implements.
 func (m *Meta) FlagSet(n string, fs FlagSetFlags) *flag.FlagSet {
 	f := flag.NewFlagSet(n, flag.ContinueOnError)
 
@@ -41,9 +40,6 @@ func (m *Meta) FlagSet(n string, fs FlagSetFlags) *flag.FlagSet {
 	}
 
 	// Create an io.Writer that writes to our Ui properly for errors.
-	// This is kind of a hack, but it does the job. Basically: create
-	// a pipe, use a scanner to break it into lines, and output each line
-	// to the UI. Do this forever.
 	errR, errW := io.Pipe()
 	errScanner := bufio.NewScanner(errR)
 	go func() {
