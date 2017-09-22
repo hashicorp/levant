@@ -36,7 +36,7 @@ General Options:
 
   -var-file=<file>
     Used in conjunction with the -job-file will deploy a templated job to your
-	Nomad cluster.
+    Nomad cluster.
 `
 	return strings.TrimSpace(helpText)
 }
