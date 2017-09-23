@@ -17,9 +17,9 @@ import (
 )
 
 const (
-	terraformVarExtention = "tf"
-	yamlVarExtension      = "yaml"
-	ymlVarExtension       = "yml"
+	terraformVarExtention = ".tf"
+	yamlVarExtension      = ".yaml"
+	ymlVarExtension       = ".yml"
 )
 
 // RenderTemplate is the main entry point to render the template based on the
@@ -118,8 +118,7 @@ func renderYAMLVarsTemplate(src, variableFile string, flagVars *map[string]strin
 
 	// Setup the template file for rendering
 	t := template.New("jobTemplate")
-	tempF, _ := ioutil.ReadFile(src)
-	if t, err = t.Parse(string(tempF)); err != nil {
+	if t, err = t.Parse(string(src)); err != nil {
 		return
 	}
 
