@@ -1,4 +1,4 @@
-job "{{.job_name}}" {
+job "[[.job_name]]" {
   datacenters = ["dc1"]
   type = "service"
   update {
@@ -20,9 +20,20 @@ job "{{.job_name}}" {
       size = 300
     }
     task "redis" {
+      template {
+        data = <<EOH
+        APP_ENV={{ key "config/app/env" }}
+        APP_DEBUG={{ key "config/app/debug" }}
+        APP_KEY={{ secret "secret/key" }}
+        APP_URL={{ key "config/app/url" }}
+        EOH
+        destination = "core/.env"
+        change_mode = "noop"
+      }
+
       driver = "docker"
       config {
-        image = "redis:13.2"
+        image = "redis:3.2"
         port_map {
           db = 6379
         }

@@ -22,7 +22,7 @@ job "levantExample" {
     task "redis" {
       driver = "docker"
       config {
-        image = "redis:13.2"
+        image = "redis:3.2"
         port_map {
           db = 6379
         }
