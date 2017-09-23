@@ -85,7 +85,7 @@ func renderTFTemplte(src, variableFile string, flagVars *map[string]string) (tpl
 	mergedVars := helper.VariableMerge(&variables, flagVars)
 
 	// Setup the template file for rendering
-	t := template.New("jobTemplate")
+	t := template.New("jobTemplate").Delims("[[", "]]")
 
 	if t, err = t.Parse(src); err != nil {
 		return
@@ -117,7 +117,7 @@ func renderYAMLVarsTemplate(src, variableFile string, flagVars *map[string]strin
 	mergedVars := helper.VariableMerge(&variables, flagVars)
 
 	// Setup the template file for rendering
-	t := template.New("jobTemplate")
+	t := template.New("jobTemplate").Delims("[[", "]]")
 	if t, err = t.Parse(string(src)); err != nil {
 		return
 	}
@@ -134,7 +134,7 @@ func readJobFile(src string, flagVars *map[string]string) (tpl *bytes.Buffer, er
 	tpl = &bytes.Buffer{}
 
 	// Setup the template file for rendering
-	t := template.New("jobTemplate")
+	t := template.New("jobTemplate").Delims("[[", "]]")
 	if t, err = t.Parse(src); err != nil {
 		return
 	}

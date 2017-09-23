@@ -1,5 +1,5 @@
-job "{{.job_name}}" {
-  datacenters = ["{{.datacentre}}"]
+job "[[.job_name]]" {
+  datacenters = ["[[.datacentre]]"]
   type = "service"
   update {
     max_parallel     = 1
@@ -22,7 +22,7 @@ job "{{.job_name}}" {
     task "redis" {
       driver = "docker"
       config {
-        image = "redis:13.2"
+        image = "redis:3.2"
         port_map {
           db = 6379
         }
