@@ -69,6 +69,22 @@ Full example:
 levant deploy -log-level=debug -address=nomad.devoops -var-file=var.yaml -var 'var=test' example.nomad
 ```
 
+### Command: `render`
+
+`render` allows rendering of a Nomad job template without deploying, useful when testing or debugging. An example render command would look like `levant render -out job.nomad job.nomad.tpl`, options:
+
+* **-var-file** (string: "") The variables file to render the template with.
+
+* **-output** (string: "") The path to write the rendered template to. The template will be rendered to stdout if this is not set.
+
+Like `deploy`, the `render` command also supports passing variables individually on the command line. Multiple vars can be passed in the format of `-var 'key=value'`. Variables passed via the command line take precedence over the same variable declared within a passed variable file.
+
+Full example:
+
+```
+levant render -var-file=var.yaml -var 'var=test' render example.nomad
+```
+
 ### Command: `version`
 
 The `version` command displays build information about the running binary, including the release version.
