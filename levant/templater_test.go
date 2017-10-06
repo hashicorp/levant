@@ -1,6 +1,7 @@
 package levant
 
 import (
+	"strings"
 	"testing"
 
 	nomad "github.com/hashicorp/nomad/api"
@@ -68,5 +69,15 @@ func TestTemplater_RenderTemplate(t *testing.T) {
 	}
 	if job.Datacenters[0] != testDCName {
 		t.Fatalf("expected %s but got %v", testDCName, job.Datacenters[0])
+	}
+
+	// Test var-args only render.
+	fVars["job_name"] = testJobName
+	job, err = RenderTemplate("test-fixtures/missing_var.nomad", "", &fVars)
+	if err == nil {
+		t.Fatal("expected err to not be nil")
+	}
+	if !strings.Contains(err.Error(), "binary_url") {
+		t.Fatal("expected err to mention missing var (binary_url)")
 	}
 }
