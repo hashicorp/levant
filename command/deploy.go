@@ -73,7 +73,7 @@ func (c *DeployCommand) Run(args []string) int {
 
 	logging.SetLevel(log)
 
-	job, err = levant.RenderTemplate(args[0], variables, &c.Meta.flagVars)
+	job, err = levant.RenderJob(args[0], variables, &c.Meta.flagVars)
 	if err != nil {
 		c.UI.Error(fmt.Sprintf("[ERROR] levant/command: %v", err))
 		return 1

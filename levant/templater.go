@@ -22,11 +22,20 @@ const (
 	ymlVarExtension       = ".yml"
 )
 
+func RenderJob(templateFile, variableFile string, flagVars *map[string]string) (job *nomad.Job, err error) {
+	var tpl *bytes.Buffer
+	tpl, err = RenderTemplate(templateFile, variableFile, flagVars)
+	if err != nil {
+		return
+	}
+
+	job, err = jobspec.Parse(tpl)
+	return
+}
+
 // RenderTemplate is the main entry point to render the template based on the
 // passed variables file.
-func RenderTemplate(templateFile, variableFile string, flagVars *map[string]string) (job *nomad.Job, err error) {
-
-	var tpl *bytes.Buffer
+func RenderTemplate(templateFile, variableFile string, flagVars *map[string]string) (tpl *bytes.Buffer, err error) {
 	ext := path.Ext(variableFile)
 
 	src, err := ioutil.ReadFile(templateFile)
@@ -43,9 +52,7 @@ func RenderTemplate(templateFile, variableFile string, flagVars *map[string]stri
 		tpl, err = renderYAMLVarsTemplate(string(src), variableFile, flagVars)
 	case "":
 		if len(*flagVars) == 0 {
-			logging.Debug("levant/template: no variables file or var flags, skipping templating")
 			tpl = bytes.NewBuffer(src)
-			break
 		}
 
 		logging.Debug("levant/templater: variable file not passed, using any passed CLI variables")
@@ -54,11 +61,6 @@ func RenderTemplate(templateFile, variableFile string, flagVars *map[string]stri
 		err = fmt.Errorf("variables file extension %v not supported", ext)
 	}
 
-	if err != nil {
-		return
-	}
-
-	job, err = jobspec.Parse(tpl)
 	return
 }
 
