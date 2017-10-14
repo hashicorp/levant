@@ -30,6 +30,10 @@ General Options:
     The Nomad HTTP API address including port which Levant will use to make
     calls.
 
+  -canary-auto-promote=<seconds>
+    The time in seconds, after which Levant will auto-promote a canary job
+    if all canaries within the deployment are healthy.
+
   -log-level=<level>
     Specify the verbosity level of Levant's logs. Valid values include DEBUG,
     INFO, and WARN, in decreasing order of verbosity. The default is INFO.
@@ -52,11 +56,13 @@ func (c *DeployCommand) Run(args []string) int {
 	var variables, addr, log string
 	var err error
 	var job *nomad.Job
+	var canary int
 
-	flags := c.Meta.FlagSet("build", FlagSetVars)
+	flags := c.Meta.FlagSet("deploy", FlagSetVars)
 	flags.Usage = func() { c.UI.Output(c.Help()) }
 
 	flags.StringVar(&addr, "address", "", "")
+	flags.IntVar(&canary, "canary-auto-promote", 0, "")
 	flags.StringVar(&log, "log-level", "INFO", "")
 	flags.StringVar(&variables, "var-file", "", "")
 
@@ -79,13 +85,18 @@ func (c *DeployCommand) Run(args []string) int {
 		return 1
 	}
 
+	if err = c.checkCanaryAutoPromote(job, canary); err != nil {
+		c.UI.Error(fmt.Sprintf("[ERROR] levant/command: %v", err))
+		return 1
+	}
+
 	client, err := levant.NewNomadClient(addr)
 	if err != nil {
 		c.UI.Error(fmt.Sprintf("[ERROR] levant/command: %v", err))
 		return 1
 	}
 
-	success := client.Deploy(job)
+	success := client.Deploy(job, canary)
 	if !success {
 		c.UI.Error(fmt.Sprintf("[ERROR] levant/command: deployment of job %s failed", *job.Name))
 		return 1
@@ -94,4 +105,15 @@ func (c *DeployCommand) Run(args []string) int {
 	c.UI.Info(fmt.Sprintf("[INFO] levant/command: deployment of job %s successful", *job.Name))
 
 	return 0
+}
+
+func (c *DeployCommand) checkCanaryAutoPromote(job *nomad.Job, canaryAutoPromote int) error {
+
+	if canaryAutoPromote > 0 && *job.Update.Canary == 0 {
+		return fmt.Errorf("canary-auto-update of %v passed but job is not canary enabled", canaryAutoPromote)
+	}
+
+	c.UI.Info(fmt.Sprintf("[INFO] levant/command: running canary-auto-update of %v", canaryAutoPromote))
+
+	return nil
 }

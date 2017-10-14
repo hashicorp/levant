@@ -14,6 +14,8 @@ Levant is an open source templating and deployment tool for [HashiCorp Nomad](ht
 
 * **Failure Inspection**: Upon a deployment failure, Levant will inspect each allocation and log information about each event, providing useful information for debugging without the need for querying the cluster retrospectively.
 
+* **Canary Auto Promotion**: In environments with advanced automation and alerting, automatic promotion of canary deployments may be desirable after a certain time threshold. Levant allows the user to specify a `canary-auto-promote` time period, which if reached with a healthy set of canaries, will automatically promote the deployment.
+
 * **Multiple Variable File Formats**: Currently Levant supports `.tf`, `.yaml` and `.yml` file extensions for the declaration of template variables. *This is planned to increase in the near future.*
 
 ## Download
@@ -53,9 +55,11 @@ Levant supports a number of command line arguments which provide control over th
 
 ### Command: `deploy`
 
-`Deploy` is the main entry point into Levant for deploying a Nomad job and supports the following flags which should then be proceded by the Nomad job template you which to deploy. An example deployment command would look like `levant -log-level=debug example.nomad`.
+`Deploy` is the main entry point into Levant for deploying a Nomad job and supports the following flags which should then be proceeded by the Nomad job template you which to deploy. An example deployment command would look like `levant -log-level=debug example.nomad`.
 
 * **-address** (string: "http://localhost:4646") The HTTP API endpoint for Nomad where all calls will be made.
+
+* **-canary-auto-promote** (int: 0)
 
 * **-log-level** (string: "INFO") The level at which Levant will log to. Valid values are DEBUG, INFO, WARNING, ERROR and FATAL.
 
@@ -82,7 +86,7 @@ Like `deploy`, the `render` command also supports passing variables individually
 Full example:
 
 ```
-levant render -var-file=var.yaml -var 'var=test' render example.nomad
+levant render -var-file=var.yaml -var 'var=test' example.nomad
 ```
 
 ### Command: `version`
