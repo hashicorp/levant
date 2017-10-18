@@ -57,13 +57,13 @@ func (c *nomadClient) allocInspector(allocID *string, wg *sync.WaitGroup) {
 		for _, event := range task.Events {
 			switch event.Type {
 			case nomad.TaskDriverFailure:
-				logging.Info("levant/failure_inspector: allocation %v incurred %v due to %s",
+				logging.Error("levant/failure_inspector: allocation %v incurred %v due to %s",
 					*allocID, nomad.TaskDriverFailure, strings.TrimSpace(event.DriverError))
 			case nomad.TaskGenericMessage:
-				logging.Info("levant/failure_inspector: allocation %v incurred %v due to %s",
+				logging.Error("levant/failure_inspector: allocation %v incurred %v due to %s",
 					*allocID, nomad.TaskGenericMessage, strings.TrimSpace(event.Message))
 			case nomad.TaskArtifactDownloadFailed:
-				logging.Info("levant/failure_inspector: allocation %v incurred %v due to %s",
+				logging.Error("levant/failure_inspector: allocation %v incurred %v due to %s",
 					*allocID, nomad.TaskArtifactDownloadFailed, strings.TrimSpace(event.DownloadError))
 			}
 		}
