@@ -167,7 +167,7 @@ func (c *nomadClient) canaryAutoPromote(depID string, waitTime int, shutdownChan
 				waitTime, depID)
 
 			// Check the deployment is healthy before promoting.
-			if healthly := c.checkCanaryDeploymentHealth(depID); !healthly {
+			if healthy := c.checkCanaryDeploymentHealth(depID); !healthy {
 				logging.Error("levant/deploy: the canary deployment %s has unhealthy allocations, unable to promote", depID)
 				close(deploymentChan)
 				return
@@ -213,7 +213,7 @@ func (c *nomadClient) checkCanaryDeploymentHealth(depID string) (healthy bool) {
 
 	// If zero unhealthy tasks were found, continue with the auto promotion.
 	if unhealthy == 0 {
-		logging.Info("levant/deploy: deployment %s has 0 unhealthy allocations", depID)
+		logging.Debug("levant/deploy: deployment %s has 0 unhealthy allocations", depID)
 		healthy = true
 	}
 

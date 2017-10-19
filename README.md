@@ -59,7 +59,7 @@ Levant supports a number of command line arguments which provide control over th
 
 * **-address** (string: "http://localhost:4646") The HTTP API endpoint for Nomad where all calls will be made.
 
-* **-canary-auto-promote** (int: 0)
+* **-canary-auto-promote** (int: 0) The time period in seconds that Levant should wait for before attempting to promote a canary deployment.
 
 * **-log-level** (string: "INFO") The level at which Levant will log to. Valid values are DEBUG, INFO, WARNING, ERROR and FATAL.
 
