@@ -53,7 +53,7 @@ Levant supports a number of command line arguments which provide control over th
 
 ### Command: `deploy`
 
-`Deploy` is the main entry point into Levant for deploying a Nomad job and supports the following flags which should then be proceeded by the Nomad job template you which to deploy. An example deployment command would look like `levant -log-level=debug example.nomad`.
+`Deploy` is the main entry point into Levant for deploying a Nomad job and supports the following flags which should then be proceeded by the Nomad job template you which to deploy. An example deployment command would look like `levant deploy -log-level=debug example.nomad`.
 
 * **-address** (string: "http://localhost:4646") The HTTP API endpoint for Nomad where all calls will be made.
 
