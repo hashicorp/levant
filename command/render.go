@@ -26,9 +26,9 @@ Usage: levant render [options] TEMPLATE
 General Options:
 	
   -out=<file>
-	Specify the path to write the rendered template out to, if a file exists at
-	the specified path it will be truncated before rendering. The template will be
-	rendered to stdout if this is not set.
+    Specify the path to write the rendered template out to, if a file exists at
+    the specified path it will be truncated before rendering. The template will be
+    rendered to stdout if this is not set.
 
   -var-file=<file>
     The variables file to render the template with.
