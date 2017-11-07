@@ -5,8 +5,8 @@ import (
 	"strings"
 	"sync"
 
+	nomad "github.com/hashicorp/nomad/api"
 	"github.com/jrasell/levant/logging"
-	nomad "github.com/jrasell/nomad/api"
 )
 
 // checkFailedDeployment helps log information about deployment failures.
