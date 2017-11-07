@@ -1,11 +1,12 @@
 package levant
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 
-	nomad "github.com/hashicorp/nomad/api"
 	"github.com/jrasell/levant/logging"
+	nomad "github.com/jrasell/nomad/api"
 )
 
 // checkFailedDeployment helps log information about deployment failures.
@@ -55,16 +56,81 @@ func (c *nomadClient) allocInspector(allocID *string, wg *sync.WaitGroup) {
 	// help debug deployment failures.
 	for _, task := range resp.TaskStates {
 		for _, event := range task.Events {
+
+			var desc string
+
 			switch event.Type {
+			case nomad.TaskFailedValidation:
+				if event.ValidationError != "" {
+					desc = event.ValidationError
+				} else {
+					desc = "validation of task failed"
+				}
+			case nomad.TaskSetupFailure:
+				if event.SetupError != "" {
+					desc = event.SetupError
+				} else {
+					desc = "task setup failed"
+				}
 			case nomad.TaskDriverFailure:
-				logging.Error("levant/failure_inspector: allocation %v incurred %v due to %s",
-					*allocID, nomad.TaskDriverFailure, strings.TrimSpace(event.DriverError))
-			case nomad.TaskGenericMessage:
-				logging.Error("levant/failure_inspector: allocation %v incurred %v due to %s",
-					*allocID, nomad.TaskGenericMessage, strings.TrimSpace(event.Message))
+				if event.DriverError != "" {
+					desc = event.DriverError
+				} else {
+					desc = "failed to start task"
+				}
 			case nomad.TaskArtifactDownloadFailed:
-				logging.Error("levant/failure_inspector: allocation %v incurred %v due to %s",
-					*allocID, nomad.TaskArtifactDownloadFailed, strings.TrimSpace(event.DownloadError))
+				if event.DownloadError != "" {
+					desc = event.DownloadError
+				} else {
+					desc = "the task failed to download artifacts"
+				}
+			case nomad.TaskKilling:
+				if event.KillReason != "" {
+					desc = fmt.Sprintf("the task was killed: %v", event.KillReason)
+				} else if event.KillTimeout != 0 {
+					desc = fmt.Sprintf("sent interrupt, waiting %v before force killing", event.KillTimeout)
+				} else {
+					desc = "the task was sent interrupt"
+				}
+			case nomad.TaskKilled:
+				if event.KillError != "" {
+					desc = event.KillError
+				} else {
+					desc = "the task was successfully killed"
+				}
+			case nomad.TaskTerminated:
+				var parts []string
+				parts = append(parts, fmt.Sprintf("exit Code %d", event.ExitCode))
+
+				if event.Signal != 0 {
+					parts = append(parts, fmt.Sprintf("signal %d", event.Signal))
+				}
+
+				if event.Message != "" {
+					parts = append(parts, fmt.Sprintf("exit message %q", event.Message))
+				}
+				desc = strings.Join(parts, ", ")
+			case nomad.TaskNotRestarting:
+				if event.RestartReason != "" {
+					desc = event.RestartReason
+				} else {
+					desc = "the task exceeded restart policy"
+				}
+			case nomad.TaskSiblingFailed:
+				if event.FailedSibling != "" {
+					desc = fmt.Sprintf("task's sibling %q failed", event.FailedSibling)
+				} else {
+					desc = "task's sibling failed"
+				}
+			case nomad.TaskLeaderDead:
+				desc = "leader task in group is dead"
+			}
+
+			// If we have matched and have an updated desc then log the appropriate
+			// information.
+			if desc != "" {
+				logging.Error("levant/failure_inspector: alloc %s incurred event %s because %s",
+					*allocID, strings.ToLower(event.Type), strings.TrimSpace(desc))
 			}
 		}
 	}
