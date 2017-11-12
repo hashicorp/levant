@@ -22,6 +22,8 @@ const (
 	ymlVarExtension       = ".yml"
 )
 
+// RenderJob takes in a template and variables performing a render of the
+// template followed by Nomad jobspec parse.
 func RenderJob(templateFile, variableFile string, flagVars *map[string]string) (job *nomad.Job, err error) {
 	var tpl *bytes.Buffer
 	tpl, err = RenderTemplate(templateFile, variableFile, flagVars)
