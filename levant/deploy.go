@@ -64,7 +64,7 @@ func (c *nomadClient) Deploy(job *nomad.Job, autoPromote int) (success bool) {
 	case nomadStructs.JobTypeService:
 		logging.Debug("levant/deploy: beginning deployment watcher for job %s", *job.Name)
 		success = c.deploymentWatcher(eval.EvalID, autoPromote)
-	case nomadStructs.JobTypeBatch, nomadStructs.JobTypeSystem:
+	default:
 		logging.Debug("levant/deploy: job type %s does not support Nomad deployment model", *job.Type)
 		success = true
 	}
