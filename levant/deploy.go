@@ -49,7 +49,7 @@ func (c *nomadClient) Deploy(job *nomad.Job, autoPromote int) (success bool) {
 
 	// If job.Type isn't set we can't continue
 	if job.Type == nil {
-		logging.Error("levant/deploy: Nomad job `type` is not set. Should be set to `service`")
+		logging.Error("levant/deploy: Nomad job `type` is not set, should be set to `service`")
 		return
 	}
 
