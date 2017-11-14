@@ -41,6 +41,10 @@ General Options:
   -var-file=<file>
     Used in conjunction with the -job-file will deploy a templated job to your
     Nomad cluster.
+
+  -force-count
+    Use the taskgroup count from the Nomad jobfile instead of the count that
+    is currently set in a running job.
 `
 	return strings.TrimSpace(helpText)
 }
@@ -57,6 +61,7 @@ func (c *DeployCommand) Run(args []string) int {
 	var err error
 	var job *nomad.Job
 	var canary int
+	var forceCount bool
 
 	flags := c.Meta.FlagSet("deploy", FlagSetVars)
 	flags.Usage = func() { c.UI.Output(c.Help()) }
@@ -65,6 +70,7 @@ func (c *DeployCommand) Run(args []string) int {
 	flags.IntVar(&canary, "canary-auto-promote", 0, "")
 	flags.StringVar(&log, "log-level", "INFO", "")
 	flags.StringVar(&variables, "var-file", "", "")
+	flags.BoolVar(&forceCount, "force-count", false, "")
 
 	if err = flags.Parse(args); err != nil {
 		return 1
@@ -98,7 +104,7 @@ func (c *DeployCommand) Run(args []string) int {
 		return 1
 	}
 
-	success := client.Deploy(job, canary)
+	success := client.Deploy(job, canary, forceCount)
 	if !success {
 		c.UI.Error(fmt.Sprintf("[ERROR] levant/command: deployment of job %s failed", *job.Name))
 		return 1
