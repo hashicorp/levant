@@ -107,7 +107,7 @@ func (c *nomadClient) deploymentWatcher(evalID string, autoPromote int) (success
 	for {
 
 		dep, meta, err := c.nomad.Deployments().Info(depID, q)
-		logging.Debug("levant/deploy: deployment %v running for %v", depID, time.Since(t))
+		logging.Debug("levant/deploy: deployment %v running for %.2fs", depID, time.Since(t).Seconds())
 
 		// Listen for the deploymentChan closing which indicates Levant should exit
 		// the deployment watcher.
