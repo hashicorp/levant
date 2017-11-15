@@ -47,6 +47,12 @@ func (c *nomadClient) Deploy(job *nomad.Job, autoPromote int, forceCount bool) (
 		return
 	}
 
+	// If job.Type isn't set we can't continue
+	if job.Type == nil {
+		logging.Error("levant/deploy: Nomad job `type` is not set, should be set to `service`")
+		return
+	}
+
 	if !forceCount {
 		logging.Debug("levant/deploy: running dynamic job count updater for job %s", *job.Name)
 		if err := c.dynamicGroupCountUpdater(job); err != nil {
