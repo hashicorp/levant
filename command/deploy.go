@@ -2,6 +2,7 @@ package command
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	nomad "github.com/hashicorp/nomad/api"
@@ -20,9 +21,13 @@ type DeployCommand struct {
 // Help provides the help information for the deploy command.
 func (c *DeployCommand) Help() string {
 	helpText := `
-Usage: levant deploy [options] TEMPLATE
+Usage: levant deploy [options] [TEMPLATE]
 
   Deploy a Nomad job based on input templates and variable files.
+
+Arguments:
+
+  TEMPLATE  nomad job template [default: levant.nomad]
 
 General Options:
 
@@ -40,7 +45,7 @@ General Options:
 
   -var-file=<file>
     Used in conjunction with the -job-file will deploy a templated job to your
-    Nomad cluster.
+    Nomad cluster. [default: levant.tf]
 
   -force-count
     Use the taskgroup count from the Nomad jobfile instead of the count that
@@ -57,7 +62,7 @@ func (c *DeployCommand) Synopsis() string {
 // Run triggers a run of the Levant template and deploy functions.
 func (c *DeployCommand) Run(args []string) int {
 
-	var variables, addr, log string
+	var variables, addr, log, templateFile string
 	var err error
 	var job *nomad.Job
 	var canary int
@@ -79,13 +84,18 @@ func (c *DeployCommand) Run(args []string) int {
 	args = flags.Args()
 
 	if len(args) != 1 {
-		c.UI.Error(c.Help())
-		return 1
+		templateFile = "levant.nomad"
+		if _, err := os.Stat(templateFile); os.IsNotExist(err) {
+			c.UI.Error(c.Help())
+			return 1
+		}
+	} else {
+		templateFile = args[0]
 	}
 
 	logging.SetLevel(log)
 
-	job, err = levant.RenderJob(args[0], variables, &c.Meta.flagVars)
+	job, err = levant.RenderJob(templateFile, variables, &c.Meta.flagVars)
 	if err != nil {
 		c.UI.Error(fmt.Sprintf("[ERROR] levant/command: %v", err))
 		return 1

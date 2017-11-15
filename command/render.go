@@ -19,9 +19,13 @@ type RenderCommand struct {
 // Help provides the help information for the template command.
 func (c *RenderCommand) Help() string {
 	helpText := `
-Usage: levant render [options] TEMPLATE
+Usage: levant render [options] [TEMPLATE]
 
   Render a Nomad job template, useful for debugging.
+
+Arguments:
+
+  TEMPLATE  nomad job template [default: levant.nomad]
 
 General Options:
 	
@@ -31,7 +35,7 @@ General Options:
     rendered to stdout if this is not set.
 
   -var-file=<file>
-    The variables file to render the template with.
+    The variables file to render the template with. [default: levant.tf]
 `
 	return strings.TrimSpace(helpText)
 }
@@ -44,7 +48,7 @@ func (c *RenderCommand) Synopsis() string {
 // Run triggers a run of the Levant template functions.
 func (c *RenderCommand) Run(args []string) int {
 
-	var variables, outPath string
+	var variables, outPath, templateFile string
 	var err error
 	var tpl *bytes.Buffer
 
@@ -61,11 +65,16 @@ func (c *RenderCommand) Run(args []string) int {
 	args = flags.Args()
 
 	if len(args) != 1 {
-		c.UI.Error(c.Help())
-		return 1
+		templateFile = "levant.nomad"
+		if _, err := os.Stat(templateFile); os.IsNotExist(err) {
+			c.UI.Error(c.Help())
+			return 1
+		}
+	} else {
+		templateFile = args[0]
 	}
 
-	tpl, err = levant.RenderTemplate(args[0], variables, &c.Meta.flagVars)
+	tpl, err = levant.RenderTemplate(templateFile, variables, &c.Meta.flagVars)
 	if err != nil {
 		c.UI.Error(fmt.Sprintf("[ERROR] levant/command: %v", err))
 		return 1

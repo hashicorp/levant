@@ -38,7 +38,6 @@ func RenderJob(templateFile, variableFile string, flagVars *map[string]string) (
 // RenderTemplate is the main entry point to render the template based on the
 // passed variables file.
 func RenderTemplate(templateFile, variableFile string, flagVars *map[string]string) (tpl *bytes.Buffer, err error) {
-
 	// Process the variable file extension and log DEBUG so the template can be
 	// correctly rendered.
 	ext := path.Ext(variableFile)
