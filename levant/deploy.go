@@ -18,7 +18,7 @@ type nomadClient struct {
 type NomadClient interface {
 	// Deploy triggers a register of the job resulting in a Nomad deployment which
 	// is monitored to determine the eventual state.
-	Deploy(*nomad.Job, int) bool
+	Deploy(*nomad.Job, int, bool) bool
 }
 
 // NewNomadClient is used to create a new client to interact with Nomad.
@@ -39,7 +39,7 @@ func NewNomadClient(addr string) (NomadClient, error) {
 
 // Deploy triggers a register of the job resulting in a Nomad deployment which
 // is monitored to determine the eventual state.
-func (c *nomadClient) Deploy(job *nomad.Job, autoPromote int) (success bool) {
+func (c *nomadClient) Deploy(job *nomad.Job, autoPromote int, forceCount bool) (success bool) {
 
 	// Validate the job to check it is syntactically correct.
 	if _, _, err := c.nomad.Jobs().Validate(job, nil); err != nil {
@@ -53,9 +53,11 @@ func (c *nomadClient) Deploy(job *nomad.Job, autoPromote int) (success bool) {
 		return
 	}
 
-	logging.Debug("levant/deploy: running dynamic job count updater for job %s", *job.Name)
-	if err := c.dynamicGroupCountUpdater(job); err != nil {
-		return
+	if !forceCount {
+		logging.Debug("levant/deploy: running dynamic job count updater for job %s", *job.Name)
+		if err := c.dynamicGroupCountUpdater(job); err != nil {
+			return
+		}
 	}
 
 	logging.Info("levant/deploy: triggering a deployment of job %s", *job.Name)
