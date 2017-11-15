@@ -83,14 +83,17 @@ func (c *DeployCommand) Run(args []string) int {
 
 	args = flags.Args()
 
-	if len(args) != 1 {
+	if len(args) == 1 {
+		templateFile = args[0]
+	} else if len(args) == 0 {
 		templateFile = "levant.nomad"
 		if _, err := os.Stat(templateFile); os.IsNotExist(err) {
 			c.UI.Error(c.Help())
 			return 1
 		}
 	} else {
-		templateFile = args[0]
+		c.UI.Error(c.Help())
+		return 1
 	}
 
 	logging.SetLevel(log)
