@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	terraformVarExtention = ".tf"
+	terraformVarExtension = ".tf"
 	yamlVarExtension      = ".yaml"
 	ymlVarExtension       = ".yml"
 )
@@ -38,6 +38,10 @@ func RenderJob(templateFile, variableFile string, flagVars *map[string]string) (
 // RenderTemplate is the main entry point to render the template based on the
 // passed variables file.
 func RenderTemplate(templateFile, variableFile string, flagVars *map[string]string) (tpl *bytes.Buffer, err error) {
+	if variableFile == "" {
+		variableFile = helper.GetDefaultVarFile()
+	}
+
 	// Process the variable file extension and log DEBUG so the template can be
 	// correctly rendered.
 	ext := path.Ext(variableFile)
@@ -57,8 +61,8 @@ func RenderTemplate(templateFile, variableFile string, flagVars *map[string]stri
 	}
 
 	switch ext {
-	case terraformVarExtention:
-		// Run the render using variables formatted in Terraforms .tf extension.
+	case terraformVarExtension:
+		logging.Debug("levant/templater: detected .tf variable file extension")
 		tpl, err = renderTFTemplte(string(src), variableFile, flagVars)
 
 	case yamlVarExtension, ymlVarExtension:

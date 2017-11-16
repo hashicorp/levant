@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/jrasell/levant/helper"
 	"github.com/jrasell/levant/levant"
 )
 
@@ -25,7 +26,8 @@ Usage: levant render [options] [TEMPLATE]
 
 Arguments:
 
-  TEMPLATE  nomad job template [default: levant.nomad]
+  TEMPLATE  nomad job template
+    If no argument is given we look for a single *.nomad file
 
 General Options:
 	
@@ -67,8 +69,7 @@ func (c *RenderCommand) Run(args []string) int {
 	if len(args) == 1 {
 		templateFile = args[0]
 	} else if len(args) == 0 {
-		templateFile = "levant.nomad"
-		if _, err := os.Stat(templateFile); os.IsNotExist(err) {
+		if templateFile = helper.GetDefaultTmplFile(); templateFile == "" {
 			c.UI.Error(c.Help())
 			return 1
 		}

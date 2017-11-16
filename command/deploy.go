@@ -2,11 +2,11 @@ package command
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	nomad "github.com/hashicorp/nomad/api"
 
+	"github.com/jrasell/levant/helper"
 	"github.com/jrasell/levant/levant"
 	"github.com/jrasell/levant/logging"
 )
@@ -27,7 +27,8 @@ Usage: levant deploy [options] [TEMPLATE]
 
 Arguments:
 
-  TEMPLATE  nomad job template [default: levant.nomad]
+  TEMPLATE  nomad job template
+    If no argument is given we look for a single *.nomad file
 
 General Options:
 
@@ -83,11 +84,12 @@ func (c *DeployCommand) Run(args []string) int {
 
 	args = flags.Args()
 
+	logging.SetLevel(log)
+
 	if len(args) == 1 {
 		templateFile = args[0]
 	} else if len(args) == 0 {
-		templateFile = "levant.nomad"
-		if _, err := os.Stat(templateFile); os.IsNotExist(err) {
+		if templateFile = helper.GetDefaultTmplFile(); templateFile == "" {
 			c.UI.Error(c.Help())
 			return 1
 		}
@@ -95,8 +97,6 @@ func (c *DeployCommand) Run(args []string) int {
 		c.UI.Error(c.Help())
 		return 1
 	}
-
-	logging.SetLevel(log)
 
 	job, err = levant.RenderJob(templateFile, variables, &c.Meta.flagVars)
 	if err != nil {
