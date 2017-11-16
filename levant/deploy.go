@@ -60,6 +60,16 @@ func (c *nomadClient) Deploy(job *nomad.Job, autoPromote int, forceCount bool) (
 		}
 	}
 
+	// Check that the job has at least 1 TaskGroup with count > 0 (GH-16)
+	TGCount := 0
+	for _, group := range job.TaskGroups {
+		TGCount += *group.Count
+	}
+	if TGCount == 0 {
+		logging.Error("levant/deploy: all TaskGroups have a count of 0, nothing to do")
+		return
+	}
+
 	logging.Info("levant/deploy: triggering a deployment of job %s", *job.Name)
 
 	eval, _, err := c.nomad.Jobs().Register(job, nil)
