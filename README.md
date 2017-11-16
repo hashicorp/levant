@@ -59,6 +59,8 @@ Levant supports a number of command line arguments which provide control over th
 
 * **-canary-auto-promote** (int: 0) The time period in seconds that Levant should wait for before attempting to promote a canary deployment.
 
+* **--force-count** (bool: false) Use the taskgroup count from the Nomad job file instead of the count that is obtained from the running job count.
+
 * **-log-level** (string: "INFO") The level at which Levant will log to. Valid values are DEBUG, INFO, WARNING, ERROR and FATAL.
 
 * **-var-file** (string: "") The variables file to render the template with.
