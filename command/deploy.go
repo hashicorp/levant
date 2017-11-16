@@ -46,7 +46,7 @@ General Options:
 
   -var-file=<file>
     Used in conjunction with the -job-file will deploy a templated job to your
-    Nomad cluster. [default: levant.tf]
+    Nomad cluster. [default: levant.(yaml|yml|tf)]
 
   -force-count
     Use the taskgroup count from the Nomad jobfile instead of the count that

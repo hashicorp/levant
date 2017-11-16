@@ -37,7 +37,7 @@ General Options:
     rendered to stdout if this is not set.
 
   -var-file=<file>
-    The variables file to render the template with. [default: levant.tf]
+    The variables file to render the template with. [default: levant.(yaml|yml|tf)]
 `
 	return strings.TrimSpace(helpText)
 }
