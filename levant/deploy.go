@@ -60,6 +60,15 @@ func (c *nomadClient) Deploy(job *nomad.Job, autoPromote int) (success bool) {
 		return
 	}
 
+	// Trigger the evaluationInspector to identify any potential errors in the
+	// Nomad evaluation run. As far as I can tell from testing; a single alloc
+	// failure in an evaluation means no allocs will be placed so we exit here.
+	err = c.evaluationInspector(&eval.EvalID)
+	if err != nil {
+		logging.Error("levant/deploy: %v", err)
+		return
+	}
+
 	switch *job.Type {
 	case nomadStructs.JobTypeService:
 		logging.Debug("levant/deploy: beginning deployment watcher for job %s", *job.Name)
@@ -70,6 +79,47 @@ func (c *nomadClient) Deploy(job *nomad.Job, autoPromote int) (success bool) {
 	}
 
 	return
+}
+
+func (c *nomadClient) evaluationInspector(evalID *string) error {
+
+	evalInfo, _, err := c.nomad.Evaluations().Info(*evalID, nil)
+	if err != nil {
+		return err
+	}
+
+	for {
+		switch evalInfo.Status {
+		case nomadStructs.EvalStatusComplete, nomadStructs.EvalStatusFailed, nomadStructs.EvalStatusCancelled:
+			if len(evalInfo.FailedTGAllocs) == 0 {
+				logging.Info("levant/deploy: evaluation %s finished successfully", *evalID)
+				return nil
+			}
+
+			var class, dimension []string
+
+			for group, metrics := range evalInfo.FailedTGAllocs {
+
+				// Iterate the classes and dimensions to generate lists of each failure.
+				for c := range metrics.ClassExhausted {
+					class = append(class, c)
+				}
+				for d := range metrics.DimensionExhausted {
+					dimension = append(dimension, d)
+				}
+
+				logging.Error("levant/deploy: task group %s failed to place %v allocs, failed on %v and exhausted %v",
+					group, metrics.CoalescedFailures+1, class, dimension)
+			}
+
+			return fmt.Errorf("evaluation %v finished with status %s but failed to place allocations",
+				*evalID, evalInfo.Status)
+
+		default:
+			time.Sleep(1 * time.Second)
+			continue
+		}
+	}
 }
 
 func (c *nomadClient) deploymentWatcher(evalID string, autoPromote int) (success bool) {
