@@ -2,6 +2,7 @@
 
 IMPROVEMENTS:
  * Introduce `-force-count` flag into deploy command which disables dynamic count updating; meaning Levant will explicity use counts defined in the job specification template [GH-33](https://github.com/jrasell/levant/pull/33)
+ * Levant deployments now inspect the evaluation results and log any error messages [GH-40](https://github.com/jrasell/levant/pull/40) 
 
 BUG FIXES:
  * Fix formatting issue in render command help [GH-28](https://github.com/jrasell/levant/pull/28)
