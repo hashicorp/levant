@@ -96,6 +96,8 @@ func (c *DeployCommand) Run(args []string) int {
 			c.UI.Error(fmt.Sprintf("[ERROR] levant/command: %v", err))
 			return 1
 		}
+
+		c.UI.Info(fmt.Sprintf("[INFO] levant/command: running canary-auto-update of %vs", canary))
 	}
 
 	client, err := levant.NewNomadClient(addr)
@@ -116,12 +118,19 @@ func (c *DeployCommand) Run(args []string) int {
 }
 
 func (c *DeployCommand) checkCanaryAutoPromote(job *nomad.Job, canaryAutoPromote int) error {
-
-	if canaryAutoPromote > 0 && *job.Update.Canary == 0 {
-		return fmt.Errorf("canary-auto-update of %v passed but job is not canary enabled", canaryAutoPromote)
+	if canaryAutoPromote == 0 {
+		return nil
 	}
 
-	c.UI.Info(fmt.Sprintf("[INFO] levant/command: running canary-auto-update of %vs", canaryAutoPromote))
+	if job.Update != nil && job.Update.Canary != nil && *job.Update.Canary > 0 {
+		return nil
+	}
 
-	return nil
+	for _, group := range job.TaskGroups {
+		if group.Update != nil && group.Update.Canary != nil && *group.Update.Canary > 0 {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("canary-auto-update of %v passed but job is not canary enabled", canaryAutoPromote)
 }
