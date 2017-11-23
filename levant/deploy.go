@@ -101,12 +101,12 @@ func (c *nomadClient) Deploy(job *nomad.Job, autoPromote int, forceCount bool) (
 
 func (c *nomadClient) evaluationInspector(evalID *string) error {
 
-	evalInfo, _, err := c.nomad.Evaluations().Info(*evalID, nil)
-	if err != nil {
-		return err
-	}
-
 	for {
+		evalInfo, _, err := c.nomad.Evaluations().Info(*evalID, nil)
+		if err != nil {
+			return err
+		}
+
 		switch evalInfo.Status {
 		case nomadStructs.EvalStatusComplete, nomadStructs.EvalStatusFailed, nomadStructs.EvalStatusCancelled:
 			if len(evalInfo.FailedTGAllocs) == 0 {
