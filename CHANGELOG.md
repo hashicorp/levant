@@ -1,3 +1,5 @@
+## 0.0.3 (Unreleased)
+
 ## 0.0.2 (29 November 2017)
 
 IMPROVEMENTS:
