@@ -78,6 +78,12 @@ func (c *nomadClient) Deploy(job *nomad.Job, autoPromote int, forceCount bool) (
 		return
 	}
 
+	// GH-50: batch job types do not return an evaluation upon registration.
+	if eval == nil && *job.Type == nomadStructs.JobTypeBatch {
+		logging.Debug("levant/deploy: job type %s does not create evaluations", nomadStructs.JobTypeBatch)
+		return true
+	}
+
 	// Trigger the evaluationInspector to identify any potential errors in the
 	// Nomad evaluation run. As far as I can tell from testing; a single alloc
 	// failure in an evaluation means no allocs will be placed so we exit here.
