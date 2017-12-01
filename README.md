@@ -16,6 +16,8 @@ Levant is an open source templating and deployment tool for [HashiCorp Nomad](ht
 
 * **Multiple Variable File Formats**: Currently Levant supports `.tf`, `.yaml` and `.yml` file extensions for the declaration of template variables. *This is planned to increase in the near future.*
 
+* **Auto Revert Checking**: In the event that a job deployment does not pass its healthy threshold and the job has auto-revert enabled; Levant will track the resulting rollback deployment so you can see the exact outcome of the deployment process.
+
 ## Download
 
 * The Levant binary can be downloaded from the [GitHub releases page]() using `curl https://github.com/jrasell/levant/releases/download/v0.0.1/linux-amd64-levant -o levant`
