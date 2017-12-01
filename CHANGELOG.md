@@ -1,5 +1,8 @@
 ## 0.0.3 (Unreleased)
 
+BUG FIXES:
+ * Fix issue where Levant did not correctly handle deploying jobs of type `batch` [GH-52](https://github.com/jrasell/levant/pull/52)
+
 ## 0.0.2 (29 November 2017)
 
 IMPROVEMENTS:
