@@ -95,8 +95,31 @@ func (c *nomadClient) Deploy(job *nomad.Job, autoPromote int, forceCount bool) (
 
 	switch *job.Type {
 	case nomadStructs.JobTypeService:
-		logging.Debug("levant/deploy: beginning deployment watcher for job %s", *job.Name)
-		success = c.deploymentWatcher(eval.EvalID, autoPromote)
+		logging.Info("levant/deploy: beginning deployment watcher for job %s", *job.Name)
+
+		// Get the deploymentID from the evaluationID so that we can watch the
+		// deployment for end status.
+		depID, err := c.getDeploymentID(eval.EvalID)
+		if err != nil {
+			logging.Error("levant/deploy: unable to get info of evaluation %s: %v", eval.EvalID, err)
+			return
+		}
+
+		// Get the success of the deployment.
+		success = c.deploymentWatcher(depID, autoPromote)
+
+		// If the deployment has not been successful; check whether the job is
+		// configured to auto-revert so that this can be tracked.
+		if !success {
+			dep, _, err := c.nomad.Deployments().Info(depID, nil)
+			if err != nil {
+				logging.Error("levant/deploy: unable to query deployment %s for auto-revert check: %v",
+					dep.ID, err)
+				break
+			}
+			c.checkAutoRevert(dep)
+		}
+
 	default:
 		logging.Debug("levant/deploy: job type %s does not support Nomad deployment model", *job.Type)
 		success = true
@@ -146,20 +169,13 @@ func (c *nomadClient) evaluationInspector(evalID *string) error {
 	}
 }
 
-func (c *nomadClient) deploymentWatcher(evalID string, autoPromote int) (success bool) {
+func (c *nomadClient) deploymentWatcher(depID string, autoPromote int) (success bool) {
 
 	var canaryChan chan interface{}
 	deploymentChan := make(chan interface{})
 
 	t := time.Now()
 	wt := time.Duration(5 * time.Second)
-
-	// Get the deploymentID from the evaluationID so that we can watch the
-	// deployment for end status.
-	depID, err := c.getDeploymentID(evalID)
-	if err != nil {
-		logging.Error("levant/deploy: unable to get info of evaluation %s: %v", evalID, err)
-	}
 
 	// Setup the canaryChan and launch the autoPromote go routine if autoPromote
 	// has been enabled.
@@ -195,7 +211,7 @@ func (c *nomadClient) deploymentWatcher(evalID string, autoPromote int) (success
 
 		q.WaitIndex = meta.LastIndex
 
-		cont, err := c.checkDeploymentStatus(dep.Status, depID, canaryChan)
+		cont, err := c.checkDeploymentStatus(dep, canaryChan)
 		if err != nil {
 			return false
 		}
@@ -208,22 +224,25 @@ func (c *nomadClient) deploymentWatcher(evalID string, autoPromote int) (success
 	}
 }
 
-func (c *nomadClient) checkDeploymentStatus(status, depID string, shutdownChan chan interface{}) (bool, error) {
+func (c *nomadClient) checkDeploymentStatus(dep *nomad.Deployment, shutdownChan chan interface{}) (bool, error) {
 
-	switch status {
+	switch dep.Status {
 	case nomadStructs.DeploymentStatusSuccessful:
-		logging.Info("levant/deploy: deployment %v has completed successfully", depID)
+		logging.Info("levant/deploy: deployment %v has completed successfully", dep.ID)
 		return false, nil
 	case nomadStructs.DeploymentStatusRunning:
 		return true, nil
 	default:
 		if shutdownChan != nil {
-			logging.Debug("levant/deploy: deployment %v meaning canary auto promote will shutdown", status)
+			logging.Debug("levant/deploy: deployment %v meaning canary auto promote will shutdown", dep.Status)
 			close(shutdownChan)
 		}
 
-		logging.Error("levant/deploy: deployment %v has status %s, Levant will now exit", depID, status)
-		c.checkFailedDeployment(&depID)
+		logging.Error("levant/deploy: deployment %v has status %s", dep.ID, dep.Status)
+
+		// Launch the failure inspector.
+		c.checkFailedDeployment(&dep.ID)
+
 		return false, fmt.Errorf("deployment failed")
 	}
 }
