@@ -1,5 +1,8 @@
 ## 0.0.3 (Unreleased)
 
+IMPROVEMENTS:
+ * Levant can now track Nomad auto-revert of a failed deployment [GH-55](https://github.com/jrasell/levant/pull/55)
+
 BUG FIXES:
  * Fix issue where Levant did not correctly handle deploying jobs of type `batch` [GH-52](https://github.com/jrasell/levant/pull/52)
 
