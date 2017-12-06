@@ -60,14 +60,18 @@ func (c *nomadClient) Deploy(job *nomad.Job, autoPromote int, forceCount bool) (
 		}
 	}
 
-	// Check that the job has at least 1 TaskGroup with count > 0 (GH-16)
-	TGCount := 0
-	for _, group := range job.TaskGroups {
-		TGCount += *group.Count
-	}
-	if TGCount == 0 {
-		logging.Error("levant/deploy: all TaskGroups have a count of 0, nothing to do")
-		return
+	// Check that the job has at least 1 TaskGroup with count > 0 (GH-16) if the
+	// job is not a System job. Systems jobs do not define counts so cannot be
+	// checked.
+	if *job.Type != nomadStructs.JobTypeSystem {
+		tgCount := 0
+		for _, group := range job.TaskGroups {
+			tgCount += *group.Count
+		}
+		if tgCount == 0 {
+			logging.Error("levant/deploy: all TaskGroups have a count of 0, nothing to do")
+			return
+		}
 	}
 
 	logging.Info("levant/deploy: triggering a deployment of job %s", *job.Name)
