@@ -7,5 +7,7 @@ RUN apk add --no-cache make \
 
 FROM alpine:latest
 
+RUN apk add --no-cache ca-certificates
+
 COPY --from=builder /go/bin/levant /usr/bin/levant
 CMD ["levant", "--help"]
