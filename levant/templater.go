@@ -38,27 +38,39 @@ func RenderJob(templateFile, variableFile string, flagVars *map[string]string) (
 // RenderTemplate is the main entry point to render the template based on the
 // passed variables file.
 func RenderTemplate(templateFile, variableFile string, flagVars *map[string]string) (tpl *bytes.Buffer, err error) {
+
+	// Process the variable file extension and log DEBUG so the template can be
+	// correctly rendered.
 	ext := path.Ext(variableFile)
+	if variableFile != "" {
+		logging.Debug("levant/templater: variable file extension %s detected", ext)
+	}
 
 	src, err := ioutil.ReadFile(templateFile)
 	if err != nil {
 		return
 	}
 
+	// If no command line variables are passed; log this as DEBUG to provide much
+	// greater feedback.
+	if len(*flagVars) == 0 {
+		logging.Debug("levant/templater: no command line variables passed")
+	}
+
 	switch ext {
 	case terraformVarExtention:
-		logging.Debug("levant/templater: detected .tf variable file extension")
+		// Run the render using variables formatted in Terraforms .tf extension.
 		tpl, err = renderTFTemplte(string(src), variableFile, flagVars)
-	case yamlVarExtension, ymlVarExtension:
-		logging.Debug("levant/templater: detected .yaml or .yml variable file extension")
-		tpl, err = renderYAMLVarsTemplate(string(src), variableFile, flagVars)
-	case "":
-		if len(*flagVars) == 0 {
-			tpl = bytes.NewBuffer(src)
-		}
 
-		logging.Debug("levant/templater: variable file not passed, using any passed CLI variables")
+	case yamlVarExtension, ymlVarExtension:
+		// Run the render using a YAML varaible file.
+		tpl, err = renderYAMLVarsTemplate(string(src), variableFile, flagVars)
+
+	case "":
+		// No varibles file passed; render using any passed CLI variables.
+		logging.Debug("levant/templater: variable file not passed")
 		tpl, err = readJobFile(string(src), flagVars)
+
 	default:
 		err = fmt.Errorf("variables file extension %v not supported", ext)
 	}
