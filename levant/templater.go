@@ -39,13 +39,16 @@ func RenderJob(templateFile, variableFile string, flagVars *map[string]string) (
 // passed variables file.
 func RenderTemplate(templateFile, variableFile string, flagVars *map[string]string) (tpl *bytes.Buffer, err error) {
 	if variableFile == "" {
-		variableFile = helper.GetDefaultVarFile()
+		logging.Debug("levant/templater: no variable file passed, trying defaults")
+		if variableFile = helper.GetDefaultVarFile(); variableFile != "" {
+			logging.Debug("levant/templater: found default variable file, using %s", variableFile)
+		}
 	}
 
 	// Process the variable file extension and log DEBUG so the template can be
 	// correctly rendered.
-	ext := path.Ext(variableFile)
-	if variableFile != "" {
+	var ext string
+	if ext = path.Ext(variableFile); ext != "" {
 		logging.Debug("levant/templater: variable file extension %s detected", ext)
 	}
 
@@ -62,15 +65,14 @@ func RenderTemplate(templateFile, variableFile string, flagVars *map[string]stri
 
 	switch ext {
 	case terraformVarExtension:
-		logging.Debug("levant/templater: detected .tf variable file extension")
 		tpl, err = renderTFTemplte(string(src), variableFile, flagVars)
 
 	case yamlVarExtension, ymlVarExtension:
-		// Run the render using a YAML varaible file.
+		// Run the render using a YAML variable file.
 		tpl, err = renderYAMLVarsTemplate(string(src), variableFile, flagVars)
 
 	case "":
-		// No varibles file passed; render using any passed CLI variables.
+		// No variables file passed; render using any passed CLI variables.
 		logging.Debug("levant/templater: variable file not passed")
 		tpl, err = readJobFile(string(src), flagVars)
 
