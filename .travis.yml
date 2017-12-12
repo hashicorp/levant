@@ -9,7 +9,7 @@ install:
 script:
 - make test
 after_success:
-- make release
+- if [[ -n "$TRAVIS_TAG" ]]; then make release; fi
 notifications:
   email: true
 deploy:
