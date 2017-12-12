@@ -71,6 +71,7 @@ func (c *RenderCommand) Run(args []string) int {
 	} else if len(args) == 0 {
 		if templateFile = helper.GetDefaultTmplFile(); templateFile == "" {
 			c.UI.Error(c.Help())
+			c.UI.Error("\nERROR: Template arg missing and no default template found")
 			return 1
 		}
 	} else {
