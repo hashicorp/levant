@@ -3,7 +3,7 @@
 IMPROVEMENTS:
  * Levant can now track Nomad auto-revert of a failed deployment [GH-55](https://github.com/jrasell/levant/pull/55)
  * Provide greater feedback around variables file passed, CLI variables passed and which variables are being used by Levant.[GH-62](https://github.com/jrasell/levant/pull/62)
- * Levant supports autoloading of default files when running `levant deploy` [GH-37]
+ * Levant supports autoloading of default files when running `levant deploy` [GH-37](https://github.com/jrasell/levant/pull/37)
 
 BUG FIXES:
  * Fix issue where Levant did not correctly handle deploying jobs of type `batch` [GH-52](https://github.com/jrasell/levant/pull/52)
