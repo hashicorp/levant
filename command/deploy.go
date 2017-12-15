@@ -6,6 +6,7 @@ import (
 
 	nomad "github.com/hashicorp/nomad/api"
 
+	"github.com/jrasell/levant/helper"
 	"github.com/jrasell/levant/levant"
 	"github.com/jrasell/levant/logging"
 )
@@ -20,9 +21,14 @@ type DeployCommand struct {
 // Help provides the help information for the deploy command.
 func (c *DeployCommand) Help() string {
 	helpText := `
-Usage: levant deploy [options] TEMPLATE
+Usage: levant deploy [options] [TEMPLATE]
 
   Deploy a Nomad job based on input templates and variable files.
+
+Arguments:
+
+  TEMPLATE  nomad job template
+    If no argument is given we look for a single *.nomad file
 
 General Options:
 
@@ -40,7 +46,7 @@ General Options:
 
   -var-file=<file>
     Used in conjunction with the -job-file will deploy a templated job to your
-    Nomad cluster.
+    Nomad cluster. [default: levant.(yaml|yml|tf)]
 
   -force-count
     Use the taskgroup count from the Nomad jobfile instead of the count that
@@ -57,7 +63,7 @@ func (c *DeployCommand) Synopsis() string {
 // Run triggers a run of the Levant template and deploy functions.
 func (c *DeployCommand) Run(args []string) int {
 
-	var variables, addr, log string
+	var variables, addr, log, templateFile string
 	var err error
 	var job *nomad.Job
 	var canary int
@@ -78,14 +84,22 @@ func (c *DeployCommand) Run(args []string) int {
 
 	args = flags.Args()
 
-	if len(args) != 1 {
+	logging.SetLevel(log)
+
+	if len(args) == 1 {
+		templateFile = args[0]
+	} else if len(args) == 0 {
+		if templateFile = helper.GetDefaultTmplFile(); templateFile == "" {
+			c.UI.Error(c.Help())
+			c.UI.Error("\nERROR: Template arg missing and no default template found")
+			return 1
+		}
+	} else {
 		c.UI.Error(c.Help())
 		return 1
 	}
 
-	logging.SetLevel(log)
-
-	job, err = levant.RenderJob(args[0], variables, &c.Meta.flagVars)
+	job, err = levant.RenderJob(templateFile, variables, &c.Meta.flagVars)
 	if err != nil {
 		c.UI.Error(fmt.Sprintf("[ERROR] levant/command: %v", err))
 		return 1

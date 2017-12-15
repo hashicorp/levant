@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/jrasell/levant/helper"
 	"github.com/jrasell/levant/levant"
 )
 
@@ -19,9 +20,14 @@ type RenderCommand struct {
 // Help provides the help information for the template command.
 func (c *RenderCommand) Help() string {
 	helpText := `
-Usage: levant render [options] TEMPLATE
+Usage: levant render [options] [TEMPLATE]
 
   Render a Nomad job template, useful for debugging.
+
+Arguments:
+
+  TEMPLATE  nomad job template
+    If no argument is given we look for a single *.nomad file
 
 General Options:
 	
@@ -31,7 +37,7 @@ General Options:
     rendered to stdout if this is not set.
 
   -var-file=<file>
-    The variables file to render the template with.
+    The variables file to render the template with. [default: levant.(yaml|yml|tf)]
 `
 	return strings.TrimSpace(helpText)
 }
@@ -44,7 +50,7 @@ func (c *RenderCommand) Synopsis() string {
 // Run triggers a run of the Levant template functions.
 func (c *RenderCommand) Run(args []string) int {
 
-	var variables, outPath string
+	var variables, outPath, templateFile string
 	var err error
 	var tpl *bytes.Buffer
 
@@ -60,12 +66,20 @@ func (c *RenderCommand) Run(args []string) int {
 
 	args = flags.Args()
 
-	if len(args) != 1 {
+	if len(args) == 1 {
+		templateFile = args[0]
+	} else if len(args) == 0 {
+		if templateFile = helper.GetDefaultTmplFile(); templateFile == "" {
+			c.UI.Error(c.Help())
+			c.UI.Error("\nERROR: Template arg missing and no default template found")
+			return 1
+		}
+	} else {
 		c.UI.Error(c.Help())
 		return 1
 	}
 
-	tpl, err = levant.RenderTemplate(args[0], variables, &c.Meta.flagVars)
+	tpl, err = levant.RenderTemplate(templateFile, variables, &c.Meta.flagVars)
 	if err != nil {
 		c.UI.Error(fmt.Sprintf("[ERROR] levant/command: %v", err))
 		return 1
