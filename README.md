@@ -51,7 +51,7 @@ job_name: jrasell-example
 
 ## Commands
 
-Levant supports a number of command line arguments which provide control over the Levant binary.
+Levant supports a number of command line arguments which provide control over the Levant binary. Levant also supports autoloading files; where if `levant [deploy,render]` is run, Levant will look in the current working directory for a `levant.[yaml,yml,tf]` file and a single `*.nomad` file to use for the command actions.
 
 ### Command: `deploy`
 
