@@ -148,20 +148,39 @@ func (c *nomadClient) evaluationInspector(evalID *string) error {
 				return nil
 			}
 
-			var class, dimension []string
-
 			for group, metrics := range evalInfo.FailedTGAllocs {
 
-				// Iterate the classes and dimensions to generate lists of each failure.
-				for c := range metrics.ClassExhausted {
-					class = append(class, c)
-				}
-				for d := range metrics.DimensionExhausted {
-					dimension = append(dimension, d)
+				// Check if any nodes have been exhausted of resources and therfore are
+				// unable to place allocs.
+				if metrics.NodesExhausted > 0 {
+					var exhausted, dimension []string
+					for e := range metrics.ClassExhausted {
+						exhausted = append(exhausted, e)
+					}
+					for d := range metrics.DimensionExhausted {
+						dimension = append(dimension, d)
+					}
+					logging.Error("levant/deploy: task group %s failed to place allocs, failed on %v and exhausted %v",
+						group, exhausted, dimension)
 				}
 
-				logging.Error("levant/deploy: task group %s failed to place %v allocs, failed on %v and exhausted %v",
-					group, metrics.CoalescedFailures+1, class, dimension)
+				// Check if any node classes were filtered causing alloc placement
+				// failures.
+				if len(metrics.ClassFiltered) > 0 {
+					for f := range metrics.ClassFiltered {
+						logging.Error("levant/deploy: task group %s failed to place %v allocs as class \"%s\" was filtered",
+							group, len(metrics.ClassFiltered), f)
+					}
+				}
+
+				// Check if any node constraints were filtered causing alloc placement
+				// failures.
+				if len(metrics.ConstraintFiltered) > 0 {
+					for cf := range metrics.ConstraintFiltered {
+						logging.Error("levant/deploy: task group %s failed to place %v allocs as constraint \"%s\" was filtered",
+							group, len(metrics.ConstraintFiltered), cf)
+					}
+				}
 			}
 
 			return fmt.Errorf("evaluation %v finished with status %s but failed to place allocations",
