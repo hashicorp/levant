@@ -8,6 +8,7 @@ IMPROVEMENTS:
 BUG FIXES:
  * Fix issue where Levant did not correctly handle deploying jobs of type `batch` [GH-52](https://github.com/jrasell/levant/pull/52)
  * Fix issue where evaluations errors were not being fully checked [GH-66](https://github.com/jrasell/levant/pull/66)
+ * Fix issue in failure_inspector incorrectly handling multi-groups [GH-69](https://github.com/jrasell/levant/pull/69)
 
 ## 0.0.2 (29 November 2017)
 
