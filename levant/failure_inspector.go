@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	nomad "github.com/hashicorp/nomad/api"
+	nomadStructs "github.com/hashicorp/nomad/nomad/structs"
 	"github.com/jrasell/levant/logging"
 )
 
@@ -21,20 +22,22 @@ func (c *nomadClient) checkFailedDeployment(depID *string) {
 	}
 
 	// Iterate the allocations on the deployment and create a list of each allocID
-	// to inspect.
+	// to inspect that is not running.
 	for _, alloc := range allocs {
-		allocIDS = append(allocIDS, alloc.ID)
+		if alloc.ClientStatus != nomadStructs.AllocClientStatusRunning {
+			allocIDS = append(allocIDS, alloc.ID)
+		}
 	}
 
 	// Setup a waitgroup so the function doesn't return until all allocations have
 	// been inspected.
 	var wg sync.WaitGroup
-	wg.Add(len(allocIDS))
+	wg.Add(+len(allocIDS))
 
 	// Inspect each allocation.
 	for _, id := range allocIDS {
 		logging.Debug("levant/failure_inspector: launching allocation inspector for alloc %v", id)
-		go c.allocInspector(&id, &wg)
+		go c.allocInspector(id, &wg)
 	}
 
 	wg.Wait()
@@ -42,14 +45,15 @@ func (c *nomadClient) checkFailedDeployment(depID *string) {
 
 // allocInspector inspects an allocations events to log any useful information
 // which may help debug deployment failures.
-func (c *nomadClient) allocInspector(allocID *string, wg *sync.WaitGroup) {
+func (c *nomadClient) allocInspector(allocID string, wg *sync.WaitGroup) {
 
 	// Inform the wait group we have finished our task upon completion.
 	defer wg.Done()
 
-	resp, _, err := c.nomad.Allocations().Info(*allocID, nil)
+	resp, _, err := c.nomad.Allocations().Info(allocID, nil)
 	if err != nil {
 		logging.Error("levant/failure_inspector: unable to query alloc %v: %v", allocID, err)
+		return
 	}
 
 	// Iterate each each Task and Event to log any relevant information which may
@@ -130,7 +134,7 @@ func (c *nomadClient) allocInspector(allocID *string, wg *sync.WaitGroup) {
 			// information.
 			if desc != "" {
 				logging.Error("levant/failure_inspector: alloc %s incurred event %s because %s",
-					*allocID, strings.ToLower(event.Type), strings.TrimSpace(desc))
+					allocID, strings.ToLower(event.Type), strings.TrimSpace(desc))
 			}
 		}
 	}
