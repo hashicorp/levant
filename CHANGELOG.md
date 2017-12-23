@@ -1,4 +1,4 @@
-## 0.0.3 (Unreleased)
+## 0.0.3 (23 December 2017)
 
 IMPROVEMENTS:
  * Levant can now track Nomad auto-revert of a failed deployment [GH-55](https://github.com/jrasell/levant/pull/55)
