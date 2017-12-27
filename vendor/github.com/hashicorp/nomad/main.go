@@ -27,28 +27,35 @@ func Run(args []string) int {
 func RunCustom(args []string, commands map[string]cli.CommandFactory) int {
 	// Build the commands to include in the help now.
 	commandsInclude := make([]string, 0, len(commands))
-	for k, _ := range commands {
+	for k := range commands {
 		switch k {
-		case "check":
 		case "deployment list", "deployment status", "deployment pause",
 			"deployment resume", "deployment fail", "deployment promote":
-		case "executor":
 		case "fs ls", "fs cat", "fs stat":
 		case "job deployments", "job dispatch", "job history", "job promote", "job revert":
+		case "namespace list", "namespace delete", "namespace apply", "namespace inspect", "namespace status":
+		case "quota list", "quota delete", "quota apply", "quota status", "quota inspect", "quota init":
 		case "operator raft", "operator raft list-peers", "operator raft remove-peer":
-		case "syslog":
+		case "acl policy", "acl policy apply", "acl token", "acl token create":
 		default:
 			commandsInclude = append(commandsInclude, k)
 		}
 	}
 
+	// Hidden hides the commands from both help and autocomplete. Commands that
+	// users should not be running should be placed here, versus hiding
+	// subcommands from the main help, which should be filtered out of the
+	// commands above.
+	hidden := []string{"check", "executor", "syslog"}
+
 	cli := &cli.CLI{
-		Name:         "nomad",
-		Version:      version.GetVersion().FullVersionNumber(true),
-		Args:         args,
-		Commands:     commands,
-		Autocomplete: true,
-		HelpFunc:     cli.FilteredHelpFunc(commandsInclude, helpFunc),
+		Name:           "nomad",
+		Version:        version.GetVersion().FullVersionNumber(true),
+		Args:           args,
+		Commands:       commands,
+		Autocomplete:   true,
+		HiddenCommands: hidden,
+		HelpFunc:       cli.FilteredHelpFunc(commandsInclude, helpFunc),
 	}
 
 	exitCode, err := cli.Run()

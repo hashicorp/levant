@@ -94,3 +94,17 @@ levant render -var-file=var.yaml -var 'var=test' example.nomad
 ### Command: `version`
 
 The `version` command displays build information about the running binary, including the release version.
+
+## Nomad Client
+
+The project uses the Nomad [Default API Client](https://github.com/hashicorp/nomad/blob/master/api/api.go#L191) which means the following Nomad client parameters used by Levant are configurable via environment variables:
+
+ * **NOMAD_ADDR** - The address of the Nomad server.
+ * **NOMAD_REGION** - The region of the Nomad servers to forward commands to.
+ * **NOMAD_NAMESPACE** - The target namespace for queries and actions bound to a namespace.
+ * **NOMAD_CACERT** - Path to a PEM encoded CA cert file to use to verify the Nomad server SSL certificate.
+ * **NOMAD_CAPATH** - Path to a directory of PEM encoded CA cert files to verify the Nomad server SSL certificate.
+ * **NOMAD_CLIENT_CERT** - Path to a PEM encoded client certificate for TLS authentication to the Nomad server.
+ * **NOMAD_CLIENT_KEY** - Path to an unencrypted PEM encoded private key matching the client certificate from `NOMAD_CLIENT_CERT`.
+ * **NOMAD_SKIP_VERIFY** - Do not verify TLS certificate.
+ * **NOMAD_TOKEN** - The SecretID of an ACL token to use to authenticate API requests with.

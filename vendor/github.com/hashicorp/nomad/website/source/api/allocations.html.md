@@ -22,9 +22,9 @@ The table below shows this endpoint's support for
 [blocking queries](/api/index.html#blocking-queries) and
 [required ACLs](/api/index.html#acls).
 
-| Blocking Queries | ACL Required |
-| ---------------- | ------------ |
-| `YES`            | `none`       |
+| Blocking Queries | ACL Required         |
+| ---------------- | -------------------- |
+| `YES`            | `namespace:read-job` |
 
 ### Parameters
 
@@ -141,7 +141,8 @@ $ curl \
     },
     "CreateIndex": 54,
     "ModifyIndex": 57,
-    "CreateTime": 1495747371794276400
+    "CreateTime": 1495747371794276400,
+    "ModifyTime": 1495747371794276400
   }
 ]
 ```
@@ -158,9 +159,9 @@ The table below shows this endpoint's support for
 [blocking queries](/api/index.html#blocking-queries) and
 [required ACLs](/api/index.html#acls).
 
-| Blocking Queries | ACL Required |
-| ---------------- | ------------ |
-| `YES`            | `none`       |
+| Blocking Queries | ACL Required         |
+| ---------------- | -------------------- |
+| `YES`            | `namespace:read-job` |
 
 ### Parameters
 
@@ -461,7 +462,8 @@ $ curl \
   "CreateIndex": 54,
   "ModifyIndex": 57,
   "AllocModifyIndex": 54,
-  "CreateTime": 1495747371794276400
+  "CreateTime": 1495747371794276400,
+  "ModifyTime": 1495747371794276400
 }
 ```
 

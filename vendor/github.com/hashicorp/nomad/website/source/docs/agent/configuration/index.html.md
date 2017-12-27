@@ -74,6 +74,8 @@ testing.
 
 ## General Parameters
 
+- `acl` <code>([ACL][acl]: nil)</code> - Specifies configuration which is specific to ACLs.
+
 - `addresses` `(Addresses: see below)` - Specifies the bind address for
   individual network services. Any values configured in this stanza take
   precedence over the default [bind_addr](#bind_addr).
@@ -161,8 +163,8 @@ testing.
   increasing order of verbosity.
 
 - `name` `(string: [hostname])` - Specifies the name of the local node. This
-  value is used to identify individual nodes in a given datacenter and must be
-  unique per-datacenter.
+  value is used to identify individual agents. When specified on a server, the
+  name must be unique within the region.
 
 - `ports` `(Port: see below)` - Specifies the network ports used for different
   services required by the Nomad agent.
@@ -191,6 +193,8 @@ testing.
   member of. A region typically maps to a geographic region, for example `us`,
   with potentially multiple zones, which map to [datacenters](#datacenter) such
   as `us-west` and `us-east`.
+
+- `sentinel` <code>([Sentinel][sentinel]: nil)</code> - Specifies configuration for Sentinel policies.
 
 - `server` <code>([Server][server]: nil)</code> - Specifies configuration which is specific to the Nomad server.
 
@@ -229,4 +233,6 @@ http_api_response_headers {
 [vault]: /docs/agent/configuration/vault.html "Nomad Agent vault Configuration"
 [tls]: /docs/agent/configuration/tls.html "Nomad Agent tls Configuration"
 [client]: /docs/agent/configuration/client.html "Nomad Agent client Configuration"
+[sentinel]: /docs/agent/configuration/sentinel.html "Nomad Agent sentinel Configuration"
 [server]: /docs/agent/configuration/server.html "Nomad Agent server Configuration"
+[acl]: /docs/agent/configuration/acl.html "Nomad Agent ACL Configuration"

@@ -31,6 +31,7 @@ func TestParse(t *testing.T) {
 				AllAtOnce:   helper.BoolToPtr(true),
 				Datacenters: []string{"us2", "eu1"},
 				Region:      helper.StringToPtr("fooregion"),
+				Namespace:   helper.StringToPtr("foonamespace"),
 				VaultToken:  helper.StringToPtr("foo"),
 
 				Meta: map[string]string{
@@ -38,7 +39,7 @@ func TestParse(t *testing.T) {
 				},
 
 				Constraints: []*api.Constraint{
-					&api.Constraint{
+					{
 						LTarget: "kernel.os",
 						RTarget: "windows",
 						Operand: "=",
@@ -56,10 +57,10 @@ func TestParse(t *testing.T) {
 				},
 
 				TaskGroups: []*api.TaskGroup{
-					&api.TaskGroup{
+					{
 						Name: helper.StringToPtr("outside"),
 						Tasks: []*api.Task{
-							&api.Task{
+							{
 								Name:   "outside",
 								Driver: "java",
 								Config: map[string]interface{}{
@@ -72,11 +73,11 @@ func TestParse(t *testing.T) {
 						},
 					},
 
-					&api.TaskGroup{
+					{
 						Name:  helper.StringToPtr("binsl"),
 						Count: helper.IntToPtr(5),
 						Constraints: []*api.Constraint{
-							&api.Constraint{
+							{
 								LTarget: "kernel.os",
 								RTarget: "linux",
 								Operand: "=",
@@ -106,14 +107,14 @@ func TestParse(t *testing.T) {
 							Canary:          helper.IntToPtr(2),
 						},
 						Tasks: []*api.Task{
-							&api.Task{
+							{
 								Name:   "binstore",
 								Driver: "docker",
 								User:   "bob",
 								Config: map[string]interface{}{
 									"image": "hashicorp/binstore",
 									"labels": []map[string]interface{}{
-										map[string]interface{}{
+										{
 											"FOO": "bar",
 										},
 									},
@@ -129,6 +130,11 @@ func TestParse(t *testing.T) {
 												PortLabel: "admin",
 												Interval:  10 * time.Second,
 												Timeout:   2 * time.Second,
+												CheckRestart: &api.CheckRestart{
+													Limit:          3,
+													Grace:          helper.TimeToPtr(10 * time.Second),
+													IgnoreWarnings: true,
+												},
 											},
 										},
 									},
@@ -141,7 +147,7 @@ func TestParse(t *testing.T) {
 									CPU:      helper.IntToPtr(500),
 									MemoryMB: helper.IntToPtr(128),
 									Networks: []*api.NetworkResource{
-										&api.NetworkResource{
+										{
 											MBits:         helper.IntToPtr(100),
 											ReservedPorts: []api.Port{{Label: "one", Value: 1}, {Label: "two", Value: 2}, {Label: "three", Value: 3}},
 											DynamicPorts:  []api.Port{{Label: "http", Value: 0}, {Label: "https", Value: 0}, {Label: "admin", Value: 0}},
@@ -196,9 +202,10 @@ func TestParse(t *testing.T) {
 										RightDelim: helper.StringToPtr("__"),
 									},
 								},
-								Leader: true,
+								Leader:     true,
+								KillSignal: "",
 							},
-							&api.Task{
+							{
 								Name:   "storagelocker",
 								Driver: "docker",
 								User:   "",
@@ -211,7 +218,7 @@ func TestParse(t *testing.T) {
 									IOPS:     helper.IntToPtr(30),
 								},
 								Constraints: []*api.Constraint{
-									&api.Constraint{
+									{
 										LTarget: "kernel.arch",
 										RTarget: "amd64",
 										Operand: "=",
@@ -264,7 +271,7 @@ func TestParse(t *testing.T) {
 				ID:   helper.StringToPtr("foo"),
 				Name: helper.StringToPtr("foo"),
 				Constraints: []*api.Constraint{
-					&api.Constraint{
+					{
 						LTarget: "$attr.kernel.version",
 						RTarget: "~> 3.2",
 						Operand: structs.ConstraintVersion,
@@ -280,7 +287,7 @@ func TestParse(t *testing.T) {
 				ID:   helper.StringToPtr("foo"),
 				Name: helper.StringToPtr("foo"),
 				Constraints: []*api.Constraint{
-					&api.Constraint{
+					{
 						LTarget: "$attr.kernel.version",
 						RTarget: "[0-9.]+",
 						Operand: structs.ConstraintRegex,
@@ -296,7 +303,7 @@ func TestParse(t *testing.T) {
 				ID:   helper.StringToPtr("foo"),
 				Name: helper.StringToPtr("foo"),
 				Constraints: []*api.Constraint{
-					&api.Constraint{
+					{
 						LTarget: "$meta.data",
 						RTarget: "foo,bar,baz",
 						Operand: structs.ConstraintSetContains,
@@ -312,7 +319,7 @@ func TestParse(t *testing.T) {
 				ID:   helper.StringToPtr("foo"),
 				Name: helper.StringToPtr("foo"),
 				Constraints: []*api.Constraint{
-					&api.Constraint{
+					{
 						Operand: structs.ConstraintDistinctHosts,
 					},
 				},
@@ -326,7 +333,7 @@ func TestParse(t *testing.T) {
 				ID:   helper.StringToPtr("foo"),
 				Name: helper.StringToPtr("foo"),
 				Constraints: []*api.Constraint{
-					&api.Constraint{
+					{
 						Operand: structs.ConstraintDistinctProperty,
 						LTarget: "${meta.rack}",
 					},
@@ -365,16 +372,16 @@ func TestParse(t *testing.T) {
 				ID:   helper.StringToPtr("foo"),
 				Name: helper.StringToPtr("foo"),
 				TaskGroups: []*api.TaskGroup{
-					&api.TaskGroup{
+					{
 						Name: helper.StringToPtr("bar"),
 						Tasks: []*api.Task{
-							&api.Task{
+							{
 								Name:   "bar",
 								Driver: "docker",
 								Config: map[string]interface{}{
 									"image": "hashicorp/image",
 									"port_map": []map[string]interface{}{
-										map[string]interface{}{
+										{
 											"db": 1234,
 										},
 									},
@@ -399,10 +406,10 @@ func TestParse(t *testing.T) {
 				ID:   helper.StringToPtr("binstore-storagelocker"),
 				Name: helper.StringToPtr("binstore-storagelocker"),
 				TaskGroups: []*api.TaskGroup{
-					&api.TaskGroup{
+					{
 						Name: helper.StringToPtr("binsl"),
 						Tasks: []*api.Task{
-							&api.Task{
+							{
 								Name:   "binstore",
 								Driver: "docker",
 								Artifacts: []*api.TaskArtifact{
@@ -436,11 +443,11 @@ func TestParse(t *testing.T) {
 				Name: helper.StringToPtr("check_initial_status"),
 				Type: helper.StringToPtr("service"),
 				TaskGroups: []*api.TaskGroup{
-					&api.TaskGroup{
+					{
 						Name:  helper.StringToPtr("group"),
 						Count: helper.IntToPtr(1),
 						Tasks: []*api.Task{
-							&api.Task{
+							{
 								Name: "task",
 								Services: []*api.Service{
 									{
@@ -486,10 +493,10 @@ func TestParse(t *testing.T) {
 				ID:   helper.StringToPtr("example"),
 				Name: helper.StringToPtr("example"),
 				TaskGroups: []*api.TaskGroup{
-					&api.TaskGroup{
+					{
 						Name: helper.StringToPtr("cache"),
 						Tasks: []*api.Task{
-							&api.Task{
+							{
 								Name: "redis",
 								Vault: &api.Vault{
 									Policies:   []string{"group"},
@@ -497,7 +504,7 @@ func TestParse(t *testing.T) {
 									ChangeMode: helper.StringToPtr(structs.VaultChangeModeRestart),
 								},
 							},
-							&api.Task{
+							{
 								Name: "redis2",
 								Vault: &api.Vault{
 									Policies:   []string{"task"},
@@ -507,10 +514,10 @@ func TestParse(t *testing.T) {
 							},
 						},
 					},
-					&api.TaskGroup{
+					{
 						Name: helper.StringToPtr("cache2"),
 						Tasks: []*api.Task{
-							&api.Task{
+							{
 								Name: "redis",
 								Vault: &api.Vault{
 									Policies:   []string{"job"},
@@ -545,6 +552,77 @@ func TestParse(t *testing.T) {
 								Driver: "docker",
 								DispatchPayload: &api.DispatchPayloadConfig{
 									File: "foo/bar",
+								},
+							},
+						},
+					},
+				},
+			},
+			false,
+		},
+		{
+			"job-with-kill-signal.hcl",
+			&api.Job{
+				ID:   helper.StringToPtr("foo"),
+				Name: helper.StringToPtr("foo"),
+				TaskGroups: []*api.TaskGroup{
+					{
+						Name: helper.StringToPtr("bar"),
+						Tasks: []*api.Task{
+							{
+								Name:       "bar",
+								Driver:     "docker",
+								KillSignal: "SIGQUIT",
+								Config: map[string]interface{}{
+									"image": "hashicorp/image",
+								},
+							},
+						},
+					},
+				},
+			},
+			false,
+		},
+		{
+			"service-check-driver-address.hcl",
+			&api.Job{
+				ID:   helper.StringToPtr("address_mode_driver"),
+				Name: helper.StringToPtr("address_mode_driver"),
+				Type: helper.StringToPtr("service"),
+				TaskGroups: []*api.TaskGroup{
+					{
+						Name: helper.StringToPtr("group"),
+						Tasks: []*api.Task{
+							{
+								Name: "task",
+								Services: []*api.Service{
+									{
+										Name:        "http-service",
+										PortLabel:   "http",
+										AddressMode: "auto",
+										Checks: []api.ServiceCheck{
+											{
+												Name:        "http-check",
+												Type:        "http",
+												Path:        "/",
+												PortLabel:   "http",
+												AddressMode: "driver",
+											},
+										},
+									},
+									{
+										Name:        "random-service",
+										PortLabel:   "9000",
+										AddressMode: "driver",
+										Checks: []api.ServiceCheck{
+											{
+												Name:        "random-check",
+												Type:        "tcp",
+												PortLabel:   "9001",
+												AddressMode: "driver",
+											},
+										},
+									},
 								},
 							},
 						},

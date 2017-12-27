@@ -64,11 +64,11 @@ func (d *RawExecDriver) Validate(config map[string]interface{}) error {
 	fd := &fields.FieldData{
 		Raw: config,
 		Schema: map[string]*fields.FieldSchema{
-			"command": &fields.FieldSchema{
+			"command": {
 				Type:     fields.TypeString,
 				Required: true,
 			},
-			"args": &fields.FieldSchema{
+			"args": {
 				Type: fields.TypeArray,
 			},
 		},
@@ -135,7 +135,6 @@ func (d *RawExecDriver) Start(ctx *ExecContext, task *structs.Task) (*StartRespo
 	executorCtx := &executor.ExecutorContext{
 		TaskEnv: ctx.TaskEnv,
 		Driver:  "raw_exec",
-		AllocID: d.DriverContext.allocID,
 		Task:    task,
 		TaskDir: ctx.TaskDir.Dir,
 		LogDir:  ctx.TaskDir.LogDir,
@@ -145,10 +144,16 @@ func (d *RawExecDriver) Start(ctx *ExecContext, task *structs.Task) (*StartRespo
 		return nil, fmt.Errorf("failed to set executor context: %v", err)
 	}
 
+	taskKillSignal, err := getTaskKillSignal(task.KillSignal)
+	if err != nil {
+		return nil, err
+	}
+
 	execCmd := &executor.ExecCommand{
-		Cmd:  command,
-		Args: driverConfig.Args,
-		User: task.User,
+		Cmd:            command,
+		Args:           driverConfig.Args,
+		User:           task.User,
+		TaskKillSignal: taskKillSignal,
 	}
 	ps, err := exec.LaunchCmd(execCmd)
 	if err != nil {

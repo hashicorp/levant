@@ -60,6 +60,8 @@ Plan will return one of the following exit codes:
 * `-diff`: Determines whether the diff between the remote job and planned job is
   shown. Defaults to true.
 
+* `-policy-override`: Sets the flag to force override any soft mandatory Sentinel policies.
+
 * `-verbose`: Increase diff verbosity.
 
 ## Examples
@@ -101,7 +103,7 @@ Scheduler dry-run:
 - WARNING: Failed to place all allocations.
   Task Group "cache" (failed to place 3 allocations):
     * Resources exhausted on 1 nodes
-    * Dimension "cpu exhausted" exhausted on 1 nodes
+    * Dimension "cpu" exhausted on 1 nodes
 
 Job Modify Index: 15
 To submit the job with version verification run:

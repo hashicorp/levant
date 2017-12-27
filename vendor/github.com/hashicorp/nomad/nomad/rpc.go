@@ -1,6 +1,7 @@
 package nomad
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"io"
@@ -10,10 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/armon/go-metrics"
+	metrics "github.com/armon/go-metrics"
 	"github.com/hashicorp/consul/lib"
 	memdb "github.com/hashicorp/go-memdb"
-	"github.com/hashicorp/net-rpc-msgpackrpc"
+	msgpackrpc "github.com/hashicorp/net-rpc-msgpackrpc"
 	"github.com/hashicorp/nomad/nomad/state"
 	"github.com/hashicorp/nomad/nomad/structs"
 	"github.com/hashicorp/raft"
@@ -99,9 +100,11 @@ func (s *Server) handleConn(conn net.Conn, isTLS bool) {
 
 	// Enforce TLS if EnableRPC is set
 	if s.config.TLSConfig.EnableRPC && !isTLS && RPCType(buf[0]) != rpcTLS {
-		s.logger.Printf("[WARN] nomad.rpc: Non-TLS connection attempted with RequireTLS set")
-		conn.Close()
-		return
+		if !s.config.TLSConfig.RPCUpgradeMode {
+			s.logger.Printf("[WARN] nomad.rpc: Non-TLS connection attempted from %s with RequireTLS set", conn.RemoteAddr().String())
+			conn.Close()
+			return
+		}
 	}
 
 	// Switch on the byte
@@ -341,7 +344,8 @@ type blockingOptions struct {
 // blockingRPC is used for queries that need to wait for a
 // minimum index. This is used to block and wait for changes.
 func (s *Server) blockingRPC(opts *blockingOptions) error {
-	var timeout *time.Timer
+	ctx := context.Background()
+	var cancel context.CancelFunc
 	var state *state.StateStore
 
 	// Fast path non-blocking
@@ -360,8 +364,8 @@ func (s *Server) blockingRPC(opts *blockingOptions) error {
 	opts.queryOpts.MaxQueryTime += lib.RandomStagger(opts.queryOpts.MaxQueryTime / jitterFraction)
 
 	// Setup a query timeout
-	timeout = time.NewTimer(opts.queryOpts.MaxQueryTime)
-	defer timeout.Stop()
+	ctx, cancel = context.WithTimeout(context.Background(), opts.queryOpts.MaxQueryTime)
+	defer cancel()
 
 RUN_QUERY:
 	// Update the query meta data
@@ -393,7 +397,7 @@ RUN_QUERY:
 
 	// Check for minimum query time
 	if err == nil && opts.queryOpts.MinQueryIndex > 0 && opts.queryMeta.Index <= opts.queryOpts.MinQueryIndex {
-		if expired := ws.Watch(timeout.C); !expired {
+		if err := ws.WatchCtx(ctx); err == nil {
 			goto RUN_QUERY
 		}
 	}

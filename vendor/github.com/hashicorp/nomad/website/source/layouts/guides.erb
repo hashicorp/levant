@@ -1,6 +1,10 @@
 <% wrap_layout :inner do %>
   <% content_for :sidebar do %>
-    <ul class="nav docs-sidenav">
+      <ul class="nav docs-sidenav">
+
+      <li<%= sidebar_current("guides-acl") %>>
+        <a href="/guides/acl.html">ACLs</a>
+      </li>
 
       <li<%= sidebar_current("guides-spark") %>>
         <a href="/guides/spark/spark.html">Apache Spark Integration</a>
@@ -50,14 +54,34 @@
         </ul>
       </li>
 
-      <li<%= sidebar_current("guides-securing-nomad") %>>
-        <a href="/guides/securing-nomad.html">Securing Nomad</a>
+      <li<%= sidebar_current("guides-namespaces") %>>
+        <a href="/guides/namespaces.html">Namespaces</a>
       </li>
 
       <li<%= sidebar_current("guides-outage-recovery") %>>
         <a href="/guides/outage.html">Outage Recovery</a>
       </li>
 
+      <li<%= sidebar_current("guides-quotas") %>>
+        <a href="/guides/quotas.html">Resource Quotas</a>
+      </li>
+
+      <li<%= sidebar_current("guides-securing-nomad") %>>
+        <a href="/guides/securing-nomad.html">Securing Nomad</a>
+      </li>
+
+      <li<%= sidebar_current("guides-sentinel") %>>
+        <a href="/guides/sentinel-policy.html">Sentinel Policies</a>
+        <ul class="nav">
+          <li<%= sidebar_current("guides-sentinel-job") %>>
+            <a href="/guides/sentinel/job.html">Job Object</a>
+          </li>
+        </ul>
+      </li>
+
+      <li<%= sidebar_current("guides-ui") %>>
+        <a href="/guides/ui.html">Web UI</a>
+      </li>
     </ul>
   <% end %>
 

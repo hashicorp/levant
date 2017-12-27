@@ -24,7 +24,7 @@ The table below shows this endpoint's support for
 
 | Blocking Queries | ACL Required |
 | ---------------- | ------------ |
-| `YES`            | `none`       |
+| `YES`            | `node:read`  |
 
 ### Parameters
 
@@ -73,9 +73,9 @@ The table below shows this endpoint's support for
 [blocking queries](/api/index.html#blocking-queries) and
 [required ACLs](/api/index.html#acls).
 
-| Blocking Queries | ACL Required |
-| ---------------- | ------------ |
-| `YES`            | `none`       |
+| Blocking Queries | ACL Required      |
+| ---------------- | ----------------- |
+| `YES`            | `node:read`       |
 
 ### Parameters
 
@@ -175,9 +175,9 @@ The table below shows this endpoint's support for
 [blocking queries](/api/index.html#blocking-queries) and
 [required ACLs](/api/index.html#acls).
 
-| Blocking Queries | ACL Required |
-| ---------------- | ------------ |
-| `YES`            | `none`       |
+| Blocking Queries | ACL Required                   |
+| ---------------- | ------------------------------ |
+| `YES`            | `node:read,namespace:read-job` |
 
 ### Parameters
 
@@ -504,7 +504,8 @@ $ curl \
     "CreateIndex": 15052,
     "ModifyIndex": 15057,
     "AllocModifyIndex": 15052,
-    "CreateTime": 1502140975600438500
+    "CreateTime": 1502140975600438500,
+    "ModifyTime": 1502140975600438500
   },
 ...
 ]
@@ -523,9 +524,9 @@ The table below shows this endpoint's support for
 [blocking queries](/api/index.html#blocking-queries) and
 [required ACLs](/api/index.html#acls).
 
-| Blocking Queries | ACL Required |
-| ---------------- | ------------ |
-| `NO`             | `none`       |
+| Blocking Queries | ACL Required       |
+| ---------------- | ------------------ |
+| `NO`             | `node:write`       |
 
 ### Parameters
 
@@ -580,9 +581,9 @@ The table below shows this endpoint's support for
 [blocking queries](/api/index.html#blocking-queries) and
 [required ACLs](/api/index.html#acls).
 
-| Blocking Queries | ACL Required |
-| ---------------- | ------------ |
-| `NO`             | `none`       |
+| Blocking Queries | ACL Required       |
+| ---------------- | ------------------ |
+| `NO`             | `node:write`       |
 
 ### Parameters
 
@@ -598,6 +599,51 @@ The table below shows this endpoint's support for
 ```text
 $ curl \
     https://nomad.rocks/v1/node/fb2170a8-257d-3c64-b14d-bc06cc94e34c/drain?enable=true
+```
+
+### Sample Response
+
+```json
+{
+  "EvalIDs": [
+    "253ec083-22a7-76c9-b8b6-2bf3d4b27bfb"
+  ],
+  "EvalCreateIndex": 91,
+  "NodeModifyIndex": 90,
+  "Index": 90,
+  "LastContact": 0,
+  "KnownLeader": false
+}
+```
+
+## Purge Node
+
+This endpoint purges a node from the system. Nodes can still join the cluster if
+they are alive.
+
+| Method  | Path                      | Produces                   |
+| ------- | ------------------------- | -------------------------- |
+| `POST`  | `/v1/node/:node_id/purge` | `application/json`         |
+
+The table below shows this endpoint's support for
+[blocking queries](/api/index.html#blocking-queries) and
+[required ACLs](/api/index.html#acls).
+
+| Blocking Queries | ACL Required       |
+| ---------------- | ------------------ |
+| `NO`             | `node:write`       |
+
+### Parameters
+
+- `:node_id` `(string: <required>)`- Specifies the UUID of the node. This must
+  be the full UUID, not the short 8-character one. This is specified as part of
+  the path.
+
+### Sample Request
+
+```text
+$ curl \
+    -XPOST https://nomad.rocks/v1/node/fb2170a8-257d-3c64-b14d-bc06cc94e34c/purge
 ```
 
 ### Sample Response

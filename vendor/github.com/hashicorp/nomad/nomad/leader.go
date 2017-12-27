@@ -1,15 +1,21 @@
 package nomad
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"math/rand"
 	"net"
+	"sync"
 	"time"
+
+	"golang.org/x/time/rate"
 
 	"github.com/armon/go-metrics"
 	memdb "github.com/hashicorp/go-memdb"
+	"github.com/hashicorp/nomad/helper/uuid"
+	"github.com/hashicorp/nomad/nomad/state"
 	"github.com/hashicorp/nomad/nomad/structs"
 	"github.com/hashicorp/raft"
 	"github.com/hashicorp/serf/serf"
@@ -20,25 +26,54 @@ const (
 	// unblocked to re-enter the scheduler. A failed evaluation occurs under
 	// high contention when the schedulers plan does not make progress.
 	failedEvalUnblockInterval = 1 * time.Minute
+
+	// replicationRateLimit is used to rate limit how often data is replicated
+	// between the authoritative region and the local region
+	replicationRateLimit rate.Limit = 10.0
+
+	// barrierWriteTimeout is used to give Raft a chance to process a
+	// possible loss of leadership event if we are unable to get a barrier
+	// while leader.
+	barrierWriteTimeout = 2 * time.Minute
 )
 
 // monitorLeadership is used to monitor if we acquire or lose our role
 // as the leader in the Raft cluster. There is some work the leader is
 // expected to do, so we must react to changes
 func (s *Server) monitorLeadership() {
-	var stopCh chan struct{}
+	var weAreLeaderCh chan struct{}
+	var leaderLoop sync.WaitGroup
 	for {
 		select {
 		case isLeader := <-s.leaderCh:
-			if isLeader {
-				stopCh = make(chan struct{})
-				go s.leaderLoop(stopCh)
+			switch {
+			case isLeader:
+				if weAreLeaderCh != nil {
+					s.logger.Printf("[ERR] nomad: attempted to start the leader loop while running")
+					continue
+				}
+
+				weAreLeaderCh = make(chan struct{})
+				leaderLoop.Add(1)
+				go func(ch chan struct{}) {
+					defer leaderLoop.Done()
+					s.leaderLoop(ch)
+				}(weAreLeaderCh)
 				s.logger.Printf("[INFO] nomad: cluster leadership acquired")
-			} else if stopCh != nil {
-				close(stopCh)
-				stopCh = nil
+
+			default:
+				if weAreLeaderCh == nil {
+					s.logger.Printf("[ERR] nomad: attempted to stop the leader loop while not running")
+					continue
+				}
+
+				s.logger.Printf("[DEBUG] nomad: shutting down leader loop")
+				close(weAreLeaderCh)
+				leaderLoop.Wait()
+				weAreLeaderCh = nil
 				s.logger.Printf("[INFO] nomad: cluster leadership lost")
 			}
+
 		case <-s.shutdownCh:
 			return
 		}
@@ -48,9 +83,6 @@ func (s *Server) monitorLeadership() {
 // leaderLoop runs as long as we are the leader to run various
 // maintence activities
 func (s *Server) leaderLoop(stopCh chan struct{}) {
-	// Ensure we revoke leadership on stepdown
-	defer s.revokeLeadership()
-
 	var reconcileCh chan serf.Member
 	establishedLeader := false
 
@@ -61,7 +93,7 @@ RECONCILE:
 
 	// Apply a raft barrier to ensure our FSM is caught up
 	start := time.Now()
-	barrier := s.raft.Barrier(0)
+	barrier := s.raft.Barrier(barrierWriteTimeout)
 	if err := barrier.Error(); err != nil {
 		s.logger.Printf("[ERR] nomad: failed to wait for barrier: %v", err)
 		goto WAIT
@@ -75,6 +107,11 @@ RECONCILE:
 			goto WAIT
 		}
 		establishedLeader = true
+		defer func() {
+			if err := s.revokeLeadership(); err != nil {
+				s.logger.Printf("[ERR] nomad: failed to revoke leadership: %v", err)
+			}
+		}()
 	}
 
 	// Reconcile any missing data
@@ -86,6 +123,15 @@ RECONCILE:
 	// Initial reconcile worked, now we can process the channel
 	// updates
 	reconcileCh = s.reconcileCh
+
+	// Poll the stop channel to give it priority so we don't waste time
+	// trying to perform the other operations if we have been asked to shut
+	// down.
+	select {
+	case <-stopCh:
+		return
+	default:
+	}
 
 WAIT:
 	// Wait until leadership is lost
@@ -108,6 +154,10 @@ WAIT:
 // previously inflight transactions have been committed and that our
 // state is up-to-date.
 func (s *Server) establishLeadership(stopCh chan struct{}) error {
+	// Generate a leader ACL token. This will allow the leader to issue work
+	// that requires a valid ACL token.
+	s.setLeaderAcl(uuid.Generate())
+
 	// Disable workers to free half the cores for use in the plan queue and
 	// evaluation broker
 	if numWorkers := len(s.workers); numWorkers > 1 {
@@ -129,9 +179,10 @@ func (s *Server) establishLeadership(stopCh chan struct{}) error {
 
 	// Enable the blocked eval tracker, since we are now the leader
 	s.blockedEvals.SetEnabled(true)
+	s.blockedEvals.SetTimetable(s.fsm.TimeTable())
 
 	// Enable the deployment watcher, since we are now the leader
-	if err := s.deploymentWatcher.SetEnabled(true); err != nil {
+	if err := s.deploymentWatcher.SetEnabled(true, s.State()); err != nil {
 		return err
 	}
 
@@ -166,6 +217,9 @@ func (s *Server) establishLeadership(stopCh chan struct{}) error {
 	// Periodically unblock failed allocations
 	go s.periodicUnblockFailedEvals(stopCh)
 
+	// Periodically publish job summary metrics
+	go s.publishJobSummaryMetrics(stopCh)
+
 	// Setup the heartbeat timers. This is done both when starting up or when
 	// a leader fail over happens. Since the timers are maintained by the leader
 	// node, effectively this means all the timers are renewed at the time of failover.
@@ -188,6 +242,19 @@ func (s *Server) establishLeadership(stopCh chan struct{}) error {
 	if err := s.reconcileJobSummaries(); err != nil {
 		return fmt.Errorf("unable to reconcile job summaries: %v", err)
 	}
+
+	// Start replication of ACLs and Policies if they are enabled,
+	// and we are not the authoritative region.
+	if s.config.ACLEnabled && s.config.Region != s.config.AuthoritativeRegion {
+		go s.replicateACLPolicies(stopCh)
+		go s.replicateACLTokens(stopCh)
+	}
+
+	// Setup any enterprise systems required.
+	if err := s.establishEnterpriseLeadership(stopCh); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -293,14 +360,25 @@ func (s *Server) restorePeriodicDispatcher() error {
 			continue
 		}
 
-		s.periodicDispatcher.Add(job)
+		if err := s.periodicDispatcher.Add(job); err != nil {
+			return err
+		}
+
+		// We do not need to force run the job since it isn't active.
+		if !job.IsPeriodicActive() {
+			continue
+		}
 
 		// If the periodic job has never been launched before, launch will hold
 		// the time the periodic job was added. Otherwise it has the last launch
 		// time of the periodic job.
-		launch, err := s.fsm.State().PeriodicLaunchByID(ws, job.ID)
-		if err != nil || launch == nil {
+		launch, err := s.fsm.State().PeriodicLaunchByID(ws, job.Namespace, job.ID)
+		if err != nil {
 			return fmt.Errorf("failed to get periodic launch time: %v", err)
+		}
+		if launch == nil {
+			return fmt.Errorf("no recorded periodic launch time for job %q in namespace %q",
+				job.ID, job.Namespace)
 		}
 
 		// nextLaunch is the next launch that should occur.
@@ -313,7 +391,7 @@ func (s *Server) restorePeriodicDispatcher() error {
 			continue
 		}
 
-		if _, err := s.periodicDispatcher.ForceRun(job.ID); err != nil {
+		if _, err := s.periodicDispatcher.ForceRun(job.Namespace, job.ID); err != nil {
 			msg := fmt.Sprintf("force run of periodic job %q failed: %v", job.ID, err)
 			s.logger.Printf("[ERR] nomad.periodic: %s", msg)
 			return errors.New(msg)
@@ -333,6 +411,8 @@ func (s *Server) schedulePeriodic(stopCh chan struct{}) {
 	defer nodeGC.Stop()
 	jobGC := time.NewTicker(s.config.JobGCInterval)
 	defer jobGC.Stop()
+	deploymentGC := time.NewTicker(s.config.DeploymentGCInterval)
+	defer deploymentGC.Stop()
 
 	// getLatest grabs the latest index from the state store. It returns true if
 	// the index was retrieved successfully.
@@ -361,6 +441,10 @@ func (s *Server) schedulePeriodic(stopCh chan struct{}) {
 			if index, ok := getLatest(); ok {
 				s.evalBroker.Enqueue(s.coreJobEval(structs.CoreJobJobGC, index))
 			}
+		case <-deploymentGC.C:
+			if index, ok := getLatest(); ok {
+				s.evalBroker.Enqueue(s.coreJobEval(structs.CoreJobDeploymentGC, index))
+			}
 		case <-stopCh:
 			return
 		}
@@ -370,11 +454,13 @@ func (s *Server) schedulePeriodic(stopCh chan struct{}) {
 // coreJobEval returns an evaluation for a core job
 func (s *Server) coreJobEval(job string, modifyIndex uint64) *structs.Evaluation {
 	return &structs.Evaluation{
-		ID:          structs.GenerateUUID(),
+		ID:          uuid.Generate(),
+		Namespace:   "-",
 		Priority:    structs.CoreJobPriority,
 		Type:        structs.JobTypeCore,
 		TriggeredBy: structs.EvalTriggerScheduled,
 		JobID:       job,
+		LeaderACL:   s.getLeaderAcl(),
 		Status:      structs.EvalStatusPending,
 		ModifyIndex: modifyIndex,
 	}
@@ -475,9 +561,80 @@ func (s *Server) periodicUnblockFailedEvals(stopCh chan struct{}) {
 	}
 }
 
+// publishJobSummaryMetrics publishes the job summaries as metrics
+func (s *Server) publishJobSummaryMetrics(stopCh chan struct{}) {
+	timer := time.NewTimer(0)
+	defer timer.Stop()
+
+	for {
+		select {
+		case <-stopCh:
+			return
+		case <-timer.C:
+			timer.Reset(s.config.StatsCollectionInterval)
+			state, err := s.State().Snapshot()
+			if err != nil {
+				s.logger.Printf("[ERR] nomad: failed to get state: %v", err)
+				continue
+			}
+			ws := memdb.NewWatchSet()
+			iter, err := state.JobSummaries(ws)
+			if err != nil {
+				s.logger.Printf("[ERR] nomad: failed to get job summaries: %v", err)
+				continue
+			}
+
+			for {
+				raw := iter.Next()
+				if raw == nil {
+					break
+				}
+				summary := raw.(*structs.JobSummary)
+				for name, tgSummary := range summary.Summary {
+					if !s.config.DisableTaggedMetrics {
+						labels := []metrics.Label{
+							{
+								Name:  "job",
+								Value: summary.JobID,
+							},
+							{
+								Name:  "task_group",
+								Value: name,
+							},
+						}
+						metrics.SetGaugeWithLabels([]string{"nomad", "job_summary", "queued"},
+							float32(tgSummary.Queued), labels)
+						metrics.SetGaugeWithLabels([]string{"nomad", "job_summary", "complete"},
+							float32(tgSummary.Complete), labels)
+						metrics.SetGaugeWithLabels([]string{"nomad", "job_summary", "failed"},
+							float32(tgSummary.Failed), labels)
+						metrics.SetGaugeWithLabels([]string{"nomad", "job_summary", "running"},
+							float32(tgSummary.Running), labels)
+						metrics.SetGaugeWithLabels([]string{"nomad", "job_summary", "starting"},
+							float32(tgSummary.Starting), labels)
+						metrics.SetGaugeWithLabels([]string{"nomad", "job_summary", "lost"},
+							float32(tgSummary.Lost), labels)
+					}
+					if s.config.BackwardsCompatibleMetrics {
+						metrics.SetGauge([]string{"nomad", "job_summary", summary.JobID, name, "queued"}, float32(tgSummary.Queued))
+						metrics.SetGauge([]string{"nomad", "job_summary", summary.JobID, name, "complete"}, float32(tgSummary.Complete))
+						metrics.SetGauge([]string{"nomad", "job_summary", summary.JobID, name, "failed"}, float32(tgSummary.Failed))
+						metrics.SetGauge([]string{"nomad", "job_summary", summary.JobID, name, "running"}, float32(tgSummary.Running))
+						metrics.SetGauge([]string{"nomad", "job_summary", summary.JobID, name, "starting"}, float32(tgSummary.Starting))
+						metrics.SetGauge([]string{"nomad", "job_summary", summary.JobID, name, "lost"}, float32(tgSummary.Lost))
+					}
+				}
+			}
+		}
+	}
+}
+
 // revokeLeadership is invoked once we step down as leader.
 // This is used to cleanup any state that may be specific to a leader.
 func (s *Server) revokeLeadership() error {
+	// Clear the leader token since we are no longer the leader.
+	s.setLeaderAcl("")
+
 	// Disable the plan queue, since we are no longer leader
 	s.planQueue.SetEnabled(false)
 
@@ -494,7 +651,12 @@ func (s *Server) revokeLeadership() error {
 	s.vault.SetActive(false)
 
 	// Disable the deployment watcher as it is only useful as a leader.
-	if err := s.deploymentWatcher.SetEnabled(false); err != nil {
+	if err := s.deploymentWatcher.SetEnabled(false, nil); err != nil {
+		return err
+	}
+
+	// Disable any enterprise systems required.
+	if err := s.revokeEnterpriseLeadership(); err != nil {
 		return err
 	}
 
@@ -653,4 +815,287 @@ REMOVE:
 		return err
 	}
 	return nil
+}
+
+// replicateACLPolicies is used to replicate ACL policies from
+// the authoritative region to this region.
+func (s *Server) replicateACLPolicies(stopCh chan struct{}) {
+	req := structs.ACLPolicyListRequest{
+		QueryOptions: structs.QueryOptions{
+			Region:     s.config.AuthoritativeRegion,
+			AllowStale: true,
+		},
+	}
+	limiter := rate.NewLimiter(replicationRateLimit, int(replicationRateLimit))
+	s.logger.Printf("[DEBUG] nomad: starting ACL policy replication from authoritative region %q", req.Region)
+
+START:
+	for {
+		select {
+		case <-stopCh:
+			return
+		default:
+			// Rate limit how often we attempt replication
+			limiter.Wait(context.Background())
+
+			// Fetch the list of policies
+			var resp structs.ACLPolicyListResponse
+			req.AuthToken = s.ReplicationToken()
+			err := s.forwardRegion(s.config.AuthoritativeRegion,
+				"ACL.ListPolicies", &req, &resp)
+			if err != nil {
+				s.logger.Printf("[ERR] nomad: failed to fetch policies from authoritative region: %v", err)
+				goto ERR_WAIT
+			}
+
+			// Perform a two-way diff
+			delete, update := diffACLPolicies(s.State(), req.MinQueryIndex, resp.Policies)
+
+			// Delete policies that should not exist
+			if len(delete) > 0 {
+				args := &structs.ACLPolicyDeleteRequest{
+					Names: delete,
+				}
+				_, _, err := s.raftApply(structs.ACLPolicyDeleteRequestType, args)
+				if err != nil {
+					s.logger.Printf("[ERR] nomad: failed to delete policies: %v", err)
+					goto ERR_WAIT
+				}
+			}
+
+			// Fetch any outdated policies
+			var fetched []*structs.ACLPolicy
+			if len(update) > 0 {
+				req := structs.ACLPolicySetRequest{
+					Names: update,
+					QueryOptions: structs.QueryOptions{
+						Region:        s.config.AuthoritativeRegion,
+						AuthToken:     s.ReplicationToken(),
+						AllowStale:    true,
+						MinQueryIndex: resp.Index - 1,
+					},
+				}
+				var reply structs.ACLPolicySetResponse
+				if err := s.forwardRegion(s.config.AuthoritativeRegion,
+					"ACL.GetPolicies", &req, &reply); err != nil {
+					s.logger.Printf("[ERR] nomad: failed to fetch policies from authoritative region: %v", err)
+					goto ERR_WAIT
+				}
+				for _, policy := range reply.Policies {
+					fetched = append(fetched, policy)
+				}
+			}
+
+			// Update local policies
+			if len(fetched) > 0 {
+				args := &structs.ACLPolicyUpsertRequest{
+					Policies: fetched,
+				}
+				_, _, err := s.raftApply(structs.ACLPolicyUpsertRequestType, args)
+				if err != nil {
+					s.logger.Printf("[ERR] nomad: failed to update policies: %v", err)
+					goto ERR_WAIT
+				}
+			}
+
+			// Update the minimum query index, blocks until there
+			// is a change.
+			req.MinQueryIndex = resp.Index
+		}
+	}
+
+ERR_WAIT:
+	select {
+	case <-time.After(s.config.ReplicationBackoff):
+		goto START
+	case <-stopCh:
+		return
+	}
+}
+
+// diffACLPolicies is used to perform a two-way diff between the local
+// policies and the remote policies to determine which policies need to
+// be deleted or updated.
+func diffACLPolicies(state *state.StateStore, minIndex uint64, remoteList []*structs.ACLPolicyListStub) (delete []string, update []string) {
+	// Construct a set of the local and remote policies
+	local := make(map[string][]byte)
+	remote := make(map[string]struct{})
+
+	// Add all the local policies
+	iter, err := state.ACLPolicies(nil)
+	if err != nil {
+		panic("failed to iterate local policies")
+	}
+	for {
+		raw := iter.Next()
+		if raw == nil {
+			break
+		}
+		policy := raw.(*structs.ACLPolicy)
+		local[policy.Name] = policy.Hash
+	}
+
+	// Iterate over the remote policies
+	for _, rp := range remoteList {
+		remote[rp.Name] = struct{}{}
+
+		// Check if the policy is missing locally
+		if localHash, ok := local[rp.Name]; !ok {
+			update = append(update, rp.Name)
+
+			// Check if policy is newer remotely and there is a hash mis-match.
+		} else if rp.ModifyIndex > minIndex && !bytes.Equal(localHash, rp.Hash) {
+			update = append(update, rp.Name)
+		}
+	}
+
+	// Check if policy should be deleted
+	for lp := range local {
+		if _, ok := remote[lp]; !ok {
+			delete = append(delete, lp)
+		}
+	}
+	return
+}
+
+// replicateACLTokens is used to replicate global ACL tokens from
+// the authoritative region to this region.
+func (s *Server) replicateACLTokens(stopCh chan struct{}) {
+	req := structs.ACLTokenListRequest{
+		GlobalOnly: true,
+		QueryOptions: structs.QueryOptions{
+			Region:     s.config.AuthoritativeRegion,
+			AllowStale: true,
+		},
+	}
+	limiter := rate.NewLimiter(replicationRateLimit, int(replicationRateLimit))
+	s.logger.Printf("[DEBUG] nomad: starting ACL token replication from authoritative region %q", req.Region)
+
+START:
+	for {
+		select {
+		case <-stopCh:
+			return
+		default:
+			// Rate limit how often we attempt replication
+			limiter.Wait(context.Background())
+
+			// Fetch the list of tokens
+			var resp structs.ACLTokenListResponse
+			req.AuthToken = s.ReplicationToken()
+			err := s.forwardRegion(s.config.AuthoritativeRegion,
+				"ACL.ListTokens", &req, &resp)
+			if err != nil {
+				s.logger.Printf("[ERR] nomad: failed to fetch tokens from authoritative region: %v", err)
+				goto ERR_WAIT
+			}
+
+			// Perform a two-way diff
+			delete, update := diffACLTokens(s.State(), req.MinQueryIndex, resp.Tokens)
+
+			// Delete tokens that should not exist
+			if len(delete) > 0 {
+				args := &structs.ACLTokenDeleteRequest{
+					AccessorIDs: delete,
+				}
+				_, _, err := s.raftApply(structs.ACLTokenDeleteRequestType, args)
+				if err != nil {
+					s.logger.Printf("[ERR] nomad: failed to delete tokens: %v", err)
+					goto ERR_WAIT
+				}
+			}
+
+			// Fetch any outdated policies.
+			var fetched []*structs.ACLToken
+			if len(update) > 0 {
+				req := structs.ACLTokenSetRequest{
+					AccessorIDS: update,
+					QueryOptions: structs.QueryOptions{
+						Region:        s.config.AuthoritativeRegion,
+						AuthToken:     s.ReplicationToken(),
+						AllowStale:    true,
+						MinQueryIndex: resp.Index - 1,
+					},
+				}
+				var reply structs.ACLTokenSetResponse
+				if err := s.forwardRegion(s.config.AuthoritativeRegion,
+					"ACL.GetTokens", &req, &reply); err != nil {
+					s.logger.Printf("[ERR] nomad: failed to fetch tokens from authoritative region: %v", err)
+					goto ERR_WAIT
+				}
+				for _, token := range reply.Tokens {
+					fetched = append(fetched, token)
+				}
+			}
+
+			// Update local tokens
+			if len(fetched) > 0 {
+				args := &structs.ACLTokenUpsertRequest{
+					Tokens: fetched,
+				}
+				_, _, err := s.raftApply(structs.ACLTokenUpsertRequestType, args)
+				if err != nil {
+					s.logger.Printf("[ERR] nomad: failed to update tokens: %v", err)
+					goto ERR_WAIT
+				}
+			}
+
+			// Update the minimum query index, blocks until there
+			// is a change.
+			req.MinQueryIndex = resp.Index
+		}
+	}
+
+ERR_WAIT:
+	select {
+	case <-time.After(s.config.ReplicationBackoff):
+		goto START
+	case <-stopCh:
+		return
+	}
+}
+
+// diffACLTokens is used to perform a two-way diff between the local
+// tokens and the remote tokens to determine which tokens need to
+// be deleted or updated.
+func diffACLTokens(state *state.StateStore, minIndex uint64, remoteList []*structs.ACLTokenListStub) (delete []string, update []string) {
+	// Construct a set of the local and remote policies
+	local := make(map[string][]byte)
+	remote := make(map[string]struct{})
+
+	// Add all the local global tokens
+	iter, err := state.ACLTokensByGlobal(nil, true)
+	if err != nil {
+		panic("failed to iterate local tokens")
+	}
+	for {
+		raw := iter.Next()
+		if raw == nil {
+			break
+		}
+		token := raw.(*structs.ACLToken)
+		local[token.AccessorID] = token.Hash
+	}
+
+	// Iterate over the remote tokens
+	for _, rp := range remoteList {
+		remote[rp.AccessorID] = struct{}{}
+
+		// Check if the token is missing locally
+		if localHash, ok := local[rp.AccessorID]; !ok {
+			update = append(update, rp.AccessorID)
+
+			// Check if policy is newer remotely and there is a hash mis-match.
+		} else if rp.ModifyIndex > minIndex && !bytes.Equal(localHash, rp.Hash) {
+			update = append(update, rp.AccessorID)
+		}
+	}
+
+	// Check if local token should be deleted
+	for lp := range local {
+		if _, ok := remote[lp]; !ok {
+			delete = append(delete, lp)
+		}
+	}
+	return
 }

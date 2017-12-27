@@ -7,6 +7,7 @@ import (
 
 	memdb "github.com/hashicorp/go-memdb"
 	"github.com/hashicorp/go-multierror"
+	"github.com/hashicorp/nomad/helper/uuid"
 	"github.com/hashicorp/nomad/nomad/structs"
 )
 
@@ -153,6 +154,7 @@ func (s *GenericScheduler) Process(eval *structs.Evaluation) error {
 		newEval := s.eval.Copy()
 		newEval.EscapedComputedClass = e.HasEscaped()
 		newEval.ClassEligibility = e.GetClasses()
+		newEval.QuotaLimitReached = e.QuotaLimitReached()
 		return s.planner.ReblockEval(newEval)
 	}
 
@@ -174,7 +176,7 @@ func (s *GenericScheduler) createBlockedEval(planFailure bool) error {
 		classEligibility = e.GetClasses()
 	}
 
-	s.blocked = s.eval.CreateBlockedEval(classEligibility, escaped)
+	s.blocked = s.eval.CreateBlockedEval(classEligibility, escaped, e.QuotaLimitReached())
 	if planFailure {
 		s.blocked.TriggeredBy = structs.EvalTriggerMaxPlans
 		s.blocked.StatusDescription = blockedEvalMaxPlanDesc
@@ -191,7 +193,7 @@ func (s *GenericScheduler) process() (bool, error) {
 	// Lookup the Job by ID
 	var err error
 	ws := memdb.NewWatchSet()
-	s.job, err = s.state.JobByID(ws, s.eval.JobID)
+	s.job, err = s.state.JobByID(ws, s.eval.Namespace, s.eval.JobID)
 	if err != nil {
 		return false, fmt.Errorf("failed to get job %q: %v", s.eval.JobID, err)
 	}
@@ -208,7 +210,7 @@ func (s *GenericScheduler) process() (bool, error) {
 
 	if !s.batch {
 		// Get any existing deployment
-		s.deployment, err = s.state.LatestDeploymentByJobID(ws, s.eval.JobID)
+		s.deployment, err = s.state.LatestDeploymentByJobID(ws, s.eval.Namespace, s.eval.JobID)
 		if err != nil {
 			return false, fmt.Errorf("failed to get job deployment %q: %v", s.eval.JobID, err)
 		}
@@ -294,7 +296,7 @@ func (s *GenericScheduler) process() (bool, error) {
 
 // filterCompleteAllocs filters allocations that are terminal and should be
 // re-placed.
-func (s *GenericScheduler) filterCompleteAllocs(allocs []*structs.Allocation) ([]*structs.Allocation, map[string]*structs.Allocation) {
+func (s *GenericScheduler) filterCompleteAllocs(allocs []*structs.Allocation) []*structs.Allocation {
 	filter := func(a *structs.Allocation) bool {
 		if s.batch {
 			// Allocs from batch jobs should be filtered when the desired status
@@ -319,19 +321,9 @@ func (s *GenericScheduler) filterCompleteAllocs(allocs []*structs.Allocation) ([
 		return a.TerminalStatus()
 	}
 
-	terminalAllocsByName := make(map[string]*structs.Allocation)
 	n := len(allocs)
 	for i := 0; i < n; i++ {
 		if filter(allocs[i]) {
-
-			// Add the allocation to the terminal allocs map if it's not already
-			// added or has a higher create index than the one which is
-			// currently present.
-			alloc, ok := terminalAllocsByName[allocs[i].Name]
-			if !ok || alloc.CreateIndex < allocs[i].CreateIndex {
-				terminalAllocsByName[allocs[i].Name] = allocs[i]
-			}
-
 			// Remove the allocation
 			allocs[i], allocs[n-1] = allocs[n-1], nil
 			i--
@@ -339,25 +331,7 @@ func (s *GenericScheduler) filterCompleteAllocs(allocs []*structs.Allocation) ([
 		}
 	}
 
-	// If the job is batch, we want to filter allocations that have been
-	// replaced by a newer version for the same task group.
-	filtered := allocs[:n]
-	if s.batch {
-		byTG := make(map[string]*structs.Allocation)
-		for _, alloc := range filtered {
-			existing := byTG[alloc.Name]
-			if existing == nil || existing.CreateIndex < alloc.CreateIndex {
-				byTG[alloc.Name] = alloc
-			}
-		}
-
-		filtered = make([]*structs.Allocation, 0, len(byTG))
-		for _, alloc := range byTG {
-			filtered = append(filtered, alloc)
-		}
-	}
-
-	return filtered, terminalAllocsByName
+	return allocs[:n]
 }
 
 // computeJobAllocs is used to reconcile differences between the job,
@@ -365,7 +339,7 @@ func (s *GenericScheduler) filterCompleteAllocs(allocs []*structs.Allocation) ([
 func (s *GenericScheduler) computeJobAllocs() error {
 	// Lookup the allocations by JobID
 	ws := memdb.NewWatchSet()
-	allocs, err := s.state.AllocsByJob(ws, s.eval.JobID, true)
+	allocs, err := s.state.AllocsByJob(ws, s.eval.Namespace, s.eval.JobID, true)
 	if err != nil {
 		return fmt.Errorf("failed to get allocs for job '%s': %v",
 			s.eval.JobID, err)
@@ -383,7 +357,7 @@ func (s *GenericScheduler) computeJobAllocs() error {
 	updateNonTerminalAllocsToLost(s.plan, tainted, allocs)
 
 	// Filter out the allocations in a terminal state
-	allocs, _ = s.filterCompleteAllocs(allocs)
+	allocs = s.filterCompleteAllocs(allocs)
 
 	reconciler := NewAllocReconciler(s.ctx.Logger(),
 		genericAllocUpdateFn(s.ctx, s.stack, s.eval.ID),
@@ -516,7 +490,8 @@ func (s *GenericScheduler) computePlacements(destructive, place []placementResul
 			if option != nil {
 				// Create an allocation for this
 				alloc := &structs.Allocation{
-					ID:            structs.GenerateUUID(),
+					ID:            uuid.Generate(),
+					Namespace:     s.job.Namespace,
 					EvalID:        s.eval.ID,
 					Name:          missing.Name(),
 					JobID:         s.job.ID,

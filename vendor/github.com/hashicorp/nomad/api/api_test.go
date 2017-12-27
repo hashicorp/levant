@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hashicorp/nomad/nomad/structs"
+	"github.com/hashicorp/nomad/helper/uuid"
 	"github.com/hashicorp/nomad/testutil"
 	"github.com/stretchr/testify/assert"
 )
@@ -22,6 +22,24 @@ var seen map[*testing.T]struct{}
 
 func init() {
 	seen = make(map[*testing.T]struct{})
+}
+
+func makeACLClient(t *testing.T, cb1 configCallback,
+	cb2 testutil.ServerConfigCallback) (*Client, *testutil.TestServer, *ACLToken) {
+	client, server := makeClient(t, cb1, func(c *testutil.TestServerConfig) {
+		c.ACL.Enabled = true
+		if cb2 != nil {
+			cb2(c)
+		}
+	})
+
+	// Get the root token
+	root, _, err := client.ACLTokens().Bootstrap(nil)
+	if err != nil {
+		t.Fatalf("failed to bootstrap ACLs: %v", err)
+	}
+	client.SetSecretID(root.SecretID)
+	return client, server, root
 }
 
 func makeClient(t *testing.T, cb1 configCallback,
@@ -97,17 +115,37 @@ func TestDefaultConfig_env(t *testing.T) {
 	t.Parallel()
 	url := "http://1.2.3.4:5678"
 	auth := []string{"nomaduser", "12345"}
+	region := "test"
+	namespace := "dev"
+	token := "foobar"
 
 	os.Setenv("NOMAD_ADDR", url)
 	defer os.Setenv("NOMAD_ADDR", "")
 
+	os.Setenv("NOMAD_REGION", region)
+	defer os.Setenv("NOMAD_REGION", "")
+
+	os.Setenv("NOMAD_NAMESPACE", namespace)
+	defer os.Setenv("NOMAD_NAMESPACE", "")
+
 	os.Setenv("NOMAD_HTTP_AUTH", strings.Join(auth, ":"))
 	defer os.Setenv("NOMAD_HTTP_AUTH", "")
+
+	os.Setenv("NOMAD_TOKEN", token)
+	defer os.Setenv("NOMAD_TOKEN", "")
 
 	config := DefaultConfig()
 
 	if config.Address != url {
 		t.Errorf("expected %q to be %q", config.Address, url)
+	}
+
+	if config.Region != region {
+		t.Errorf("expected %q to be %q", config.Region, region)
+	}
+
+	if config.Namespace != namespace {
+		t.Errorf("expected %q to be %q", config.Namespace, namespace)
 	}
 
 	if config.HttpAuth.Username != auth[0] {
@@ -116,6 +154,10 @@ func TestDefaultConfig_env(t *testing.T) {
 
 	if config.HttpAuth.Password != auth[1] {
 		t.Errorf("expected %q to be %q", config.HttpAuth.Password, auth[1])
+	}
+
+	if config.SecretID != token {
+		t.Errorf("Expected %q to be %q", config.SecretID, token)
 	}
 }
 
@@ -127,13 +169,18 @@ func TestSetQueryOptions(t *testing.T) {
 	r, _ := c.newRequest("GET", "/v1/jobs")
 	q := &QueryOptions{
 		Region:     "foo",
+		Namespace:  "bar",
 		AllowStale: true,
 		WaitIndex:  1000,
 		WaitTime:   100 * time.Second,
+		AuthToken:  "foobar",
 	}
 	r.setQueryOptions(q)
 
 	if r.params.Get("region") != "foo" {
+		t.Fatalf("bad: %v", r.params)
+	}
+	if r.params.Get("namespace") != "bar" {
 		t.Fatalf("bad: %v", r.params)
 	}
 	if _, ok := r.params["stale"]; !ok {
@@ -145,6 +192,9 @@ func TestSetQueryOptions(t *testing.T) {
 	if r.params.Get("wait") != "100000ms" {
 		t.Fatalf("bad: %v", r.params)
 	}
+	if r.token != "foobar" {
+		t.Fatalf("bad: %v", r.token)
+	}
 }
 
 func TestSetWriteOptions(t *testing.T) {
@@ -154,12 +204,20 @@ func TestSetWriteOptions(t *testing.T) {
 
 	r, _ := c.newRequest("GET", "/v1/jobs")
 	q := &WriteOptions{
-		Region: "foo",
+		Region:    "foo",
+		Namespace: "bar",
+		AuthToken: "foobar",
 	}
 	r.setWriteOptions(q)
 
 	if r.params.Get("region") != "foo" {
 		t.Fatalf("bad: %v", r.params)
+	}
+	if r.params.Get("namespace") != "bar" {
+		t.Fatalf("bad: %v", r.params)
+	}
+	if r.token != "foobar" {
+		t.Fatalf("bad: %v", r.token)
 	}
 }
 
@@ -170,7 +228,9 @@ func TestRequestToHTTP(t *testing.T) {
 
 	r, _ := c.newRequest("DELETE", "/v1/jobs/foo")
 	q := &QueryOptions{
-		Region: "foo",
+		Region:    "foo",
+		Namespace: "bar",
+		AuthToken: "foobar",
 	}
 	r.setQueryOptions(q)
 	req, err := r.toHTTP()
@@ -181,7 +241,10 @@ func TestRequestToHTTP(t *testing.T) {
 	if req.Method != "DELETE" {
 		t.Fatalf("bad: %v", req)
 	}
-	if req.URL.RequestURI() != "/v1/jobs/foo?region=foo" {
+	if req.URL.RequestURI() != "/v1/jobs/foo?namespace=bar&region=foo" {
+		t.Fatalf("bad: %v", req)
+	}
+	if req.Header.Get("X-Nomad-Token") != "foobar" {
 		t.Fatalf("bad: %v", req)
 	}
 }
@@ -234,7 +297,10 @@ func TestQueryString(t *testing.T) {
 	defer s.Stop()
 
 	r, _ := c.newRequest("PUT", "/v1/abc?foo=bar&baz=zip")
-	q := &WriteOptions{Region: "foo"}
+	q := &WriteOptions{
+		Region:    "foo",
+		Namespace: "bar",
+	}
 	r.setWriteOptions(q)
 
 	req, err := r.toHTTP()
@@ -242,7 +308,7 @@ func TestQueryString(t *testing.T) {
 		t.Fatalf("err: %s", err)
 	}
 
-	if uri := req.URL.RequestURI(); uri != "/v1/abc?baz=zip&foo=bar&region=foo" {
+	if uri := req.URL.RequestURI(); uri != "/v1/abc?baz=zip&foo=bar&namespace=bar&region=foo" {
 		t.Fatalf("bad uri: %q", uri)
 	}
 }
@@ -251,7 +317,7 @@ func TestClient_NodeClient(t *testing.T) {
 	http := "testdomain:4646"
 	tlsNode := func(string, *QueryOptions) (*Node, *QueryMeta, error) {
 		return &Node{
-			ID:         structs.GenerateUUID(),
+			ID:         uuid.Generate(),
 			Status:     "ready",
 			HTTPAddr:   http,
 			TLSEnabled: true,
@@ -259,7 +325,7 @@ func TestClient_NodeClient(t *testing.T) {
 	}
 	noTlsNode := func(string, *QueryOptions) (*Node, *QueryMeta, error) {
 		return &Node{
-			ID:         structs.GenerateUUID(),
+			ID:         uuid.Generate(),
 			Status:     "ready",
 			HTTPAddr:   http,
 			TLSEnabled: false,

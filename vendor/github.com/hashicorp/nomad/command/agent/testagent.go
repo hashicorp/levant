@@ -13,9 +13,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mitchellh/go-testing-interface"
+
+	metrics "github.com/armon/go-metrics"
+	"github.com/hashicorp/consul/lib/freeport"
 	"github.com/hashicorp/nomad/api"
 	"github.com/hashicorp/nomad/client/fingerprint"
 	"github.com/hashicorp/nomad/nomad"
+	"github.com/hashicorp/nomad/nomad/mock"
 	"github.com/hashicorp/nomad/nomad/structs"
 	sconfig "github.com/hashicorp/nomad/nomad/structs/config"
 	"github.com/hashicorp/nomad/testutil"
@@ -28,11 +33,13 @@ func init() {
 // TempDir defines the base dir for temporary directories.
 var TempDir = os.TempDir()
 
-// TestAgent encapsulates an Agent with a default configuration and
-// startup procedure suitable for testing. It panics if there are errors
-// during creation or startup instead of returning errors. It manages a
-// temporary data directory which is removed after shutdown.
+// TestAgent encapsulates an Agent with a default configuration and startup
+// procedure suitable for testing. It manages a temporary data directory which
+// is removed after shutdown.
 type TestAgent struct {
+	// T is the testing object
+	T testing.T
+
 	// Name is an optional name of the agent.
 	Name string
 
@@ -66,22 +73,29 @@ type TestAgent struct {
 	// Agent is the embedded Nomad agent.
 	// It is valid after Start().
 	*Agent
+
+	// RootToken is auto-bootstrapped if ACLs are enabled
+	RootToken *structs.ACLToken
 }
 
 // NewTestAgent returns a started agent with the given name and
-// configuration. It panics if the agent could not be started. The
-// caller should call Shutdown() to stop the agent and remove temporary
-// directories.
-func NewTestAgent(name string, configCallback func(*Config)) *TestAgent {
-	a := &TestAgent{Name: name, ConfigCallback: configCallback}
+// configuration. The caller should call Shutdown() to stop the agent and
+// remove temporary directories.
+func NewTestAgent(t testing.T, name string, configCallback func(*Config)) *TestAgent {
+	a := &TestAgent{
+		T:              t,
+		Name:           name,
+		ConfigCallback: configCallback,
+	}
+
 	a.Start()
 	return a
 }
 
-// Start starts a test agent. It panics if the agent could not be started.
+// Start starts a test agent.
 func (a *TestAgent) Start() *TestAgent {
 	if a.Agent != nil {
-		panic("TestAgent already started")
+		a.T.Fatalf("TestAgent already started")
 	}
 	if a.Config == nil {
 		a.Config = a.config()
@@ -94,7 +108,7 @@ func (a *TestAgent) Start() *TestAgent {
 		name = strings.Replace(name, "/", "_", -1)
 		d, err := ioutil.TempDir(TempDir, name)
 		if err != nil {
-			panic(fmt.Sprintf("Error creating data dir %s: %s", filepath.Join(TempDir, name), err))
+			a.T.Fatalf("Error creating data dir %s: %s", filepath.Join(TempDir, name), err)
 		}
 		a.DataDir = d
 		a.Config.DataDir = d
@@ -102,7 +116,7 @@ func (a *TestAgent) Start() *TestAgent {
 	}
 
 	for i := 10; i >= 0; i-- {
-		pickRandomPorts(a.Config)
+		a.pickRandomPorts(a.Config)
 		if a.Config.NodeName == "" {
 			a.Config.NodeName = fmt.Sprintf("Node %d", a.Config.Ports.RPC)
 		}
@@ -112,7 +126,7 @@ func (a *TestAgent) Start() *TestAgent {
 			writeKey := func(key, filename string) {
 				path := filepath.Join(a.Config.DataDir, filename)
 				if err := initKeyring(path, key); err != nil {
-					panic(fmt.Sprintf("Error creating keyring %s: %s", path, err))
+					a.T.Fatalf("Error creating keyring %s: %s", path, err)
 				}
 			}
 			writeKey(a.Key, serfKeyring)
@@ -152,7 +166,7 @@ func (a *TestAgent) Start() *TestAgent {
 			err := a.RPC("Status.Leader", args, &leader)
 			return leader != "", err
 		}, func(err error) {
-			panic(fmt.Sprintf("failed to find leader: %v", err))
+			a.T.Fatalf("failed to find leader: %v", err)
 		})
 	} else {
 		testutil.WaitForResult(func() (bool, error) {
@@ -161,8 +175,19 @@ func (a *TestAgent) Start() *TestAgent {
 			_, err := a.Server.AgentSelfRequest(resp, req)
 			return err == nil && resp.Code == 200, err
 		}, func(err error) {
-			panic(fmt.Sprintf("failed OK response: %v", err))
+			a.T.Fatalf("failed OK response: %v", err)
 		})
+	}
+
+	// Check if ACLs enabled. Use special value of PolicyTTL 0s
+	// to do a bypass of this step. This is so we can test bootstrap
+	// without having to pass down a special flag.
+	if a.Config.ACL.Enabled && a.Config.Server.Enabled && a.Config.ACL.PolicyTTL != 0 {
+		a.RootToken = mock.ACLManagementToken()
+		state := a.Agent.server.State()
+		if err := state.BootstrapACLTokens(1, 0, a.RootToken); err != nil {
+			a.T.Fatalf("token bootstrap failed: %v", err)
+		}
 	}
 	return a
 }
@@ -172,7 +197,14 @@ func (a *TestAgent) start() (*Agent, error) {
 		a.LogOutput = os.Stderr
 	}
 
-	agent, err := NewAgent(a.Config, a.LogOutput)
+	inm := metrics.NewInmemSink(10*time.Second, time.Minute)
+	metrics.NewGlobal(metrics.DefaultConfig("service-name"), inm)
+
+	if inm == nil {
+		return nil, fmt.Errorf("unable to set up in memory metrics needed for agent initialization")
+	}
+
+	agent, err := NewAgent(a.Config, a.LogOutput, inm)
 	if err != nil {
 		return nil, err
 	}
@@ -213,15 +245,9 @@ func (a *TestAgent) Client() *api.Client {
 	conf.Address = a.HTTPAddr()
 	c, err := api.NewClient(conf)
 	if err != nil {
-		panic(fmt.Sprintf("Error creating Nomad API client: %s", err))
+		a.T.Fatalf("Error creating Nomad API client: %s", err)
 	}
 	return c
-}
-
-// FivePorts returns the first port number of a block of
-// five random ports.
-func FivePorts() int {
-	return 1030 + int(rand.Int31n(6440))*5
 }
 
 // pickRandomPorts selects random ports from fixed size random blocks of
@@ -232,14 +258,14 @@ func FivePorts() int {
 // chance of port conflicts for concurrently executed test binaries.
 // Instead of relying on one set of ports to be sufficient we retry
 // starting the agent with different ports on port conflict.
-func pickRandomPorts(c *Config) {
-	port := FivePorts()
-	c.Ports.HTTP = port + 1
-	c.Ports.RPC = port + 2
-	c.Ports.Serf = port + 3
+func (a *TestAgent) pickRandomPorts(c *Config) {
+	ports := freeport.GetT(a.T, 3)
+	c.Ports.HTTP = ports[0]
+	c.Ports.RPC = ports[1]
+	c.Ports.Serf = ports[2]
 
 	if err := c.normalizeAddrs(); err != nil {
-		panic(fmt.Sprintf("error normalizing config: %v", err))
+		a.T.Fatalf("error normalizing config: %v", err)
 	}
 }
 
