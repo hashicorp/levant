@@ -1,3 +1,9 @@
+## 0.0.4 (Unreleased)
+
+IMPROVEMENTS:
+ * Job types of `batch` now undergo checking to confirm the job reaches status of `running` [GH-73](https://github.com/jrasell/levant/pull/73)
+ * Vendored Nomad version has been increased to 0.7.1 allowing use of Nomad ACL tokens [GH-76](https://github.com/jrasell/levant/pull/76)
+
 ## 0.0.3 (23 December 2017)
 
 IMPROVEMENTS:
