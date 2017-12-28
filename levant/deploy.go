@@ -84,9 +84,8 @@ func (c *nomadClient) Deploy(job *nomad.Job, autoPromote int, forceCount bool) (
 	}
 
 	// GH-50: batch job types do not return an evaluation upon registration.
-	if eval == nil && *job.Type == nomadStructs.JobTypeBatch {
-		logging.Debug("levant/deploy: job type %s does not create evaluations", nomadStructs.JobTypeBatch)
-		return true
+	if eval.EvalID == "" && *job.Type == nomadStructs.JobTypeBatch {
+		return c.checkBatchJob(job.Name)
 	}
 
 	// Trigger the evaluationInspector to identify any potential errors in the
