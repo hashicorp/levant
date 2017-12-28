@@ -12,7 +12,14 @@ The Nomad agent collects various runtime metrics about the performance of
 different libraries and subsystems. These metrics are aggregated on a ten
 second interval and are retained for one minute.
 
-To view this data, you must send a signal to the Nomad process: on Unix,
+This data can be accessed via an HTTP endpoint or via sending a signal to the
+Nomad process.
+
+Via HTTP, as of Nomad version 0.7, this data is available at `/metrics`. See
+[Metrics](/api/metrics.html) for more information.
+
+
+To view this data via sending a signal to the Nomad process: on Unix,
 this is `USR1` while on Windows it is `BREAK`. Once Nomad receives the signal,
 it will dump the current telemetry information to the agent's `stderr`.
 
@@ -229,7 +236,238 @@ configuration block.
 Please see the [agent configuration](/docs/agent/configuration/telemetry.html)
 page for more details.
 
-## Host Metrics
+## Host Metrics (post Nomad version 0.7)
+
+Starting in version 0.7, Nomad will emit tagged metrics, in the below format:
+
+<table class="table table-bordered table-striped">
+  <tr>
+    <th>Metric</th>
+    <th>Description</th>
+    <th>Unit</th>
+    <th>Type</th>
+    <th>Labels</th>
+  </tr>
+  <tr>
+    <td>`nomad.client.allocated.cpu`</td>
+    <td>Total amount of CPU shares the scheduler has allocated to tasks</td>
+    <td>MHz</td>
+    <td>Gauge</td>
+    <td>node_id, datacenter</td>
+  </tr>
+  <tr>
+    <td>`nomad.client.unallocated.cpu`</td>
+    <td>Total amount of CPU shares free for the scheduler to allocate to tasks</td>
+    <td>MHz</td>
+    <td>Gauge</td>
+    <td>node_id, datacenter</td>
+  </tr>
+  <tr>
+    <td>`nomad.client.allocated.memory`</td>
+    <td>Total amount of memory the scheduler has allocated to tasks</td>
+    <td>Megabytes</td>
+    <td>Gauge</td>
+    <td>node_id, datacenter</td>
+  </tr>
+  <tr>
+    <td>`nomad.client.unallocated.memory`</td>
+    <td>Total amount of memory free for the scheduler to allocate to tasks</td>
+    <td>Megabytes</td>
+    <td>Gauge</td>
+    <td>node_id, datacenter</td>
+  </tr>
+  <tr>
+    <td>`nomad.client.allocated.disk`</td>
+    <td>Total amount of disk space the scheduler has allocated to tasks</td>
+    <td>Megabytes</td>
+    <td>Gauge</td>
+    <td>node_id, datacenter</td>
+  </tr>
+  <tr>
+    <td>`nomad.client.unallocated.disk`</td>
+    <td>Total amount of disk space free for the scheduler to allocate to tasks</td>
+    <td>Megabytes</td>
+    <td>Gauge</td>
+    <td>node_id, datacenter</td>
+  </tr>
+  <tr>
+    <td>`nomad.client.allocated.iops`</td>
+    <td>Total amount of IOPS the scheduler has allocated to tasks</td>
+    <td>IOPS</td>
+    <td>Gauge</td>
+    <td>node_id, datacenter</td>
+  </tr>
+  <tr>
+    <td>`nomad.client.unallocated.iops`</td>
+    <td>Total amount of IOPS free for the scheduler to allocate to tasks</td>
+    <td>IOPS</td>
+    <td>Gauge</td>
+    <td>node_id, datacenter</td>
+  </tr>
+  <tr>
+    <td>`nomad.client.allocated.network`</td>
+    <td>Total amount of bandwidth the scheduler has allocated to tasks on the
+    given device</td>
+    <td>Megabits</td>
+    <td>Gauge</td>
+    <td>node_id, datacenter, device</td>
+  </tr>
+  <tr>
+    <td>`nomad.client.unallocated.network`</td>
+    <td>Total amount of bandwidth free for the scheduler to allocate to tasks on
+    the given device</td>
+    <td>Megabits</td>
+    <td>Gauge</td>
+    <td>node_id, datacenter, device</td>
+  </tr>
+  <tr>
+    <td>`nomad.client.host.memory.total`</td>
+    <td>Total amount of physical memory on the node</td>
+    <td>Bytes</td>
+    <td>Gauge</td>
+    <td>node_id, datacenter</td>
+  </tr>
+  <tr>
+    <td>`nomad.client.host.memory.available`</td>
+    <td>Total amount of memory available to processes which includes free and
+    cached memory</td>
+    <td>Bytes</td>
+    <td>Gauge</td>
+    <td>node_id, datacenter</td>
+  </tr>
+  <tr>
+    <td>`nomad.client.host.memory.used`</td>
+    <td>Amount of memory used by processes</td>
+    <td>Bytes</td>
+    <td>Gauge</td>
+    <td>node_id, datacenter</td>
+  </tr>
+  <tr>
+    <td>`nomad.client.host.memory.free`</td>
+    <td>Amount of memory which is free</td>
+    <td>Bytes</td>
+    <td>Gauge</td>
+    <td>node_id, datacenter</td>
+  </tr>
+  <tr>
+    <td>`nomad.client.uptime`</td>
+    <td>Uptime of the host running the Nomad client</td>
+    <td>Seconds</td>
+    <td>Gauge</td>
+    <td>node_id, datacenter</td>
+  </tr>
+  <tr>
+    <td>`nomad.client.host.cpu.total`</td>
+    <td>Total CPU utilization</td>
+    <td>Percentage</td>
+    <td>Gauge</td>
+    <td>node_id, datacenter, cpu</td>
+  </tr>
+  <tr>
+    <td>`nomad.client.host.cpu.user`</td>
+    <td>CPU utilization in the user space</td>
+    <td>Percentage</td>
+    <td>Gauge</td>
+    <td>node_id, datacenter, cpu</td>
+  </tr>
+  <tr>
+    <td>`nomad.client.host.cpu.system`</td>
+    <td>CPU utilization in the system space</td>
+    <td>Percentage</td>
+    <td>Gauge</td>
+    <td>node_id, datacenter, cpu</td>
+  </tr>
+  <tr>
+    <td>`nomad.client.host.cpu.idle`</td>
+    <td>Idle time spent by the CPU</td>
+    <td>Percentage</td>
+    <td>Gauge</td>
+    <td>node_id, datacenter, cpu</td>
+  </tr>
+  <tr>
+    <td>`nomad.client.host.disk.size`</td>
+    <td>Total size of the device</td>
+    <td>Bytes</td>
+    <td>Gauge</td>
+    <td>node_id, datacenter, disk</td>
+  </tr>
+  <tr>
+    <td>`nomad.client.host.disk.used`</td>
+    <td>Amount of space which has been used</td>
+    <td>Bytes</td>
+    <td>Gauge</td>
+    <td>node_id, datacenter, disk</td>
+  </tr>
+  <tr>
+    <td>`nomad.client.host.disk.available`</td>
+    <td>Amount of space which is available</td>
+    <td>Bytes</td>
+    <td>Gauge</td>
+    <td>node_id, datacenter, disk</td>
+  </tr>
+  <tr>
+    <td>`nomad.client.host.disk.used_percent`</td>
+    <td>Percentage of disk space used</td>
+    <td>Percentage</td>
+    <td>Gauge</td>
+    <td>node_id, datacenter, disk</td>
+  </tr>
+  <tr>
+    <td>`nomad.client.host.disk.inodes_percent`</td>
+    <td>Disk space consumed by the inodes</td>
+    <td>Percent</td>
+    <td>Gauge</td>
+    <td>node_id, datacenter, disk</td>
+  </tr>
+  <tr>
+    <td>`nomad.client.allocs.start`</td>
+    <td>Number of allocations starting</td>
+    <td>Integer</td>
+    <td>Counter</td>
+    <td>node_id, job, task_group</td>
+  </tr>
+  <tr>
+    <td>`nomad.client.allocs.running`</td>
+    <td>Number of allocations starting to run</td>
+    <td>Integer</td>
+    <td>Counter</td>
+    <td>node_id, job, task_group</td>
+  </tr>
+  <tr>
+    <td>`nomad.client.allocs.failed`</td>
+    <td>Number of allocations failing</td>
+    <td>Integer</td>
+    <td>Counter</td>
+    <td>node_id, job, task_group</td>
+  </tr>
+  <tr>
+    <td>`nomad.client.allocs.restart`</td>
+    <td>Number of allocations restarting</td>
+    <td>Integer</td>
+    <td>Counter</td>
+    <td>node_id, job, task_group</td>
+  </tr>
+  <tr>
+    <td>`nomad.client.allocs.complete`</td>
+    <td>Number of allocations completing</td>
+    <td>Integer</td>
+    <td>Counter</td>
+    <td>node_id, job, task_group</td>
+  </tr>
+  <tr>
+    <td>`nomad.client.allocs.destroy`</td>
+    <td>Number of allocations being destroyed</td>
+    <td>Integer</td>
+    <td>Counter</td>
+    <td>node_id, job, task_group</td>
+  </tr>
+</table>
+
+## Host Metrics (deprecated post Nomad 0.7)
+
+The below are metrics emitted by Nomad in versions prior to 0.7. These metrics
+can be emitted in the below format post-0.7 (as well as the new format,
+detailed above) but any new metrics will only be available in the new format.
 
 <table class="table table-bordered table-striped">
   <tr>
@@ -445,7 +683,7 @@ page for more details.
     <td>Gauge</td>
   </tr>
   <tr>
-    <td>`nomad.client.allocs.<Job>.TaskGroup>.<AllocID>.<Task>.cpu.user`</td>
+    <td>`nomad.client.allocs.<Job>.<TaskGroup>.<AllocID>.<Task>.cpu.user`</td>
     <td>Total CPU resources consumed by the task in the user space</td>
     <td>Percentage</td>
     <td>Gauge</td>

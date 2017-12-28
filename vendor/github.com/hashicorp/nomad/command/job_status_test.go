@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/nomad/api"
+	"github.com/hashicorp/nomad/command/agent"
 	"github.com/hashicorp/nomad/nomad/mock"
 	"github.com/mitchellh/cli"
 	"github.com/posener/complete"
@@ -112,8 +113,11 @@ func TestJobStatusCommand_Run(t *testing.T) {
 	if !strings.Contains(out, "Allocations") {
 		t.Fatalf("should dump allocations")
 	}
-	if !strings.Contains(out, "Created At") {
+	if !strings.Contains(out, "Created") {
 		t.Fatal("should have created header")
+	}
+	if !strings.Contains(out, "Modified") {
+		t.Fatal("should have modified header")
 	}
 	ui.ErrorWriter.Reset()
 	ui.OutputWriter.Reset()
@@ -136,6 +140,14 @@ func TestJobStatusCommand_Run(t *testing.T) {
 	out = ui.OutputWriter.String()
 	if !strings.Contains(out, "job1_sfx") || strings.Contains(out, "job2_sfx") {
 		t.Fatalf("expected only job1_sfx, got: %s", out)
+	}
+
+	if !strings.Contains(out, "Created") {
+		t.Fatal("should have created header")
+	}
+
+	if !strings.Contains(out, "Modified") {
+		t.Fatal("should have modified header")
 	}
 	ui.OutputWriter.Reset()
 
@@ -213,6 +225,55 @@ func TestJobStatusCommand_AutocompleteArgs(t *testing.T) {
 	res := predictor.Predict(args)
 	assert.Equal(1, len(res))
 	assert.Equal(j.ID, res[0])
+}
+
+func TestJobStatusCommand_WithAccessPolicy(t *testing.T) {
+	assert := assert.New(t)
+	t.Parallel()
+
+	config := func(c *agent.Config) {
+		c.ACL.Enabled = true
+	}
+
+	srv, client, url := testServer(t, true, config)
+	defer srv.Shutdown()
+
+	// Bootstrap an initial ACL token
+	token := srv.RootToken
+	assert.NotNil(token, "failed to bootstrap ACL token")
+
+	// Register a job
+	j := testJob("job1_sfx")
+
+	invalidToken := mock.ACLToken()
+
+	ui := new(cli.MockUi)
+	cmd := &JobStatusCommand{Meta: Meta{Ui: ui, flagAddress: url}}
+
+	// registering a job without a token fails
+	client.SetSecretID(invalidToken.SecretID)
+	resp, _, err := client.Jobs().Register(j, nil)
+	assert.NotNil(err)
+
+	// registering a job with a valid token succeeds
+	client.SetSecretID(token.SecretID)
+	resp, _, err = client.Jobs().Register(j, nil)
+	assert.Nil(err)
+	code := waitForSuccess(ui, client, fullId, t, resp.EvalID)
+	assert.Equal(0, code)
+
+	// Request Job List without providing a valid token
+	code = cmd.Run([]string{"-address=" + url, "-token=" + invalidToken.SecretID, "-short"})
+	assert.Equal(1, code)
+
+	// Request Job List with a valid token
+	code = cmd.Run([]string{"-address=" + url, "-token=" + token.SecretID, "-short"})
+	assert.Equal(0, code)
+
+	out := ui.OutputWriter.String()
+	if !strings.Contains(out, *j.ID) {
+		t.Fatalf("should contain full identifiers, got %s", out)
+	}
 }
 
 func waitForSuccess(ui cli.Ui, client *api.Client, length int, t *testing.T, evalId string) int {

@@ -12,7 +12,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/consul/lib/freeport"
 	"github.com/hashicorp/nomad/command/agent/consul"
+	"github.com/hashicorp/nomad/helper/uuid"
+	"github.com/hashicorp/nomad/nomad/mock"
 	"github.com/hashicorp/nomad/nomad/structs"
 	"github.com/hashicorp/nomad/nomad/structs/config"
 	"github.com/hashicorp/nomad/testutil"
@@ -21,10 +24,6 @@ import (
 var (
 	nodeNumber uint32 = 0
 )
-
-func getPort() int {
-	return 1030 + int(rand.Int31n(6440))
-}
 
 func testLogger() *log.Logger {
 	return log.New(os.Stderr, "", log.LstdFlags)
@@ -38,10 +37,25 @@ func tmpDir(t *testing.T) string {
 	return dir
 }
 
+func testACLServer(t *testing.T, cb func(*Config)) (*Server, *structs.ACLToken) {
+	server := testServer(t, func(c *Config) {
+		c.ACLEnabled = true
+		if cb != nil {
+			cb(c)
+		}
+	})
+	token := mock.ACLManagementToken()
+	err := server.State().BootstrapACLTokens(1, 0, token)
+	if err != nil {
+		t.Fatalf("failed to bootstrap ACL token: %v", err)
+	}
+	return server, token
+}
+
 func testServer(t *testing.T, cb func(*Config)) *Server {
 	// Setup the default settings
 	config := DefaultConfig()
-	config.Build = "unittest"
+	config.Build = "0.7.0+unittest"
 	config.DevMode = true
 	nodeNum := atomic.AddUint32(&nodeNumber, 1)
 	config.NodeName = fmt.Sprintf("nomad-%03d", nodeNum)
@@ -82,11 +96,12 @@ func testServer(t *testing.T, cb func(*Config)) *Server {
 
 	for i := 10; i >= 0; i-- {
 		// Get random ports
+		ports := freeport.GetT(t, 2)
 		config.RPCAddr = &net.TCPAddr{
 			IP:   []byte{127, 0, 0, 1},
-			Port: getPort(),
+			Port: ports[0],
 		}
-		config.SerfConfig.MemberlistConfig.BindPort = getPort()
+		config.SerfConfig.MemberlistConfig.BindPort = ports[1]
 
 		// Create server
 		server, err := NewServer(config, catalog, logger)
@@ -251,7 +266,7 @@ func TestServer_Reload_Vault(t *testing.T) {
 	tr := true
 	config := s1.config
 	config.VaultConfig.Enabled = &tr
-	config.VaultConfig.Token = structs.GenerateUUID()
+	config.VaultConfig.Token = uuid.Generate()
 
 	if err := s1.Reload(config); err != nil {
 		t.Fatalf("Reload failed: %v", err)

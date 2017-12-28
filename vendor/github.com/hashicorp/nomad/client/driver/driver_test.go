@@ -2,6 +2,7 @@ package driver
 
 import (
 	"io"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"github.com/hashicorp/nomad/client/config"
 	"github.com/hashicorp/nomad/client/driver/env"
 	"github.com/hashicorp/nomad/helper/testtask"
+	"github.com/hashicorp/nomad/helper/uuid"
 	"github.com/hashicorp/nomad/nomad/mock"
 	"github.com/hashicorp/nomad/nomad/structs"
 )
@@ -23,7 +25,7 @@ var basicResources = &structs.Resources{
 	MemoryMB: 256,
 	DiskMB:   20,
 	Networks: []*structs.NetworkResource{
-		&structs.NetworkResource{
+		{
 			IP:            "0.0.0.0",
 			ReservedPorts: []structs.Port{{Label: "main", Value: 12345}},
 			DynamicPorts:  []structs.Port{{Label: "HTTP", Value: 43330}},
@@ -69,10 +71,39 @@ func testLogger() *log.Logger {
 	return log.New(os.Stderr, "", log.LstdFlags)
 }
 
-func testConfig() *config.Config {
+func testConfig(t *testing.T) *config.Config {
 	conf := config.DefaultConfig()
-	conf.StateDir = os.TempDir()
-	conf.AllocDir = os.TempDir()
+
+	// Evaluate the symlinks so that the temp directory resolves correctly on
+	// Mac OS.
+	d1, err := ioutil.TempDir("", "TestStateDir")
+	if err != nil {
+		t.Fatal(err)
+	}
+	d2, err := ioutil.TempDir("", "TestAllocDir")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p1, err := filepath.EvalSymlinks(d1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p2, err := filepath.EvalSymlinks(d2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Give the directories access to everyone
+	if err := os.Chmod(p1, 0777); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(p2, 0777); err != nil {
+		t.Fatal(err)
+	}
+
+	conf.StateDir = p1
+	conf.AllocDir = p2
 	conf.MaxKillTimeout = 10 * time.Second
 	conf.Region = "global"
 	conf.Node = mock.Node()
@@ -90,9 +121,9 @@ type testContext struct {
 //
 // It is up to the caller to call AllocDir.Destroy to cleanup.
 func testDriverContexts(t *testing.T, task *structs.Task) *testContext {
-	cfg := testConfig()
+	cfg := testConfig(t)
 	cfg.Node = mock.Node()
-	allocDir := allocdir.NewAllocDir(testLogger(), filepath.Join(cfg.AllocDir, structs.GenerateUUID()))
+	allocDir := allocdir.NewAllocDir(testLogger(), filepath.Join(cfg.AllocDir, uuid.Generate()))
 	if err := allocDir.Build(); err != nil {
 		t.Fatalf("AllocDir.Build() failed: %v", err)
 	}
@@ -140,7 +171,7 @@ func setupTaskEnv(t *testing.T, driver string) (*allocdir.TaskDir, map[string]st
 			CPU:      1000,
 			MemoryMB: 500,
 			Networks: []*structs.NetworkResource{
-				&structs.NetworkResource{
+				{
 					IP:            "1.2.3.4",
 					ReservedPorts: []structs.Port{{Label: "one", Value: 80}, {Label: "two", Value: 443}},
 					DynamicPorts:  []structs.Port{{Label: "admin", Value: 8081}, {Label: "web", Value: 8086}},
@@ -157,7 +188,7 @@ func setupTaskEnv(t *testing.T, driver string) (*allocdir.TaskDir, map[string]st
 	alloc.Job.TaskGroups[0].Tasks[0] = task
 	alloc.Name = "Bar"
 	alloc.TaskResources["web"].Networks[0].DynamicPorts[0].Value = 2000
-	conf := testConfig()
+	conf := testConfig(t)
 	allocDir := allocdir.NewAllocDir(testLogger(), filepath.Join(conf.AllocDir, alloc.ID))
 	taskDir := allocDir.NewTaskDir(task.Name)
 	eb := env.NewBuilder(conf.Node, alloc, task, conf.Region)
@@ -178,12 +209,12 @@ func setupTaskEnv(t *testing.T, driver string) (*allocdir.TaskDir, map[string]st
 		"NOMAD_PORT_two":                "443",
 		"NOMAD_HOST_PORT_two":           "443",
 		"NOMAD_ADDR_admin":              "1.2.3.4:8081",
-		"NOMAD_ADDR_web_main":           "192.168.0.100:5000",
+		"NOMAD_ADDR_web_admin":          "192.168.0.100:5000",
 		"NOMAD_ADDR_web_http":           "192.168.0.100:2000",
-		"NOMAD_IP_web_main":             "192.168.0.100",
+		"NOMAD_IP_web_admin":            "192.168.0.100",
 		"NOMAD_IP_web_http":             "192.168.0.100",
 		"NOMAD_PORT_web_http":           "2000",
-		"NOMAD_PORT_web_main":           "5000",
+		"NOMAD_PORT_web_admin":          "5000",
 		"NOMAD_IP_admin":                "1.2.3.4",
 		"NOMAD_PORT_admin":              "8081",
 		"NOMAD_HOST_PORT_admin":         "8081",
@@ -301,31 +332,6 @@ func TestDriver_TaskEnv_Image(t *testing.T) {
 	// Any remaining env vars are unexpected
 	for actk, actv := range act {
 		t.Errorf("Env var %s=%q is unexpected", actk, actv)
-	}
-}
-
-func TestMapMergeStrInt(t *testing.T) {
-	t.Parallel()
-	a := map[string]int{
-		"cakes":   5,
-		"cookies": 3,
-	}
-
-	b := map[string]int{
-		"cakes": 3,
-		"pies":  2,
-	}
-
-	c := mapMergeStrInt(a, b)
-
-	d := map[string]int{
-		"cakes":   3,
-		"cookies": 3,
-		"pies":    2,
-	}
-
-	if !reflect.DeepEqual(c, d) {
-		t.Errorf("\nExpected\n%+v\nGot\n%+v\n", d, c)
 	}
 }
 

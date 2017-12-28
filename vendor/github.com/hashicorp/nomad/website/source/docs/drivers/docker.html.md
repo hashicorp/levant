@@ -74,7 +74,7 @@ The `docker` driver supports the following configuration in the job spec.  Only
       command = "my-command"
     }
     ```
-
+    
 * `dns_search_domains` - (Optional) A list of DNS search domains for the container
   to use.
 
@@ -96,6 +96,34 @@ The `docker` driver supports the following configuration in the job spec.  Only
 
 * `interactive` - (Optional) `true` or `false` (default). Keep STDIN open on
   the container.
+
+* `sysctl` - (Optional) A key-value map of sysctl configurations to set to the
+   containers on start.
+
+    ```hcl
+    config {
+      sysctl {
+        net.core.somaxconn = "16384"
+      }
+    }
+    ```
+
+* `ulimit` - (Optional) A key-value map of ulimit configurations to set to the
+  containers on start.
+
+    ```hcl
+    config {
+      ulimit {
+        nproc = "4242"
+        nofile = "2048:4096"
+      }
+    }
+    ```
+
+* `privileged` - (Optional) `true` or `false` (default). Privileged mode gives
+  the container access to devices on the host. Note that this also requires the
+  nomad agent and docker daemon to be configured to allow privileged
+  containers.
 
 * `ipc_mode` - (Optional) The IPC mode to be used for the container. The default
   is `none` for a private IPC namespace. Other values are `host` for sharing
@@ -122,18 +150,15 @@ The `docker` driver supports the following configuration in the job spec.  Only
     }
     ```
 
-* `load` - (Optional) A list of paths to image archive files. If
-  this key is not specified, Nomad assumes the `image` is hosted on a repository
-  and attempts to pull the image. The `artifact` blocks can be specified to
-  download each of the archive files. The equivalent of `docker load -i path`
-  would be run on each of the archive files.
+* `load` - (Optional) Load an image from a `tar` archive file instead of from a
+  remote repository. Equivalent to the `docker load -i <filename>` command.
 
     ```hcl
     artifact {
       source = "http://path.to/redis.tar"
     }
     config {
-      load = ["redis.tar"]
+      load = "redis.tar"
       image = "redis"
     }
     ```
@@ -283,6 +308,26 @@ The `docker` driver supports the following configuration in the job spec.  Only
       ]
     }
     ```
+* `devices` - (Optional) A list of
+  [devices](https://docs.docker.com/engine/reference/commandline/run/#add-host-device-to-container-device)
+  to be exposed the container. `host_path` is the only required field. By default, the container will be able to
+  `read`, `write` and `mknod` these devices. Use the optional `cgroup_permissions` field to restrict permissions.
+
+    ```hcl
+    config {
+      devices = [
+        {
+          host_path = "/dev/sda1"
+          container_path = "/dev/xvdc"
+          cgroup_permissions = "r"
+        },
+        {
+          host_path = "/dev/sda2"
+          container_path = "/dev/xvdd"
+        }
+      ]
+    }
+    ```
 
 ### Container Name
 
@@ -349,7 +394,17 @@ Example docker-config, using two helper scripts in $PATH,
 }
 ```
 
+Example agent configuration, using a helper script "docker-credential-ecr" in
+$PATH
 
+```hcl
+client {
+  enabled = true
+  options {
+    "docker.auth.helper" = "ecr"
+  }
+}
+```
 !> **Be Careful!** At this time these credentials are stored in Nomad in plain
 text. Secrets management will be added in a later release.
 
@@ -483,9 +538,12 @@ of the Linux Kernel and Docker daemon.
 The `docker` driver has the following [client configuration
 options](/docs/agent/configuration/client.html#options):
 
-* `docker.endpoint` - Defaults to `unix:///var/run/docker.sock`. You will need
-  to customize this if you use a non-standard socket (HTTP or another
-  location).
+* `docker.endpoint` - If using a non-standard socket, HTTP or another location,
+  or if TLS is being used, `docker.endpoint` must be set. If unset, Nomad will
+  attempt to instantiate a Docker client using the `DOCKER_HOST` environment
+  variable and then fall back to the default listen address for the given
+  operating system. Defaults to `unix:///var/run/docker.sock` on Unix platforms
+  and `npipe:////./pipe/docker_engine` for Windows.
 
 * `docker.auth.config` <a id="auth_file"></a>- Allows an operator to specify a
   JSON file which is in the dockercfg format containing authentication
@@ -495,7 +553,8 @@ options](/docs/agent/configuration/client.html#options):
 * `docker.auth.helper` <a id="auth_helper"></a>- Allows an operator to specify
   a [credsStore](https://docs.docker.com/engine/reference/commandline/login/#credential-helper-protocol)
   -like script on $PATH to lookup authentication information from external
-  sources.
+  sources. The script's name must begin with `docker-credential-` and this
+  option should include only the basename of the script, not the path.
 
 * `docker.tls.cert` - Path to the server's certificate file (`.pem`). Specify
   this along with `docker.tls.key` and `docker.tls.ca` to use a TLS client to
@@ -515,10 +574,11 @@ options](/docs/agent/configuration/client.html#options):
 * `docker.cleanup.image` Defaults to `true`. Changing this to `false` will
   prevent Nomad from removing images from stopped tasks.
 
-* `docker.cleanup.image.delay` A time duration that defaults to `3m`. The delay
-  controls how long Nomad will wait between an image being unused and deleting
-  it. If a tasks is received that uses the same image within the delay, the
-  image will be reused.
+* `docker.cleanup.image.delay` A time duration, as [defined
+  here](https://golang.org/pkg/time/#ParseDuration), that defaults to `3m`. The
+  delay controls how long Nomad will wait between an image being unused and
+  deleting it. If a tasks is received that uses the same image within the delay,
+  the image will be reused.
 
 * `docker.volumes.enabled`: Defaults to `true`. Allows tasks to bind host paths
   (`volumes`) inside their container and use volume drivers (`volume_driver`).
@@ -614,9 +674,9 @@ need a higher degree of isolation between processes for security or other
 reasons, it is recommended to use full virtualization like
 [QEMU](/docs/drivers/qemu.html).
 
-## Docker For Mac Caveats
+## Docker for Mac Caveats
 
-Docker For Mac runs docker inside a small VM and then allows access to parts of
+Docker for Mac runs Docker inside a small VM and then allows access to parts of
 the host filesystem into that VM. At present, nomad uses a syslog server bound to
 a Unix socket within a path that both the host and the VM can access to forward
 log messages back to nomad. But at present, Docker For Mac does not work for
@@ -628,3 +688,11 @@ logs will be available to nomad. Users must use the native docker facilities to
 examine the logs of any jobs running under docker.
 
 In the future, we will resolve this issue, one way or another.
+
+## Docker for Windows Caveats
+
+Docker for Windows only supports running Windows containers. Because Docker for
+Windows is relatively new and rapidly evolving you may want to consult the
+[list of relevant issues on GitHub][WinIssues].
+
+[WinIssues]: https://github.com/hashicorp/nomad/issues?q=is%3Aopen+is%3Aissue+label%3Adriver%2Fdocker+label%3Aplatform-windows

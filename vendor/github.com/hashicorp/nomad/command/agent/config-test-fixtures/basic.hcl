@@ -63,6 +63,7 @@ client {
 }
 server {
 	enabled = true
+	authoritative_region = "foobar"
 	bootstrap_expect = 5
 	data_dir = "/tmp/data"
 	protocol_version = 3
@@ -82,13 +83,22 @@ server {
 	rejoin_after_leave = true
     encrypt = "abc"
 }
+acl {
+    enabled = true
+    token_ttl = "60s"
+    policy_ttl = "60s"
+    replication_token = "foobar"
+}
 telemetry {
 	statsite_address = "127.0.0.1:1234"
 	statsd_address = "127.0.0.1:2345"
+	prometheus_metrics = true
 	disable_hostname = true
     collection_interval = "3s"
     publish_allocation_metrics = true
     publish_node_metrics = true
+    disable_tagged_metrics = true
+    backwards_compatible_metrics = true
 }
 leave_on_interrupt = true
 leave_on_terminate = true
@@ -96,12 +106,6 @@ enable_syslog = true
 syslog_facility = "LOCAL1"
 disable_update_check = true
 disable_anonymous_signature = true
-atlas {
-	infrastructure = "armon/test"
-	token = "abcd"
-	join = true
-	endpoint = "127.0.0.1:1234"
-}
 http_api_response_headers {
 	Access-Control-Allow-Origin = "*"
 }
@@ -142,5 +146,16 @@ tls {
     ca_file = "foo"
     cert_file = "bar"
     key_file = "pipe"
+    rpc_upgrade_mode = true
     verify_https_client = true
+}
+sentinel {
+    import "foo" {
+        path = "foo"
+        args = ["a", "b", "c"]
+    }
+    import "bar" {
+        path = "bar"
+        args = ["x", "y", "z"]
+    }
 }

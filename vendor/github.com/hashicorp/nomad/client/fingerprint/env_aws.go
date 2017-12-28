@@ -108,7 +108,7 @@ func (f *EnvAWSFingerprint) Fingerprint(cfg *config.Config, node *structs.Node) 
 	for k, unique := range keys {
 		res, err := client.Get(metadataURL + k)
 		if res.StatusCode != http.StatusOK {
-			f.logger.Printf("[WARN]: fingerprint.env_aws: Could not read value for attribute %q", k)
+			f.logger.Printf("[DEBUG]: fingerprint.env_aws: Could not read value for attribute %q", k)
 			continue
 		}
 		if err != nil {
@@ -236,10 +236,15 @@ func (f *EnvAWSFingerprint) linkSpeed() int {
 	}
 
 	res, err := client.Get(metadataURL + "instance-type")
+	if err != nil {
+		f.logger.Printf("[ERR]: fingerprint.env_aws: Error reading instance-type: %v", err)
+		return 0
+	}
+
 	body, err := ioutil.ReadAll(res.Body)
 	res.Body.Close()
 	if err != nil {
-		f.logger.Printf("[ERR]: fingerprint.env_aws: Error reading response body for instance-type")
+		f.logger.Printf("[ERR]: fingerprint.env_aws: Error reading response body for instance-type: %v", err)
 		return 0
 	}
 

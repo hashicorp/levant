@@ -8,7 +8,6 @@ import (
 
 	"github.com/hashicorp/nomad/api"
 	"github.com/hashicorp/nomad/scheduler"
-	"github.com/mitchellh/colorstring"
 	"github.com/posener/complete"
 )
 
@@ -26,7 +25,6 @@ potentially invalid.`
 type PlanCommand struct {
 	Meta
 	JobGetter
-	color *colorstring.Colorize
 }
 
 func (c *PlanCommand) Help() string {
@@ -68,6 +66,9 @@ Plan Options:
     Determines whether the diff between the remote job and planned job is shown.
     Defaults to true.
 
+  -policy-override
+    Sets the flag to force override any soft mandatory Sentinel policies.
+
   -verbose
     Increase diff verbosity.
 `
@@ -81,8 +82,9 @@ func (c *PlanCommand) Synopsis() string {
 func (c *PlanCommand) AutocompleteFlags() complete.Flags {
 	return mergeAutocompleteFlags(c.Meta.AutocompleteFlags(FlagSetClient),
 		complete.Flags{
-			"-diff":    complete.PredictNothing,
-			"-verbose": complete.PredictNothing,
+			"-diff":            complete.PredictNothing,
+			"-policy-override": complete.PredictNothing,
+			"-verbose":         complete.PredictNothing,
 		})
 }
 
@@ -91,11 +93,12 @@ func (c *PlanCommand) AutocompleteArgs() complete.Predictor {
 }
 
 func (c *PlanCommand) Run(args []string) int {
-	var diff, verbose bool
+	var diff, policyOverride, verbose bool
 
 	flags := c.Meta.FlagSet("plan", FlagSetClient)
 	flags.Usage = func() { c.Ui.Output(c.Help()) }
 	flags.BoolVar(&diff, "diff", true, "")
+	flags.BoolVar(&policyOverride, "policy-override", false, "")
 	flags.BoolVar(&verbose, "verbose", false, "")
 
 	if err := flags.Parse(args); err != nil {
@@ -129,8 +132,22 @@ func (c *PlanCommand) Run(args []string) int {
 		client.SetRegion(*r)
 	}
 
+	// Force the namespace to be that of the job.
+	if n := job.Namespace; n != nil {
+		client.SetNamespace(*n)
+	}
+
+	// Setup the options
+	opts := &api.PlanOptions{}
+	if diff {
+		opts.Diff = true
+	}
+	if policyOverride {
+		opts.PolicyOverride = true
+	}
+
 	// Submit the job
-	resp, _, err := client.Jobs().Plan(job, diff, nil)
+	resp, _, err := client.Jobs().PlanOpts(job, opts, nil)
 	if err != nil {
 		c.Ui.Error(fmt.Sprintf("Error during plan: %s", err))
 		return 255

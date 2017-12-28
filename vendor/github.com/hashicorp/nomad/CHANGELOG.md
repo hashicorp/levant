@@ -1,3 +1,149 @@
+## 0.7.1 (December 19, 2017)
+
+__BACKWARDS INCOMPATIBILITIES:__
+ * client: The format of service IDs in Consul has changed. If you rely upon
+   Nomad's service IDs (*not* service names; those are stable), you will need
+   to update your code.  [GH-3632]
+ * config: Nomad no longer parses Atlas configuration stanzas. Atlas has been
+   deprecated since earlier this year. If you have an Atlas stanza in your
+   config file it will have to be removed.
+ * telemetry: Hostname is now emitted via a tag rather than within the key name.
+   To maintain old behavior during an upgrade path specify
+   `backwards_compatible_metrics` in the telemetry configuration.
+
+IMPROVEMENTS:
+ * core: Allow operators to reload TLS certificate and key files via SIGHUP
+   [GH-3479]
+ * core: Allow configurable stop signals for a task, when drivers support
+   sending stop signals [GH-1755]
+ * core: Allow agents to be run in `rpc_upgrade_mode` when migrating a cluster
+   to TLS rather than changing `heartbeat_grace`
+ * api: Allocations now track and return modify time in addition to create time
+   [GH-3446]
+ * api: Introduced new fields to track details and display message for task
+   events, and deprecated redundant existing fields [GH-3399]
+ * api: Environment variables are ignored during service name validation [GH-3532]
+ * cli: Allocation create and modify times are displayed in a human readable
+   relative format like `6 h ago` [GH-3449]
+ * client: Support `address_mode` on checks [GH-3619]
+ * client: Sticky volume migrations are now atomic. [GH-3563]
+ * client: Added metrics to track state transitions of allocations [GH-3061]
+ * client: When `network_interface` is unspecified use interface attached to
+   default route [GH-3546]
+ * client: Support numeric ports on services and checks when
+   `address_mode="driver"` [GH-3619]
+ * driver/docker: Detect OOM kill event [GH-3459]
+ * driver/docker: Adds support for adding host device to container via
+   `--device` [GH-2938]
+ * driver/docker: Adds support for `ulimit` and `sysctl` options [GH-3568]
+ * driver/docker: Adds support for StopTimeout (set to the same value as
+   kill_timeout [GH-3601]
+ * driver/rkt: Add support for passing through user [GH-3612]
+ * driver/qemu: Support graceful shutdowns on unix platforms [GH-3411]
+ * template: Updated to consul template 0.19.4 [GH-3543]
+ * core/enterprise: Return 501 status code in Nomad Pro for Premium end points
+ * ui: Added log streaming for tasks [GH-3564]
+ * ui: Show the modify time for allocations [GH-3607]
+ * ui: Added a dedicated Task page under allocations [GH-3472]
+ * ui: Added placement failures to the Job Detail page [GH-3603]
+ * ui: Warn uncaught exceptions to the developer console [GH-3623]
+
+BUG FIXES:
+
+ * core: Fix issue in which restoring periodic jobs could fail when a leader
+   election occurs [GH-3646]
+ * core: Fix race condition in which rapid reprocessing of a blocked evaluation
+   may lead to the scheduler not seeing the results of the previous scheduling
+   event [GH-3669]
+ * core: Fixed an issue where the leader server could get into a state where it
+   was no longer performing the periodic leader loop duties after a barrier
+   timeout error [GH-3402]
+ * core: Fixes an issue with jobs that have `auto_revert` set to true, where
+   reverting to a previously stable job that fails to start up causes an
+   infinite cycle of reverts [GH-3496]
+ * api: Apply correct memory default when task's do not specify memory
+   explicitly [GH-3520]
+ * cli: Fix passing Consul address via flags [GH-3504]
+ * cli: Fix panic when running `keyring` commands [GH-3509]
+ * client: Fix advertising services with tags that require URL escaping
+   [GH-3632]
+ * client: Fix a panic when restoring an allocation with a dead leader task
+   [GH-3502]
+ * client: Fix crash when following logs from a Windows node [GH-3608]
+ * client: Fix service/check updating when just interpolated variables change
+   [GH-3619]
+ * client: Fix allocation accounting in GC and trigger GCs on allocation
+   updates [GH-3445]
+ * driver/docker: Fix container name conflict handling [GH-3551]
+ * driver/rkt: Remove pods on shutdown [GH-3562]
+ * driver/rkt: Don't require port maps when using host networking [GH-3615]
+ * template: Fix issue where multiple environment variable templates would be
+   parsed incorrectly when contents of one have changed after the initial
+   rendering [GH-3529]
+ * sentinel: (Nomad Enterprise) Fix an issue that could cause an import error
+   when multiple Sentinel policies are applied
+ * telemetry: Do not emit metrics for non-running tasks [GH-3559]
+ * telemetry: Emit hostname as a tag rather than within the key name [GH-3616]
+ * ui: Remove timezone text from timestamps [GH-3621]
+ * ui: Allow cross-origin requests from the UI [GH-3530]
+ * ui: Consistently use Clients instead of Nodes in copy [GH-3466]
+ * ui: Fully expand the job definition on the Job Definition page [GH-3631]
+
+## 0.7.0 (November 1, 2017)
+
+__BACKWARDS INCOMPATIBILITIES:__
+ * driver/rkt: Nomad now requires at least rkt version `1.27.0` for the rkt
+   driver to function. Please update your version of rkt to at least this
+   version.
+
+IMPROVEMENTS:
+ * core: Capability based ACL system with authoratative region, providing
+   federated ACLs.
+ * core/enterprise: Sentinel integration for fine grain policy enforcement.
+ * core/enterprise: Namespace support allowing jobs and their associated
+   objects to be isolated from each other and other users of the cluster.
+ * api: Allow force deregistration of a node [GH-3447]
+ * api: New `/v1/agent/health` endpoint for health checks.
+ * api: Metrics endpoint exposes Prometheus formatted metrics [GH-3171]
+ * cli: Consul config option flags for nomad agent command [GH-3327]
+ * discovery: Allow restarting unhealthy tasks with `check_restart` [GH-3105]
+ * driver/rkt: Enable rkt driver to use address_mode = 'driver' [GH-3256]
+ * telemetry: Add support for tagged metrics for Nomad clients [GH-3147]
+ * telemetry: Add basic Prometheus configuration for a Nomad cluster [GH-3186]
+
+BUG FIXES:
+ * core: Fix restoration of stopped periodic jobs [GH-3201]
+ * core: Run deployment garbage collector on an interval [GH-3267]
+ * core: Fix paramterized jobs occasionally showing status dead incorrectly
+   [GH-3460]
+ * core: Fix issue in which job versions above a threshold potentially wouldn't
+   be stored [GH-3372]
+ * core: Fix issue where node-drain with complete batch allocation would create
+   replacement [GH-3217]
+ * core: Allow batch jobs that have been purged to be rerun without a job
+   specification change [GH-3375]
+ * core: Fix issue in which batch allocations from previous job versions may not
+   have been stopped properly. [GH-3217]
+ * core: Fix issue in which allocations with the same name during a scale
+   down/stop event wouldn't be properly stopped [GH-3217]
+ * core: Fix a race condition in which scheduling results from one invocation of
+   the scheduler wouldn't be considered by the next for the same job [GH-3206]
+ * api: Sort /v1/agent/servers output so that output of Consul checks does not
+   change [GH-3214]
+ * api: Fix search handling of jobs with more than four hyphens and case were
+   length could cause lookup error [GH-3203]
+ * client: Improve the speed at which clients detect garbage collection events
+   [GH_-3452]
+ * client: Fix lock contention that could cause a node to miss a heartbeat and
+   be marked as down [GH-3195]
+ * client: Fix data race that could lead to concurrent map read/writes during
+   hearbeating and fingerprinting [GH-3461]
+ * driver/docker: Fix docker user specified syslogging [GH-3184]
+ * driver/docker: Fix issue where CPU usage statistics were artificially high
+   [GH-3229]
+ * client/template: Fix issue in which secrets would be renewed too aggressively
+   [GH-3360]
+
 ## 0.6.3 (September 11, 2017)
 
 BUG FIXES:
@@ -7,9 +153,11 @@ BUG FIXES:
  * cli: Sort task groups when displaying a deployment [GH-3137]
  * cli: Handle reading files that are in a symlinked directory [GH-3164]
  * cli: All status commands handle even UUID prefixes with hyphens [GH-3122]
- * cli: Fix autocompletion of paths that include directories on zsh [GH-3129] 
+ * cli: Fix autocompletion of paths that include directories on zsh [GH-3129]
  * cli: Fix job deployment -latest handling of jobs without deployments
    [GH-3166]
+ * cli: Hide CLI commands not expected to be run by user from autocomplete
+   suggestions [GH-3177]
  * cli: Status command honors exact job match even when it is the prefix of
    another job [GH-3120]
  * cli: Fix setting of TLSServerName for node API Client. This fixes an issue of

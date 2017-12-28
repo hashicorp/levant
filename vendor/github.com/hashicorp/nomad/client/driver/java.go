@@ -80,19 +80,19 @@ func (d *JavaDriver) Validate(config map[string]interface{}) error {
 	fd := &fields.FieldData{
 		Raw: config,
 		Schema: map[string]*fields.FieldSchema{
-			"class": &fields.FieldSchema{
+			"class": {
 				Type: fields.TypeString,
 			},
-			"class_path": &fields.FieldSchema{
+			"class_path": {
 				Type: fields.TypeString,
 			},
-			"jar_path": &fields.FieldSchema{
+			"jar_path": {
 				Type: fields.TypeString,
 			},
-			"jvm_options": &fields.FieldSchema{
+			"jvm_options": {
 				Type: fields.TypeArray,
 			},
-			"args": &fields.FieldSchema{
+			"args": {
 				Type: fields.TypeArray,
 			},
 		},
@@ -251,7 +251,6 @@ func (d *JavaDriver) Start(ctx *ExecContext, task *structs.Task) (*StartResponse
 	executorCtx := &executor.ExecutorContext{
 		TaskEnv: ctx.TaskEnv,
 		Driver:  "java",
-		AllocID: d.DriverContext.allocID,
 		Task:    task,
 		TaskDir: ctx.TaskDir.Dir,
 		LogDir:  ctx.TaskDir.LogDir,
@@ -266,12 +265,18 @@ func (d *JavaDriver) Start(ctx *ExecContext, task *structs.Task) (*StartResponse
 		return nil, err
 	}
 
+	taskKillSignal, err := getTaskKillSignal(task.KillSignal)
+	if err != nil {
+		return nil, err
+	}
+
 	execCmd := &executor.ExecCommand{
 		Cmd:            absPath,
 		Args:           args,
 		FSIsolation:    true,
 		ResourceLimits: true,
 		User:           getExecutorUser(task),
+		TaskKillSignal: taskKillSignal,
 	}
 	ps, err := execIntf.LaunchCmd(execCmd)
 	if err != nil {

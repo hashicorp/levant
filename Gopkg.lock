@@ -124,7 +124,7 @@
 [[projects]]
   branch = "master"
   name = "github.com/hashicorp/golang-lru"
-  packages = ["simplelru"]
+  packages = [".","simplelru"]
   revision = "0a025b7e63adc15a622f29b0b2c4c3848243bbf6"
 
 [[projects]]
@@ -141,9 +141,9 @@
 
 [[projects]]
   name = "github.com/hashicorp/nomad"
-  packages = ["api","api/contexts","helper","helper/args","helper/flatmap","jobspec","nomad/structs"]
-  revision = "ac9d8f5f46c83e96670241c0929e63f69b2f2f99"
-  version = "v0.6.3"
+  packages = ["acl","api","api/contexts","helper","helper/args","helper/flatmap","helper/uuid","jobspec","nomad/structs"]
+  revision = "2f245ac7fc9b916eb4af8a62a471dcd0b468a8c8"
+  version = "v0.7.1"
 
 [[projects]]
   branch = "library-v2-stage-one"
@@ -238,7 +238,7 @@
 [[projects]]
   branch = "master"
   name = "golang.org/x/crypto"
-  packages = ["bcrypt","blowfish","cast5","openpgp","openpgp/armor","openpgp/elgamal","openpgp/errors","openpgp/packet","openpgp/s2k","ssh/terminal"]
+  packages = ["bcrypt","blake2b","blowfish","cast5","openpgp","openpgp/armor","openpgp/elgamal","openpgp/errors","openpgp/packet","openpgp/s2k","ssh/terminal"]
   revision = "b0c9c05bfe149df95eb1d25642162cca051e0466"
 
 [[projects]]
@@ -262,6 +262,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "6c88e8a6efe8de001e13bf0d178910680e0c4c4801699617afe83a5f645d137a"
+  inputs-digest = "5e92593e7375a74e0d7c7b49365abd29823bdadad2bfe25f71da9ca08e14181b"
   solver-name = "gps-cdcl"
   solver-version = 1

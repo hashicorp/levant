@@ -20,15 +20,12 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"sync/atomic"
 
-	"github.com/hashicorp/go-cleanhttp"
+	"github.com/hashicorp/consul/lib/freeport"
+	cleanhttp "github.com/hashicorp/go-cleanhttp"
 	"github.com/hashicorp/nomad/helper/discover"
-	"github.com/mitchellh/go-testing-interface"
+	testing "github.com/mitchellh/go-testing-interface"
 )
-
-// offset is used to atomically increment the port numbers.
-var offset uint64
 
 // TestServerConfig is the main server configuration struct.
 type TestServerConfig struct {
@@ -42,6 +39,7 @@ type TestServerConfig struct {
 	Server            *ServerConfig `json:"server,omitempty"`
 	Client            *ClientConfig `json:"client,omitempty"`
 	Vault             *VaultConfig  `json:"vault,omitempty"`
+	ACL               *ACLConfig    `json:"acl,omitempty"`
 	DevMode           bool          `json:"-"`
 	Stdout, Stderr    io.Writer     `json:"-"`
 }
@@ -76,17 +74,21 @@ type VaultConfig struct {
 	Enabled bool `json:"enabled"`
 }
 
+// ACLConfig is used to configure ACLs
+type ACLConfig struct {
+	Enabled bool `json:"enabled"`
+}
+
 // ServerConfigCallback is a function interface which can be
 // passed to NewTestServerConfig to modify the server config.
 type ServerConfigCallback func(c *TestServerConfig)
 
 // defaultServerConfig returns a new TestServerConfig struct
 // with all of the listen ports incremented by one.
-func defaultServerConfig() *TestServerConfig {
-	idx := int(atomic.AddUint64(&offset, 1))
-
+func defaultServerConfig(t testing.T) *TestServerConfig {
+	ports := freeport.GetT(t, 3)
 	return &TestServerConfig{
-		NodeName:          fmt.Sprintf("node%d", idx),
+		NodeName:          fmt.Sprintf("node-%d", ports[0]),
 		DisableCheckpoint: true,
 		LogLevel:          "DEBUG",
 		// Advertise can't be localhost
@@ -96,9 +98,9 @@ func defaultServerConfig() *TestServerConfig {
 			Serf: "169.254.42.42",
 		},
 		Ports: &PortsConfig{
-			HTTP: 20000 + idx,
-			RPC:  21000 + idx,
-			Serf: 22000 + idx,
+			HTTP: ports[0],
+			RPC:  ports[1],
+			Serf: ports[2],
 		},
 		Server: &ServerConfig{
 			Enabled:         true,
@@ -108,6 +110,9 @@ func defaultServerConfig() *TestServerConfig {
 			Enabled: false,
 		},
 		Vault: &VaultConfig{
+			Enabled: false,
+		},
+		ACL: &ACLConfig{
 			Enabled: false,
 		},
 	}
@@ -152,7 +157,7 @@ func NewTestServer(t testing.T, cb ServerConfigCallback) *TestServer {
 	}
 	defer configFile.Close()
 
-	nomadConfig := defaultServerConfig()
+	nomadConfig := defaultServerConfig(t)
 	nomadConfig.DataDir = dataDir
 
 	if cb != nil {
@@ -237,7 +242,8 @@ func (s *TestServer) Stop() {
 // but will likely return before a leader is elected.
 func (s *TestServer) waitForAPI() {
 	WaitForResult(func() (bool, error) {
-		resp, err := s.HTTPClient.Get(s.url("/v1/agent/self"))
+		// Using this endpoint as it is does not have restricted access
+		resp, err := s.HTTPClient.Get(s.url("/v1/metrics"))
 		if err != nil {
 			return false, err
 		}
@@ -258,7 +264,8 @@ func (s *TestServer) waitForAPI() {
 func (s *TestServer) waitForLeader() {
 	WaitForResult(func() (bool, error) {
 		// Query the API and check the status code
-		resp, err := s.HTTPClient.Get(s.url("/v1/jobs"))
+		// Using this endpoint as it is does not have restricted access
+		resp, err := s.HTTPClient.Get(s.url("/v1/status/leader"))
 		if err != nil {
 			return false, err
 		}
@@ -267,10 +274,6 @@ func (s *TestServer) waitForLeader() {
 			return false, err
 		}
 
-		// Ensure we have a leader and a node registeration
-		if leader := resp.Header.Get("X-Nomad-KnownLeader"); leader != "true" {
-			return false, fmt.Errorf("Nomad leader status: %#v", leader)
-		}
 		return true, nil
 	}, func(err error) {
 		defer s.Stop()
