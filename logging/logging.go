@@ -13,7 +13,7 @@ type Formatter struct {
 
 // Format builds the log desired log format.
 func (c *Formatter) Format(entry *log.Entry) ([]byte, error) {
-	return []byte(fmt.Sprintf("[%s] %s\n", strings.ToUpper(entry.Level.String()), entry.Message)), nil
+	return []byte(fmt.Sprintf("%s [%s] %s\n", entry.Time.Format("2006/01/02 15:04:05 MST"), strings.ToUpper(entry.Level.String()), entry.Message)), nil
 }
 
 func init() {
