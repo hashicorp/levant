@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	nomad "github.com/hashicorp/nomad/api"
-	nomadStructs "github.com/hashicorp/nomad/nomad/structs"
 	"github.com/jrasell/levant/logging"
 )
 
@@ -22,10 +21,15 @@ func (c *nomadClient) checkFailedDeployment(depID *string) {
 	}
 
 	// Iterate the allocations on the deployment and create a list of each allocID
-	// to inspect that is not running.
+	// we only list the ones that have tasks that are not successful
 	for _, alloc := range allocs {
-		if alloc.ClientStatus != nomadStructs.AllocClientStatusRunning {
-			allocIDS = append(allocIDS, alloc.ID)
+		for _, task := range alloc.TaskStates {
+			// we need to test for success both for service style jobs and for batch style jobs
+			if task.State != nomad.TaskStarted || (task.State == nomad.TaskTerminated && task.Events[len(task.Events)-1].ExitCode != 0) {
+				allocIDS = append(allocIDS, alloc.ID)
+				// once we add the allocation we don't need to add it again
+				break
+			}
 		}
 	}
 
