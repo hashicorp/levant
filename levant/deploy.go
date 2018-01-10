@@ -321,6 +321,12 @@ func (c *nomadClient) checkCanaryDeploymentHealth(depID string) (healthy bool) {
 	// Itertate each task in the deployment to determine is health status. If an
 	// unhealthy task is found, incrament the unhealthy counter.
 	for taskName, taskInfo := range dep.TaskGroups {
+		// skip any task groups which are not configured for canary deployments
+		if taskInfo.DesiredCanaries == 0 {
+			logging.Debug("levant/deploy: task %s has no desired canaries, skipping health checks in deployment %s", taskName, depID)
+			continue
+		}
+
 		if taskInfo.DesiredCanaries != taskInfo.HealthyAllocs {
 			logging.Error("levant/deploy: task %s has unhealthy allocations in deployment %s", taskName, depID)
 			unhealthy++
