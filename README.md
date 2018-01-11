@@ -108,3 +108,7 @@ The project uses the Nomad [Default API Client](https://github.com/hashicorp/nom
  * **NOMAD_CLIENT_KEY** - Path to an unencrypted PEM encoded private key matching the client certificate from `NOMAD_CLIENT_CERT`.
  * **NOMAD_SKIP_VERIFY** - Do not verify TLS certificate.
  * **NOMAD_TOKEN** - The SecretID of an ACL token to use to authenticate API requests with.
+
+## Contributing
+
+Contributions to Levant are very welcome! Please refer to our [contribution guide](https://github.com/jrasell/levant/blob/master/.github/CONTRIBUTING.md) for details about hacking on Levant.
