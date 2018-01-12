@@ -18,7 +18,7 @@ type nomadClient struct {
 type NomadClient interface {
 	// Deploy triggers a register of the job resulting in a Nomad deployment which
 	// is monitored to determine the eventual state.
-	Deploy(*nomad.Job, int, bool) bool
+	Deploy(*nomad.Job, int, bool, uint64, bool) bool
 }
 
 // NewNomadClient is used to create a new client to interact with Nomad.
@@ -39,7 +39,7 @@ func NewNomadClient(addr string) (NomadClient, error) {
 
 // Deploy triggers a register of the job resulting in a Nomad deployment which
 // is monitored to determine the eventual state.
-func (c *nomadClient) Deploy(job *nomad.Job, autoPromote int, forceCount bool) (success bool) {
+func (c *nomadClient) Deploy(job *nomad.Job, autoPromote int, forceCount bool, timeout uint64, monitor bool) (success bool) {
 
 	// Validate the job to check it is syntactically correct.
 	if _, _, err := c.nomad.Jobs().Validate(job, nil); err != nil {
@@ -83,9 +83,11 @@ func (c *nomadClient) Deploy(job *nomad.Job, autoPromote int, forceCount bool) (
 		return
 	}
 
-	// GH-50: batch job types do not return an evaluation upon registration.
-	if eval.EvalID == "" && *job.Type == nomadStructs.JobTypeBatch {
-		return c.checkBatchJob(job.Name)
+	// parameterized jobs don't generate an eval until they run.  So if we have a succesful insertion
+	// we are done and happy.
+	if job.IsParameterized() {
+		logging.Info("levant/deploy: registered paramaterized job %s with Nomad.", *job.Name)
+		return
 	}
 
 	// Trigger the evaluationInspector to identify any potential errors in the
@@ -123,6 +125,14 @@ func (c *nomadClient) Deploy(job *nomad.Job, autoPromote int, forceCount bool) (
 			}
 			c.checkAutoRevert(dep)
 		}
+	case nomadStructs.JobTypeBatch:
+		logging.Info("levant/deploy: beginning batch watcher for job %s", *job.Name)
+		// periodic jobs never run to completion so attempting to monitor them will fail
+		if job.IsPeriodic() && monitor {
+			logging.Error("levant/deploy: cannot use the --monitor flag with periodic job %s.", *job.Name)
+			return
+		}
+		return c.checkBatchJob(&eval.EvalID, timeout, monitor)
 
 	default:
 		logging.Debug("levant/deploy: job type %s does not support Nomad deployment model", *job.Type)
