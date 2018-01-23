@@ -69,18 +69,18 @@ func (c *nomadClient) Deploy(job *nomad.Job, autoPromote int, forceCount bool) (
 		return
 	}
 
-	// GH-50: batch job types do not return an evaluation upon registration.
-	if eval.EvalID == "" && *job.Type == nomadStructs.JobTypeBatch {
-		return c.checkBatchJob(job.Name)
-	}
+	// Periodic and parameterized jobs do not return an evaluation and therefore
+	// can't perform the evaluationInspector.
+	if !job.IsPeriodic() && !job.IsParameterized() {
 
-	// Trigger the evaluationInspector to identify any potential errors in the
-	// Nomad evaluation run. As far as I can tell from testing; a single alloc
-	// failure in an evaluation means no allocs will be placed so we exit here.
-	err = c.evaluationInspector(&eval.EvalID)
-	if err != nil {
-		logging.Error("levant/deploy: %v", err)
-		return
+		// Trigger the evaluationInspector to identify any potential errors in the
+		// Nomad evaluation run. As far as I can tell from testing; a single alloc
+		// failure in an evaluation means no allocs will be placed so we exit here.
+		err = c.evaluationInspector(&eval.EvalID)
+		if err != nil {
+			logging.Error("levant/deploy: %v", err)
+			return
+		}
 	}
 
 	switch *job.Type {
@@ -110,11 +110,13 @@ func (c *nomadClient) Deploy(job *nomad.Job, autoPromote int, forceCount bool) (
 			c.checkAutoRevert(dep)
 		}
 
+	case nomadStructs.JobTypeBatch:
+		return c.checkBatchJob(job.Name)
+
 	default:
 		logging.Debug("levant/deploy: job type %s does not support Nomad deployment model", *job.Type)
 		success = true
 	}
-
 	return
 }
 
