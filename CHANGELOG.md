@@ -7,6 +7,7 @@ IMPROVEMENTS:
  
 BUG FIXES: 
  * Skip health checks for task groups without canaries when performing canary auto-promote health checking [GH-83](https://github.com/jrasell/levant/pull/83)
+ * Fix issue where jobs without specified count caused panic [GH-89](https://github.com/jrasell/levant/pull/89)
 
 ## 0.0.3 (23 December 2017)
 
