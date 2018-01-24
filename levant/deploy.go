@@ -18,7 +18,7 @@ type nomadClient struct {
 type NomadClient interface {
 	// Deploy triggers a register of the job resulting in a Nomad deployment which
 	// is monitored to determine the eventual state.
-	Deploy(*nomad.Job, int, bool, uint64, bool) bool
+	Deploy(*nomad.Job, int, bool) bool
 }
 
 // NewNomadClient is used to create a new client to interact with Nomad.
@@ -61,20 +61,6 @@ func (c *nomadClient) Deploy(job *nomad.Job, autoPromote int, forceCount bool, t
 		}
 	}
 
-	// Check that the job has at least 1 TaskGroup with count > 0 (GH-16) if the
-	// job is not a System job. Systems jobs do not define counts so cannot be
-	// checked.
-	if *job.Type != nomadStructs.JobTypeSystem {
-		tgCount := 0
-		for _, group := range job.TaskGroups {
-			tgCount += *group.Count
-		}
-		if tgCount == 0 {
-			logging.Error("levant/deploy: all TaskGroups have a count of 0, nothing to do")
-			return
-		}
-	}
-
 	logging.Info("levant/deploy: triggering a deployment of job %s", *job.Name)
 
 	eval, _, err := c.nomad.Jobs().Register(job, nil)
@@ -83,20 +69,18 @@ func (c *nomadClient) Deploy(job *nomad.Job, autoPromote int, forceCount bool, t
 		return
 	}
 
-	// parameterized jobs don't generate an eval until they run.  So if we have a succesful insertion
-	// we are done and happy.
-	if job.IsParameterized() {
-		logging.Info("levant/deploy: registered paramaterized job %s with Nomad.", *job.Name)
-		return
-	}
+	// Periodic and parameterized jobs do not return an evaluation and therefore
+	// can't perform the evaluationInspector.
+	if !job.IsPeriodic() && !job.IsParameterized() {
 
-	// Trigger the evaluationInspector to identify any potential errors in the
-	// Nomad evaluation run. As far as I can tell from testing; a single alloc
-	// failure in an evaluation means no allocs will be placed so we exit here.
-	err = c.evaluationInspector(&eval.EvalID)
-	if err != nil {
-		logging.Error("levant/deploy: %v", err)
-		return
+		// Trigger the evaluationInspector to identify any potential errors in the
+		// Nomad evaluation run. As far as I can tell from testing; a single alloc
+		// failure in an evaluation means no allocs will be placed so we exit here.
+		err = c.evaluationInspector(&eval.EvalID)
+		if err != nil {
+			logging.Error("levant/deploy: %v", err)
+			return
+		}
 	}
 
 	switch *job.Type {
@@ -125,6 +109,7 @@ func (c *nomadClient) Deploy(job *nomad.Job, autoPromote int, forceCount bool, t
 			}
 			c.checkAutoRevert(dep)
 		}
+
 	case nomadStructs.JobTypeBatch:
 		logging.Info("levant/deploy: beginning batch watcher for job %s", *job.Name)
 		// periodic jobs never run to completion so attempting to monitor them will fail
@@ -138,7 +123,6 @@ func (c *nomadClient) Deploy(job *nomad.Job, autoPromote int, forceCount bool, t
 		logging.Debug("levant/deploy: job type %s does not support Nomad deployment model", *job.Type)
 		success = true
 	}
-
 	return
 }
 
@@ -331,6 +315,12 @@ func (c *nomadClient) checkCanaryDeploymentHealth(depID string) (healthy bool) {
 	// Itertate each task in the deployment to determine is health status. If an
 	// unhealthy task is found, incrament the unhealthy counter.
 	for taskName, taskInfo := range dep.TaskGroups {
+		// skip any task groups which are not configured for canary deployments
+		if taskInfo.DesiredCanaries == 0 {
+			logging.Debug("levant/deploy: task %s has no desired canaries, skipping health checks in deployment %s", taskName, depID)
+			continue
+		}
+
 		if taskInfo.DesiredCanaries != taskInfo.HealthyAllocs {
 			logging.Error("levant/deploy: task %s has unhealthy allocations in deployment %s", taskName, depID)
 			unhealthy++
