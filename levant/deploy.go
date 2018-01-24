@@ -18,7 +18,7 @@ type nomadClient struct {
 type NomadClient interface {
 	// Deploy triggers a register of the job resulting in a Nomad deployment which
 	// is monitored to determine the eventual state.
-	Deploy(*nomad.Job, int, bool) bool
+	Deploy(*nomad.Job, int, bool, uint64, bool) bool
 }
 
 // NewNomadClient is used to create a new client to interact with Nomad.
