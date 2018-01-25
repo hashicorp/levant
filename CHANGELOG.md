@@ -1,11 +1,11 @@
-## 0.0.4 (Unreleased)
+## 0.0.4 (25 January 2018)
 
 IMPROVEMENTS:
  * Job types of `batch` now undergo checking to confirm the job reaches status of `running` [GH-73](https://github.com/jrasell/levant/pull/73)
  * Vendored Nomad version has been increased to 0.7.1 allowing use of Nomad ACL tokens [GH-76](https://github.com/jrasell/levant/pull/76)
  * Log messages now includes the date, time and timezone [GH-80](https://github.com/jrasell/levant/pull/80)
- 
-BUG FIXES: 
+
+BUG FIXES:
  * Skip health checks for task groups without canaries when performing canary auto-promote health checking [GH-83](https://github.com/jrasell/levant/pull/83)
  * Fix issue where jobs without specified count caused panic [GH-89](https://github.com/jrasell/levant/pull/89)
 
