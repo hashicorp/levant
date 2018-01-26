@@ -51,6 +51,14 @@ General Options:
   -force-count
     Use the taskgroup count from the Nomad jobfile instead of the count that
     is currently set in a running job.
+
+  -monitor
+    Monitor the job until it completes.  Only applies to batch style jobs (since
+    services don't complete).
+	
+  -timeout
+    How long to wait ( in seconds ) for jobs to be successful before giving up. 
+    Only applies to batch type jobs for now. Default is 300 seconds.
 `
 	return strings.TrimSpace(helpText)
 }
@@ -68,6 +76,8 @@ func (c *DeployCommand) Run(args []string) int {
 	var job *nomad.Job
 	var canary int
 	var forceCount bool
+	var monitor bool
+	var timeout uint64
 
 	flags := c.Meta.FlagSet("deploy", FlagSetVars)
 	flags.Usage = func() { c.UI.Output(c.Help()) }
@@ -77,6 +87,8 @@ func (c *DeployCommand) Run(args []string) int {
 	flags.StringVar(&log, "log-level", "INFO", "")
 	flags.StringVar(&variables, "var-file", "", "")
 	flags.BoolVar(&forceCount, "force-count", false, "")
+	flags.BoolVar(&monitor, "monitor", false, "")
+	flags.Uint64Var(&timeout, "timeout", 300, "")
 
 	if err = flags.Parse(args); err != nil {
 		return 1
@@ -120,7 +132,7 @@ func (c *DeployCommand) Run(args []string) int {
 		return 1
 	}
 
-	success := client.Deploy(job, canary, forceCount)
+	success := client.Deploy(job, canary, forceCount, timeout, monitor)
 	if !success {
 		c.UI.Error(fmt.Sprintf("[ERROR] levant/command: deployment of job %s failed", *job.Name))
 		return 1
