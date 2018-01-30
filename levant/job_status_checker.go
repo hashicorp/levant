@@ -8,10 +8,12 @@ import (
 	"github.com/jrasell/levant/logging"
 )
 
-// checkBatchJob checks the status of a batch job at least reaches a status of
-// running. This is required as currently Nomad does not support deployments of
-// job type batch.
-func (c *nomadClient) checkBatchJob(jobName *string) bool {
+// checkJobStatus checks the status of a job at least reaches a status of
+// running. This is required as currently Nomad does not support deployments
+// across all job types.
+func (c *nomadClient) checkJobStatus(jobName *string) bool {
+
+	logging.Info("levant/job_status_checker: running job status checker for %s", *jobName)
 
 	// Initialiaze our WaitIndex
 	var wi uint64
@@ -35,17 +37,17 @@ func (c *nomadClient) checkBatchJob(jobName *string) bool {
 		}
 
 		if *job.Status == nomadStructs.JobStatusRunning {
-			logging.Info("levant/job_status_checker: batch job %s has status %s", *jobName, *job.Status)
+			logging.Info("levant/job_status_checker: job %s has status %s", *jobName, *job.Status)
 			return true
 		}
 
 		select {
 		case <-timeout:
-			logging.Error("levant/job_status_checker: timeout reached while verifying the status of batch job %s",
+			logging.Error("levant/job_status_checker: timeout reached while verifying the status of job %s",
 				*jobName)
 			return false
 		default:
-			logging.Debug("levant/job_status_checker: batch job %s currently has status %s", *jobName, *job.Status)
+			logging.Debug("levant/job_status_checker: job %s currently has status %s", *jobName, *job.Status)
 			q.WaitIndex = meta.LastIndex
 			continue
 		}

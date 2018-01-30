@@ -111,10 +111,13 @@ func (c *nomadClient) Deploy(job *nomad.Job, autoPromote int, forceCount bool) (
 		}
 
 	case nomadStructs.JobTypeBatch:
-		return c.checkBatchJob(job.Name)
+		return c.checkJobStatus(job.Name)
+
+	case nomadStructs.JobTypeSystem:
+		return c.checkJobStatus(job.Name)
 
 	default:
-		logging.Debug("levant/deploy: job type %s does not support Nomad deployment model", *job.Type)
+		logging.Debug("levant/deploy: Levant does not support advanced deployments of job type %s", *job.Type)
 		success = true
 	}
 	return
