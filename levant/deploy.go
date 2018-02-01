@@ -85,6 +85,15 @@ func (c *nomadClient) Deploy(job *nomad.Job, autoPromote int, forceCount bool) (
 
 	switch *job.Type {
 	case nomadStructs.JobTypeService:
+
+		// If the service job doesn't have an update stanza, the job will not use
+		// Nomad deployments.
+		if job.Update == nil {
+			logging.Info("levant/deploy: job %s is not configured with update stanza, consider adding to use deployments",
+				*job.Name)
+			return c.checkJobStatus(job.Name)
+		}
+
 		logging.Info("levant/deploy: beginning deployment watcher for job %s", *job.Name)
 
 		// Get the deploymentID from the evaluationID so that we can watch the
