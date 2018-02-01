@@ -1,7 +1,10 @@
 ## 0.1.0 (Unreleased)
 
 IMPROVEMENTS:
- * Job types of `system` now undergo checking to confirm the job reaches status of `running` [GH-96](https://github.com/jrasell/levant/pull/96)
+ * Job types of `system` now undergo checking to confirm the job reaches status of `running` [GH-96](https://github.com/jrasell/levant/pull/96
+
+BUG FIXES:
+ * Service jobs that don't have an update stanza do not produce deployments and should skip the deployment watcher [GH-99](https://github.com/jrasell/levant/pull/99)
 
 ## 0.0.4 (25 January 2018)
 
