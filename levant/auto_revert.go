@@ -5,28 +5,28 @@ import (
 	"github.com/jrasell/levant/logging"
 )
 
-func (c *nomadClient) autoRevert(jobID *string) {
+func (l *levantDeployment) autoRevert(jobID *string) {
 
-	dep, _, err := c.nomad.Jobs().LatestDeployment(*jobID, nil)
+	dep, _, err := l.nomad.Jobs().LatestDeployment(*jobID, nil)
 	if err != nil {
 		logging.Error("levant/auto_revert: unable to query latest deployment of job %s", *jobID)
 		return
 	}
 
 	logging.Info("levant/auto_revert: beginning deployment watcher for job %s", *jobID)
-	success := c.deploymentWatcher(dep.ID, 0)
+	success := l.deploymentWatcher(dep.ID)
 
 	if success {
 		logging.Info("levant/auto_revert: auto-revert of job %s was successful", *jobID)
 	} else {
 		logging.Error("levant/auto_revert: auto-revert of job %s failed; POTENTIAL OUTAGE SITUATION", *jobID)
-		c.checkFailedDeployment(&dep.ID)
+		l.checkFailedDeployment(&dep.ID)
 	}
 }
 
 // checkAutoRevert inspects a Nomad deployment to determine if any TashGroups
 // have been auto-reverted.
-func (c *nomadClient) checkAutoRevert(dep *nomad.Deployment) {
+func (l *levantDeployment) checkAutoRevert(dep *nomad.Deployment) {
 
 	var revert bool
 
@@ -44,7 +44,7 @@ func (c *nomadClient) checkAutoRevert(dep *nomad.Deployment) {
 			dep.JobID)
 
 		// Run the levant autoRevert function.
-		c.autoRevert(&dep.JobID)
+		l.autoRevert(&dep.JobID)
 	} else {
 		logging.Info("levant/auto_revert: job %v is not in auto-revert; POTENTIAL OUTAGE SITUATION", dep.JobID)
 	}

@@ -11,11 +11,11 @@ import (
 )
 
 // checkFailedDeployment helps log information about deployment failures.
-func (c *nomadClient) checkFailedDeployment(depID *string) {
+func (l *levantDeployment) checkFailedDeployment(depID *string) {
 
 	var allocIDS []string
 
-	allocs, _, err := c.nomad.Deployments().Allocations(*depID, nil)
+	allocs, _, err := l.nomad.Deployments().Allocations(*depID, nil)
 	if err != nil {
 		logging.Error("levant/failure_inspector: unable to query deployment allocations for deployment %s",
 			depID)
@@ -37,7 +37,7 @@ func (c *nomadClient) checkFailedDeployment(depID *string) {
 	// Inspect each allocation.
 	for _, id := range allocIDS {
 		logging.Debug("levant/failure_inspector: launching allocation inspector for alloc %v", id)
-		go c.allocInspector(id, &wg)
+		go l.allocInspector(id, &wg)
 	}
 
 	wg.Wait()
@@ -45,12 +45,12 @@ func (c *nomadClient) checkFailedDeployment(depID *string) {
 
 // allocInspector inspects an allocations events to log any useful information
 // which may help debug deployment failures.
-func (c *nomadClient) allocInspector(allocID string, wg *sync.WaitGroup) {
+func (l *levantDeployment) allocInspector(allocID string, wg *sync.WaitGroup) {
 
 	// Inform the wait group we have finished our task upon completion.
 	defer wg.Done()
 
-	resp, _, err := c.nomad.Allocations().Info(allocID, nil)
+	resp, _, err := l.nomad.Allocations().Info(allocID, nil)
 	if err != nil {
 		logging.Error("levant/failure_inspector: unable to query alloc %v: %v", allocID, err)
 		return

@@ -11,9 +11,10 @@ import (
 // checkJobStatus checks the status of a job at least reaches a status of
 // running. This is required as currently Nomad does not support deployments
 // across all job types.
-func (c *nomadClient) checkJobStatus(jobName *string) bool {
+func (l *levantDeployment) checkJobStatus() bool {
 
-	logging.Info("levant/job_status_checker: running job status checker for %s", *jobName)
+	j := l.config.Job.Name
+	logging.Info("levant/job_status_checker: running job status checker for %s", *j)
 
 	// Initialiaze our WaitIndex
 	var wi uint64
@@ -24,9 +25,9 @@ func (c *nomadClient) checkJobStatus(jobName *string) bool {
 
 	for {
 
-		job, meta, err := c.nomad.Jobs().Info(*jobName, q)
+		job, meta, err := l.nomad.Jobs().Info(*j, q)
 		if err != nil {
-			logging.Error("levant/job_status_checker: unable to query batch job %s: %v", *jobName, err)
+			logging.Error("levant/job_status_checker: unable to query batch job %s: %v", *j, err)
 			return false
 		}
 
@@ -37,17 +38,17 @@ func (c *nomadClient) checkJobStatus(jobName *string) bool {
 		}
 
 		if *job.Status == nomadStructs.JobStatusRunning {
-			logging.Info("levant/job_status_checker: job %s has status %s", *jobName, *job.Status)
+			logging.Info("levant/job_status_checker: job %s has status %s", *j, *job.Status)
 			return true
 		}
 
 		select {
 		case <-timeout:
 			logging.Error("levant/job_status_checker: timeout reached while verifying the status of job %s",
-				*jobName)
+				*j)
 			return false
 		default:
-			logging.Debug("levant/job_status_checker: job %s currently has status %s", *jobName, *job.Status)
+			logging.Debug("levant/job_status_checker: job %s currently has status %s", *j, *job.Status)
 			q.WaitIndex = meta.LastIndex
 			continue
 		}

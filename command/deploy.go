@@ -8,6 +8,7 @@ import (
 
 	"github.com/jrasell/levant/helper"
 	"github.com/jrasell/levant/levant"
+	"github.com/jrasell/levant/levant/structs"
 	"github.com/jrasell/levant/logging"
 )
 
@@ -40,6 +41,10 @@ General Options:
     The time in seconds, after which Levant will auto-promote a canary job
     if all canaries within the deployment are healthy.
 
+  -force-count
+    Use the taskgroup count from the Nomad jobfile instead of the count that
+    is currently set in a running job.
+
   -log-level=<level>
     Specify the verbosity level of Levant's logs. Valid values include DEBUG,
     INFO, and WARN, in decreasing order of verbosity. The default is INFO.
@@ -47,10 +52,6 @@ General Options:
   -var-file=<file>
     Used in conjunction with the -job-file will deploy a templated job to your
     Nomad cluster. [default: levant.(yaml|yml|tf)]
-
-  -force-count
-    Use the taskgroup count from the Nomad jobfile instead of the count that
-    is currently set in a running job.
 `
 	return strings.TrimSpace(helpText)
 }
@@ -63,20 +64,17 @@ func (c *DeployCommand) Synopsis() string {
 // Run triggers a run of the Levant template and deploy functions.
 func (c *DeployCommand) Run(args []string) int {
 
-	var variables, addr, log, templateFile string
 	var err error
-	var job *nomad.Job
-	var canary int
-	var forceCount bool
+	config := &structs.Config{}
 
 	flags := c.Meta.FlagSet("deploy", FlagSetVars)
 	flags.Usage = func() { c.UI.Output(c.Help()) }
 
-	flags.StringVar(&addr, "address", "", "")
-	flags.IntVar(&canary, "canary-auto-promote", 0, "")
-	flags.StringVar(&log, "log-level", "INFO", "")
-	flags.StringVar(&variables, "var-file", "", "")
-	flags.BoolVar(&forceCount, "force-count", false, "")
+	flags.StringVar(&config.Addr, "address", "", "")
+	flags.IntVar(&config.Canary, "canary-auto-promote", 0, "")
+	flags.BoolVar(&config.ForceCount, "force-count", false, "")
+	flags.StringVar(&config.LogLevel, "log-level", "INFO", "")
+	flags.StringVar(&config.VaiableFile, "var-file", "", "")
 
 	if err = flags.Parse(args); err != nil {
 		return 1
@@ -84,12 +82,12 @@ func (c *DeployCommand) Run(args []string) int {
 
 	args = flags.Args()
 
-	logging.SetLevel(log)
+	logging.SetLevel(config.LogLevel)
 
 	if len(args) == 1 {
-		templateFile = args[0]
+		config.TemplateFile = args[0]
 	} else if len(args) == 0 {
-		if templateFile = helper.GetDefaultTmplFile(); templateFile == "" {
+		if config.TemplateFile = helper.GetDefaultTmplFile(); config.TemplateFile == "" {
 			c.UI.Error(c.Help())
 			c.UI.Error("\nERROR: Template arg missing and no default template found")
 			return 1
@@ -99,34 +97,25 @@ func (c *DeployCommand) Run(args []string) int {
 		return 1
 	}
 
-	job, err = levant.RenderJob(templateFile, variables, &c.Meta.flagVars)
+	config.Job, err = levant.RenderJob(config.TemplateFile, config.VaiableFile, &c.Meta.flagVars)
 	if err != nil {
 		c.UI.Error(fmt.Sprintf("[ERROR] levant/command: %v", err))
 		return 1
 	}
 
-	if canary > 0 {
-		if err = c.checkCanaryAutoPromote(job, canary); err != nil {
+	if config.Canary > 0 {
+		if err = c.checkCanaryAutoPromote(config.Job, config.Canary); err != nil {
 			c.UI.Error(fmt.Sprintf("[ERROR] levant/command: %v", err))
 			return 1
 		}
 
-		c.UI.Info(fmt.Sprintf("[INFO] levant/command: running canary-auto-update of %vs", canary))
+		c.UI.Info(fmt.Sprintf("[INFO] levant/command: running canary-auto-update of %vs", config.Canary))
 	}
 
-	client, err := levant.NewNomadClient(addr)
-	if err != nil {
-		c.UI.Error(fmt.Sprintf("[ERROR] levant/command: %v", err))
-		return 1
-	}
-
-	success := client.Deploy(job, canary, forceCount)
+	success := levant.TriggerDeployment(config)
 	if !success {
-		c.UI.Error(fmt.Sprintf("[ERROR] levant/command: deployment of job %s failed", *job.Name))
 		return 1
 	}
-
-	c.UI.Info(fmt.Sprintf("[INFO] levant/command: deployment of job %s successful", *job.Name))
 
 	return 0
 }

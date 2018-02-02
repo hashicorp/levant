@@ -7,22 +7,19 @@ import (
 
 	nomad "github.com/hashicorp/nomad/api"
 	nomadStructs "github.com/hashicorp/nomad/nomad/structs"
+	"github.com/jrasell/levant/levant/structs"
 	"github.com/jrasell/levant/logging"
 )
 
-type nomadClient struct {
-	nomad *nomad.Client
+// levantDeployment is the all deployment related objects for this Levant
+// deployment invoction.
+type levantDeployment struct {
+	nomad  *nomad.Client
+	config *structs.Config
 }
 
-// NomadClient is an interface to the Nomad API and deployment functions.
-type NomadClient interface {
-	// Deploy triggers a register of the job resulting in a Nomad deployment which
-	// is monitored to determine the eventual state.
-	Deploy(*nomad.Job, int, bool) bool
-}
-
-// NewNomadClient is used to create a new client to interact with Nomad.
-func NewNomadClient(addr string) (NomadClient, error) {
+// newNomadClient is used to create a new client to interact with Nomad.
+func newNomadClient(addr string) (*nomad.Client, error) {
 	config := nomad.DefaultConfig()
 
 	if addr != "" {
@@ -34,108 +31,148 @@ func NewNomadClient(addr string) (NomadClient, error) {
 		return nil, err
 	}
 
-	return &nomadClient{nomad: c}, nil
+	return c, nil
 }
 
-// Deploy triggers a register of the job resulting in a Nomad deployment which
+// newLevantDeployment sets up the Levant deployment object and Nomad client
+// to interact with the Nomad API.
+func newLevantDeployment(config *structs.Config) (*levantDeployment, error) {
+
+	var err error
+
+	dep := &levantDeployment{}
+	dep.config = config
+
+	dep.nomad, err = newNomadClient(config.Addr)
+	if err != nil {
+		return nil, err
+	}
+
+	return dep, nil
+}
+
+// TriggerDeployment provides the main entry point into a Levant deployment and
+// is used to setup the clients before triggering the deployment process.
+func TriggerDeployment(config *structs.Config) bool {
+
+	// Create our new deployment object.
+	levantDep, err := newLevantDeployment(config)
+	if err != nil {
+		logging.Error("levant/deploy: unable to setup Levant deployment: %v", err)
+		return false
+	}
+
+	// Start the main deployment function.
+	success := levantDep.deploy()
+	if !success {
+		logging.Error("levant/deploy: deployment of job %v failed", *config.Job.Name)
+		return false
+	}
+
+	logging.Info("levant/deploy: deployment of job %v successful", *config.Job.Name)
+	return true
+}
+
+// deploy triggers a register of the job resulting in a Nomad deployment which
 // is monitored to determine the eventual state.
-func (c *nomadClient) Deploy(job *nomad.Job, autoPromote int, forceCount bool) (success bool) {
+func (l *levantDeployment) deploy() (success bool) {
 
 	// Validate the job to check it is syntactically correct.
-	if _, _, err := c.nomad.Jobs().Validate(job, nil); err != nil {
+	if _, _, err := l.nomad.Jobs().Validate(l.config.Job, nil); err != nil {
 		logging.Error("levant/deploy: job validation failed: %v", err)
 		return
 	}
 
 	// If job.Type isn't set we can't continue
-	if job.Type == nil {
+	if l.config.Job.Type == nil {
 		logging.Error("levant/deploy: Nomad job `type` is not set; should be set to `%s`, `%s` or `%s`",
 			nomadStructs.JobTypeBatch, nomadStructs.JobTypeSystem, nomadStructs.JobTypeService)
 		return
 	}
 
-	if !forceCount {
-		logging.Debug("levant/deploy: running dynamic job count updater for job %s", *job.Name)
-		if err := c.dynamicGroupCountUpdater(job); err != nil {
+	if !l.config.ForceCount {
+		logging.Debug("levant/deploy: running dynamic job count updater for job %s", *l.config.Job.Name)
+		if err := l.dynamicGroupCountUpdater(); err != nil {
 			return
 		}
 	}
 
-	logging.Info("levant/deploy: triggering a deployment of job %s", *job.Name)
+	logging.Info("levant/deploy: triggering a deployment of job %s", *l.config.Job.Name)
 
-	eval, _, err := c.nomad.Jobs().Register(job, nil)
+	eval, _, err := l.nomad.Jobs().Register(l.config.Job, nil)
 	if err != nil {
-		logging.Error("levant/deploy: unable to register job %s with Nomad: %v", *job.Name, err)
+		logging.Error("levant/deploy: unable to register job %s with Nomad: %v", *l.config.Job.Name, err)
 		return
 	}
 
 	// Periodic and parameterized jobs do not return an evaluation and therefore
 	// can't perform the evaluationInspector.
-	if !job.IsPeriodic() && !job.IsParameterized() {
+	if !l.config.Job.IsPeriodic() && !l.config.Job.IsParameterized() {
 
 		// Trigger the evaluationInspector to identify any potential errors in the
 		// Nomad evaluation run. As far as I can tell from testing; a single alloc
 		// failure in an evaluation means no allocs will be placed so we exit here.
-		err = c.evaluationInspector(&eval.EvalID)
+		err = l.evaluationInspector(&eval.EvalID)
 		if err != nil {
 			logging.Error("levant/deploy: %v", err)
 			return
 		}
 	}
 
-	switch *job.Type {
+	switch *l.config.Job.Type {
 	case nomadStructs.JobTypeService:
 
 		// If the service job doesn't have an update stanza, the job will not use
 		// Nomad deployments.
-		if job.Update == nil {
+		if l.config.Job.Update == nil {
 			logging.Info("levant/deploy: job %s is not configured with update stanza, consider adding to use deployments",
-				*job.Name)
-			return c.checkJobStatus(job.Name)
+				*l.config.Job.Name)
+			return l.checkJobStatus()
 		}
 
-		logging.Info("levant/deploy: beginning deployment watcher for job %s", *job.Name)
+		logging.Info("levant/deploy: beginning deployment watcher for job %s", *l.config.Job.Name)
 
 		// Get the deploymentID from the evaluationID so that we can watch the
 		// deployment for end status.
-		depID, err := c.getDeploymentID(eval.EvalID)
+		depID, err := l.getDeploymentID(eval.EvalID)
 		if err != nil {
 			logging.Error("levant/deploy: unable to get info of evaluation %s: %v", eval.EvalID, err)
 			return
 		}
 
 		// Get the success of the deployment.
-		success = c.deploymentWatcher(depID, autoPromote)
+		success = l.deploymentWatcher(depID)
 
 		// If the deployment has not been successful; check whether the job is
 		// configured to auto-revert so that this can be tracked.
 		if !success {
-			dep, _, err := c.nomad.Deployments().Info(depID, nil)
+			dep, _, err := l.nomad.Deployments().Info(depID, nil)
 			if err != nil {
 				logging.Error("levant/deploy: unable to query deployment %s for auto-revert check: %v",
 					dep.ID, err)
 				break
 			}
-			c.checkAutoRevert(dep)
+			l.checkAutoRevert(dep)
 		}
 
 	case nomadStructs.JobTypeBatch:
-		return c.checkJobStatus(job.Name)
+		return l.checkJobStatus()
 
 	case nomadStructs.JobTypeSystem:
-		return c.checkJobStatus(job.Name)
+		return l.checkJobStatus()
 
 	default:
-		logging.Debug("levant/deploy: Levant does not support advanced deployments of job type %s", *job.Type)
+		logging.Debug("levant/deploy: Levant does not support advanced deployments of job type %s",
+			*l.config.Job.Type)
 		success = true
 	}
 	return
 }
 
-func (c *nomadClient) evaluationInspector(evalID *string) error {
+func (l *levantDeployment) evaluationInspector(evalID *string) error {
 
 	for {
-		evalInfo, _, err := c.nomad.Evaluations().Info(*evalID, nil)
+		evalInfo, _, err := l.nomad.Evaluations().Info(*evalID, nil)
 		if err != nil {
 			return err
 		}
@@ -192,7 +229,7 @@ func (c *nomadClient) evaluationInspector(evalID *string) error {
 	}
 }
 
-func (c *nomadClient) deploymentWatcher(depID string, autoPromote int) (success bool) {
+func (l *levantDeployment) deploymentWatcher(depID string) (success bool) {
 
 	var canaryChan chan interface{}
 	deploymentChan := make(chan interface{})
@@ -202,16 +239,16 @@ func (c *nomadClient) deploymentWatcher(depID string, autoPromote int) (success 
 
 	// Setup the canaryChan and launch the autoPromote go routine if autoPromote
 	// has been enabled.
-	if autoPromote > 0 {
+	if l.config.Canary > 0 {
 		canaryChan = make(chan interface{})
-		go c.canaryAutoPromote(depID, autoPromote, canaryChan, deploymentChan)
+		go l.canaryAutoPromote(depID, l.config.Canary, canaryChan, deploymentChan)
 	}
 
 	q := &nomad.QueryOptions{WaitIndex: 1, AllowStale: true, WaitTime: wt}
 
 	for {
 
-		dep, meta, err := c.nomad.Deployments().Info(depID, q)
+		dep, meta, err := l.nomad.Deployments().Info(depID, q)
 		logging.Debug("levant/deploy: deployment %v running for %.2fs", depID, time.Since(t).Seconds())
 
 		// Listen for the deploymentChan closing which indicates Levant should exit
@@ -234,7 +271,7 @@ func (c *nomadClient) deploymentWatcher(depID string, autoPromote int) (success 
 
 		q.WaitIndex = meta.LastIndex
 
-		cont, err := c.checkDeploymentStatus(dep, canaryChan)
+		cont, err := l.checkDeploymentStatus(dep, canaryChan)
 		if err != nil {
 			return false
 		}
@@ -247,7 +284,7 @@ func (c *nomadClient) deploymentWatcher(depID string, autoPromote int) (success 
 	}
 }
 
-func (c *nomadClient) checkDeploymentStatus(dep *nomad.Deployment, shutdownChan chan interface{}) (bool, error) {
+func (l *levantDeployment) checkDeploymentStatus(dep *nomad.Deployment, shutdownChan chan interface{}) (bool, error) {
 
 	switch dep.Status {
 	case nomadStructs.DeploymentStatusSuccessful:
@@ -264,14 +301,14 @@ func (c *nomadClient) checkDeploymentStatus(dep *nomad.Deployment, shutdownChan 
 		logging.Error("levant/deploy: deployment %v has status %s", dep.ID, dep.Status)
 
 		// Launch the failure inspector.
-		c.checkFailedDeployment(&dep.ID)
+		l.checkFailedDeployment(&dep.ID)
 
 		return false, fmt.Errorf("deployment failed")
 	}
 }
 
 // canaryAutoPromote handles Levant's canary-auto-promote functionality.
-func (c *nomadClient) canaryAutoPromote(depID string, waitTime int, shutdownChan, deploymentChan chan interface{}) {
+func (l *levantDeployment) canaryAutoPromote(depID string, waitTime int, shutdownChan, deploymentChan chan interface{}) {
 
 	// Setup the AutoPromote timer.
 	autoPromote := time.After(time.Duration(waitTime) * time.Second)
@@ -283,7 +320,7 @@ func (c *nomadClient) canaryAutoPromote(depID string, waitTime int, shutdownChan
 				waitTime, depID)
 
 			// Check the deployment is healthy before promoting.
-			if healthy := c.checkCanaryDeploymentHealth(depID); !healthy {
+			if healthy := l.checkCanaryDeploymentHealth(depID); !healthy {
 				logging.Error("levant/deploy: the canary deployment %s has unhealthy allocations, unable to promote", depID)
 				close(deploymentChan)
 				return
@@ -292,7 +329,7 @@ func (c *nomadClient) canaryAutoPromote(depID string, waitTime int, shutdownChan
 			logging.Info("levant/deploy: triggering auto promote of deployment %s", depID)
 
 			// Promote the deployment.
-			_, _, err := c.nomad.Deployments().PromoteAll(depID, nil)
+			_, _, err := l.nomad.Deployments().PromoteAll(depID, nil)
 			if err != nil {
 				logging.Error("levant/deploy: unable to promote deployment %s: %v", depID, err)
 				close(deploymentChan)
@@ -308,11 +345,11 @@ func (c *nomadClient) canaryAutoPromote(depID string, waitTime int, shutdownChan
 
 // checkCanaryDeploymentHealth is used to check the health status of each
 // task-group within a canary deployment.
-func (c *nomadClient) checkCanaryDeploymentHealth(depID string) (healthy bool) {
+func (l *levantDeployment) checkCanaryDeploymentHealth(depID string) (healthy bool) {
 
 	var unhealthy int
 
-	dep, _, err := c.nomad.Deployments().Info(depID, &nomad.QueryOptions{AllowStale: true})
+	dep, _, err := l.nomad.Deployments().Info(depID, &nomad.QueryOptions{AllowStale: true})
 	if err != nil {
 		logging.Error("levant/deploy: unable to query deployment %s for health: %v", depID, err)
 		return
@@ -346,12 +383,12 @@ func (c *nomadClient) checkCanaryDeploymentHealth(depID string) (healthy bool) {
 // evaluationID. This is only needed as sometimes Nomad initially returns eval
 // info with an empty deploymentID; and a retry is required in order to get the
 // updated response from Nomad.
-func (c *nomadClient) getDeploymentID(evalID string) (depID string, err error) {
+func (l *levantDeployment) getDeploymentID(evalID string) (depID string, err error) {
 
 	var evalInfo *nomad.Evaluation
 
 	for {
-		if evalInfo, _, err = c.nomad.Evaluations().Info(evalID, nil); err != nil {
+		if evalInfo, _, err = l.nomad.Evaluations().Info(evalID, nil); err != nil {
 			return
 		}
 
@@ -369,17 +406,17 @@ func (c *nomadClient) getDeploymentID(evalID string) (depID string, err error) {
 
 // dynamicGroupCountUpdater takes the templated and rendered job and updates the
 // group counts based on the currently deployed job; if its running.
-func (c *nomadClient) dynamicGroupCountUpdater(job *nomad.Job) error {
+func (l *levantDeployment) dynamicGroupCountUpdater() error {
 
 	// Gather information about the current state, if any, of the job on the
 	// Nomad cluster.
-	rJob, _, err := c.nomad.Jobs().Info(*job.Name, &nomad.QueryOptions{})
+	rJob, _, err := l.nomad.Jobs().Info(*l.config.Job.Name, &nomad.QueryOptions{})
 
 	// This is a hack due to GH-1849; we check the error string for 404 which
 	// indicates the job is not running, not that there was an error in the API
 	// call.
 	if err != nil && strings.Contains(err.Error(), "404") {
-		logging.Info("levant/deploy: job %s not running, using template file group counts", *job.Name)
+		logging.Info("levant/deploy: job %s not running, using template file group counts", *l.config.Job.Name)
 		return nil
 	} else if err != nil {
 		logging.Error("levant/deploy: unable to perform job evaluation: %v", err)
@@ -389,10 +426,10 @@ func (c *nomadClient) dynamicGroupCountUpdater(job *nomad.Job) error {
 	// Iterate the templated job and the Nomad returned job and update group count
 	// based on matches.
 	for _, rGroup := range rJob.TaskGroups {
-		for _, group := range job.TaskGroups {
+		for _, group := range l.config.Job.TaskGroups {
 			if *rGroup.Name == *group.Name {
 				logging.Info("levant/deploy: using dynamic count %v for job %s and group %s",
-					*rGroup.Count, *job.Name, *group.Name)
+					*rGroup.Count, *l.config.Job.Name, *group.Name)
 				group.Count = rGroup.Count
 			}
 		}

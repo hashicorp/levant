@@ -21,7 +21,7 @@ const (
 )
 
 // Meta contains the meta-options and functionality that nearly every
-// Packer command inherits.
+// Levant command inherits.
 type Meta struct {
 	UI cli.Ui
 
