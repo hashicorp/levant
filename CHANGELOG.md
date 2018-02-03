@@ -2,6 +2,7 @@
 
 IMPROVEMENTS:
  * Job types of `system` now undergo checking to confirm the job reaches status of `running` [GH-96](https://github.com/jrasell/levant/pull/96
+ * Implement config struct for Levant to track config during run [GH-102](https://github.com/jrasell/levant/pull/102)
 
 BUG FIXES:
  * Service jobs that don't have an update stanza do not produce deployments and should skip the deployment watcher [GH-99](https://github.com/jrasell/levant/pull/99)
