@@ -6,6 +6,7 @@ IMPROVEMENTS:
 
 BUG FIXES:
  * Service jobs that don't have an update stanza do not produce deployments and should skip the deployment watcher [GH-99](https://github.com/jrasell/levant/pull/99)
+ * Ensure the count updater ignores jobs that are in stopped state [GH-106](https://github.com/jrasell/levant/pull/106)
 
 ## 0.0.4 (25 January 2018)
 
