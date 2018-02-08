@@ -91,7 +91,6 @@ func (l *levantDeployment) deploy() (success bool) {
 	}
 
 	if !l.config.ForceCount {
-		logging.Debug("levant/deploy: running dynamic job count updater for job %s", *l.config.Job.Name)
 		if err := l.dynamicGroupCountUpdater(); err != nil {
 			return
 		}
@@ -412,6 +411,12 @@ func (l *levantDeployment) dynamicGroupCountUpdater() error {
 	// Nomad cluster.
 	rJob, _, err := l.nomad.Jobs().Info(*l.config.Job.Name, &nomad.QueryOptions{})
 
+	// Check that the job is actually running and not in a potentially stopped
+	// state.
+	if *rJob.Status != nomadStructs.JobStatusRunning {
+		return nil
+	}
+
 	// This is a hack due to GH-1849; we check the error string for 404 which
 	// indicates the job is not running, not that there was an error in the API
 	// call.
@@ -422,6 +427,8 @@ func (l *levantDeployment) dynamicGroupCountUpdater() error {
 		logging.Error("levant/deploy: unable to perform job evaluation: %v", err)
 		return err
 	}
+
+	logging.Debug("levant/deploy: running dynamic job count updater for job %s", *l.config.Job.Name)
 
 	// Iterate the templated job and the Nomad returned job and update group count
 	// based on matches.
