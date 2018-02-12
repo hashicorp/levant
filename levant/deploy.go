@@ -127,7 +127,7 @@ func (l *levantDeployment) deploy() (success bool) {
 		if l.config.Job.Update == nil {
 			logging.Info("levant/deploy: job %s is not configured with update stanza, consider adding to use deployments",
 				*l.config.Job.Name)
-			return l.checkJobStatus()
+			return l.jobStatusChecker(&eval.EvalID)
 		}
 
 		logging.Info("levant/deploy: beginning deployment watcher for job %s", *l.config.Job.Name)
@@ -156,10 +156,10 @@ func (l *levantDeployment) deploy() (success bool) {
 		}
 
 	case nomadStructs.JobTypeBatch:
-		return l.checkJobStatus()
+		return l.jobStatusChecker(&eval.EvalID)
 
 	case nomadStructs.JobTypeSystem:
-		return l.checkJobStatus()
+		return l.jobStatusChecker(&eval.EvalID)
 
 	default:
 		logging.Debug("levant/deploy: Levant does not support advanced deployments of job type %s",
