@@ -41,6 +41,10 @@ General Options:
     The time in seconds, after which Levant will auto-promote a canary job
     if all canaries within the deployment are healthy.
 
+  -force-batch
+    Forces a new instance of the periodic job. A new instance will be created
+    even if it violates the job's prohibit_overlap settings.
+
   -force-count
     Use the taskgroup count from the Nomad jobfile instead of the count that
     is currently set in a running job.
@@ -72,6 +76,7 @@ func (c *DeployCommand) Run(args []string) int {
 
 	flags.StringVar(&config.Addr, "address", "", "")
 	flags.IntVar(&config.Canary, "canary-auto-promote", 0, "")
+	flags.BoolVar(&config.ForceBatch, "force-batch", false, "")
 	flags.BoolVar(&config.ForceCount, "force-count", false, "")
 	flags.StringVar(&config.LogLevel, "log-level", "INFO", "")
 	flags.StringVar(&config.VaiableFile, "var-file", "", "")
@@ -108,8 +113,13 @@ func (c *DeployCommand) Run(args []string) int {
 			c.UI.Error(fmt.Sprintf("[ERROR] levant/command: %v", err))
 			return 1
 		}
+	}
 
-		c.UI.Info(fmt.Sprintf("[INFO] levant/command: running canary-auto-update of %vs", config.Canary))
+	if config.ForceBatch {
+		if err = c.checkForceBatch(config.Job, config.ForceBatch); err != nil {
+			c.UI.Error(fmt.Sprintf("[ERROR] levant/command: %v", err))
+			return 1
+		}
 	}
 
 	success := levant.TriggerDeployment(config)
@@ -136,4 +146,15 @@ func (c *DeployCommand) checkCanaryAutoPromote(job *nomad.Job, canaryAutoPromote
 	}
 
 	return fmt.Errorf("canary-auto-update of %v passed but job is not canary enabled", canaryAutoPromote)
+}
+
+// checkForceBatch ensures that if the force-batch flag is passed, the job is
+// periodic.
+func (c *DeployCommand) checkForceBatch(job *nomad.Job, forceBatch bool) error {
+
+	if forceBatch && job.IsPeriodic() {
+		return nil
+	}
+
+	return fmt.Errorf("force-batch passed but job is not periodic")
 }

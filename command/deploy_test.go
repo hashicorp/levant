@@ -41,3 +41,34 @@ func TestDeploy_checkCanaryAutoPromote(t *testing.T) {
 		}
 	}
 }
+
+func TestDeploy_checkForceBatch(t *testing.T) {
+
+	fVars := make(map[string]string)
+	depCommand := &DeployCommand{}
+	forceBatch := true
+
+	cases := []struct {
+		File       string
+		ForceBatch bool
+		Output     error
+	}{
+		{
+			File:       "test-fixtures/periodic_batch.nomad",
+			ForceBatch: forceBatch,
+			Output:     nil,
+		},
+	}
+
+	for i, c := range cases {
+		job, err := levant.RenderJob(c.File, "", &fVars)
+		if err != nil {
+			t.Fatalf("case %d failed: %v", i, err)
+		}
+
+		out := depCommand.checkForceBatch(job, c.ForceBatch)
+		if out != c.Output {
+			t.Fatalf("case %d: got \"%v\"; want %v", i, out, c.Output)
+		}
+	}
+}
