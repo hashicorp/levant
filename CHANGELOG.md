@@ -1,7 +1,7 @@
 ## 0.1.0 (Unreleased)
 
 IMPROVEMENTS:
- * Job types of `system` now undergo checking to confirm the job reaches status of `running` [GH-96](https://github.com/jrasell/levant/pull/96)
+ * Enhanced job status checking for non-service type jobs [GH-96](https://github.com/jrasell/levant/pull/96), [GH-109](https://github.com/jrasell/levant/pull/109)
  * Implement config struct for Levant to track config during run [GH-102](https://github.com/jrasell/levant/pull/102)
 
 BUG FIXES:
