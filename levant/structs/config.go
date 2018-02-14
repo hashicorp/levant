@@ -13,6 +13,10 @@ type Config struct {
 	// until attempting to perfrom autopromote.
 	Canary int
 
+	// ForceBatch is a boolean flag that can be used to force a run of a periodic
+	// job upon registration.
+	ForceBatch bool
+
 	// ForceCount is a boolean flag that can be used to ignore running job counts
 	// and force the count based on the rendered job file.
 	ForceCount bool

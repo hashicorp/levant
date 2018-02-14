@@ -104,9 +104,19 @@ func (l *levantDeployment) deploy() (success bool) {
 		return
 	}
 
+	if l.config.ForceBatch {
+		if eval.EvalID, err = l.triggerPeriodic(l.config.Job.ID); err != nil {
+			logging.Error("levant/deploy: unable to trigger periodic instance of job %s: %v",
+				*l.config.Job.Name, err)
+			return
+		}
+	}
+
 	// Periodic and parameterized jobs do not return an evaluation and therefore
-	// can't perform the evaluationInspector.
-	if !l.config.Job.IsPeriodic() && !l.config.Job.IsParameterized() {
+	// can't perform the evaluationInspector unless we are forcing an instance of
+	// periodic which will yeild an EvalID.
+	if !l.config.Job.IsPeriodic() && !l.config.Job.IsParameterized() ||
+		l.config.Job.IsPeriodic() && l.config.ForceBatch {
 
 		// Trigger the evaluationInspector to identify any potential errors in the
 		// Nomad evaluation run. As far as I can tell from testing; a single alloc
@@ -378,6 +388,19 @@ func (l *levantDeployment) checkCanaryDeploymentHealth(depID string) (healthy bo
 	return
 }
 
+// triggerPeriodic is used to force an instance of a periodic job outside of the
+// planned schedule. This results in an evalID being created that can then be
+// checked in the same fashion as other jobs.
+func (l *levantDeployment) triggerPeriodic(jobID *string) (evalID string, err error) {
+
+	logging.Info("levant/deploy: triggering a run of periodic job %s", *jobID)
+
+	// Trigger the run if possible and just returning both the evalID and the err.
+	// There is no need to check this here as the caller does this.
+	evalID, _, err = l.nomad.Jobs().PeriodicForce(*jobID, nil)
+	return
+}
+
 // getDeploymentID finds the Nomad deploymentID associated to a Nomad
 // evaluationID. This is only needed as sometimes Nomad initially returns eval
 // info with an empty deploymentID; and a retry is required in order to get the
@@ -411,12 +434,6 @@ func (l *levantDeployment) dynamicGroupCountUpdater() error {
 	// Nomad cluster.
 	rJob, _, err := l.nomad.Jobs().Info(*l.config.Job.Name, &nomad.QueryOptions{})
 
-	// Check that the job is actually running and not in a potentially stopped
-	// state.
-	if *rJob.Status != nomadStructs.JobStatusRunning {
-		return nil
-	}
-
 	// This is a hack due to GH-1849; we check the error string for 404 which
 	// indicates the job is not running, not that there was an error in the API
 	// call.
@@ -426,6 +443,12 @@ func (l *levantDeployment) dynamicGroupCountUpdater() error {
 	} else if err != nil {
 		logging.Error("levant/deploy: unable to perform job evaluation: %v", err)
 		return err
+	}
+
+	// Check that the job is actually running and not in a potentially stopped
+	// state.
+	if *rJob.Status != nomadStructs.JobStatusRunning {
+		return nil
 	}
 
 	logging.Debug("levant/deploy: running dynamic job count updater for job %s", *l.config.Job.Name)
