@@ -28,7 +28,7 @@ Usage: levant deploy [options] [TEMPLATE]
 
 Arguments:
 
-  TEMPLATE  nomad job template
+  TEMPLATE nomad job template
     If no argument is given we look for a single *.nomad file
 
 General Options:
