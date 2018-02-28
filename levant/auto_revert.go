@@ -30,7 +30,7 @@ func (l *levantDeployment) checkAutoRevert(dep *nomad.Deployment) {
 
 	var revert bool
 
-	// Identify whether any of the TashGroups are enabled for auto-revert and have
+	// Identify whether any of the TaskGroups are enabled for auto-revert and have
 	// therefore caused the job to enter a deployment to revert to a stable
 	// version.
 	for _, v := range dep.TaskGroups {
