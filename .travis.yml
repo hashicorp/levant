@@ -3,6 +3,7 @@ dist: trusty
 language: go
 go:
 - 1.9.x
+- "1.10"
 install:
 - go get github.com/golang/lint/golint
 - go get github.com/mitchellh/gox
