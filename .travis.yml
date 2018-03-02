@@ -14,7 +14,7 @@ notifications:
   email: true
 deploy:
   provider: releases
-  go: 1.9.x
+  go: "1.10"
   api_key:
     secure: T1ciNa/JVB5j36eq2j4sO3eh95y8+B1Y/cEvNz0jLBYCVKpFfcG34MCLBX1XWtUXeaDRWmtB7W5OfFjcHbE0WvkZxgq3CZSaSFvauiPFfSLRNRZi9SD+/p9HA71HRUySUggRbB9TheP3d4oBX0q+h0ZHzpgyUl+jmbVwn48h2iOgKKmBfvSHwv1HNfKvR9RYqS+DUQHHV524ObNvHdy3ERQ3vHzObfIvRfrBhWcURtqsLMPeS2UAWqXoCEUWtugUjEHqcDdAnuv85J5QiIIEbqXvOVl6Nq5xmKf6TfOSgegIZQ1/c/oEp+IcPVn0coOg7uWaV5SZMXfTgszxAs4neqG6rFco1fuIy8rYgtnp/JaPfjo9hEv5V0vR3ea9YfDzQ1BXLeD+e/EmYxWCs1IOg4IlbnhcSau+GyZTQuVrzXCGgEt25IU9NO3/qkng+ze1frN9NphaNtpSJw40NyfS9EL1tiLXfZgT7ZnJbkQCO0iD4Shi0pIWWpgMCF+e5VzDI38IFrdgCpVC4rhkG9Y2dRJbuXMYgZ3o4uboFKAY9oZnAcbimtP9rN+AbxvqSdDFuB1QXpIYaqD1cra5miOq9ok3/yGnOIQy1yEX1ruA/hRYKPNfvb+JpDqPQa4plkR8DPweWzzIl9ZuFxbXxn+MvYBYL2Eub30q3qL4Xnp5c+0=
   file:
