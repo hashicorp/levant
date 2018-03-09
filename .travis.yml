@@ -7,6 +7,7 @@ go:
 install:
 - go get github.com/golang/lint/golint
 - go get github.com/mitchellh/gox
+- go get github.com/client9/misspell/cmd/misspell
 script:
 - make test
 after_success:
