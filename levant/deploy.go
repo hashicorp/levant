@@ -114,7 +114,7 @@ func (l *levantDeployment) deploy() (success bool) {
 
 	// Periodic and parameterized jobs do not return an evaluation and therefore
 	// can't perform the evaluationInspector unless we are forcing an instance of
-	// periodic which will yeild an EvalID.
+	// periodic which will yield an EvalID.
 	if !l.config.Job.IsPeriodic() && !l.config.Job.IsParameterized() ||
 		l.config.Job.IsPeriodic() && l.config.ForceBatch {
 

@@ -6,7 +6,7 @@ import (
 	"github.com/jrasell/levant/logging"
 )
 
-// initialTaskHealth is the Levant health status assosiated to a Task when it is
+// initialTaskHealth is the Levant health status associated to a Task when it is
 // initially discovered as part of the deployment.
 const initialTaskHealth = "unknown"
 

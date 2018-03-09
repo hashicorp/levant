@@ -3,10 +3,10 @@ PREFIX?=$(shell pwd)
 SRCFILES=$(shell find . -type f -name '*.go' -not -path "./vendor/*")
 BUILDTAGS=
 
-.PHONY: clean all fmt vet lint build test install static
+.PHONY: clean all fmt vet lint spelling build test install static
 .DEFAULT: default
 
-all: clean build fmt lint test vet install
+all: clean build fmt lint spelling test vet install
 
 build:
 	@echo "==> Running $@..."
@@ -26,7 +26,7 @@ lint:
 	@echo "==> Running $@..."
 	@golint ./... | grep -v vendor | tee /dev/stderr
 
-test: fmt lint vet
+test: fmt lint vet spelling
 	@echo "==> Running $@..."
 	@go test -cover -v -tags "$(BUILDTAGS) cgo" $(shell go list ./... | grep -v vendor)
 
@@ -54,3 +54,12 @@ install:
 release:
 	@echo "==> Running $@..."
 	./scripts/build.sh
+
+spelling:
+	@echo "==> Running $@..."
+	@echo $(SRCFILES) |xargs misspell -error ;\
+	if [ $$? -ne 0 ]; then \
+	echo ""; \
+	echo "Misspell found spelling mistakes please fix them before submitting the"; \
+	echo "code for reviewal."; \
+	exit 1; fi
