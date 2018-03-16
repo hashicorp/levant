@@ -149,18 +149,20 @@ func (l *levantDeployment) deploy() (success bool) {
 			return
 		}
 
-		// Get the success of the deployment.
-		success = l.deploymentWatcher(depID)
+		// Get the success of the deployment and return if we have success.
+		if success = l.deploymentWatcher(depID); success {
+			return
+		}
 
-		// If the deployment has not been successful; check whether the job is
-		// configured to auto-revert so that this can be tracked.
-		if !success {
-			dep, _, err := l.nomad.Deployments().Info(depID, nil)
-			if err != nil {
-				logging.Error("levant/deploy: unable to query deployment %s for auto-revert check: %v",
-					dep.ID, err)
-				break
-			}
+		dep, _, err := l.nomad.Deployments().Info(depID, nil)
+		if err != nil {
+			logging.Error("levant/deploy: unable to query deployment %s for auto-revert check: %v",
+				dep.ID, err)
+			return
+		}
+
+		// If the job is not a canary job, then run the auto-revert checker.
+		if *l.config.Job.Update.Canary == 0 {
 			l.checkAutoRevert(dep)
 		}
 
