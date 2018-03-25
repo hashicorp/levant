@@ -187,14 +187,14 @@ func allocationStatusChecker(levantTasks map[string]map[string]string, allocs []
 				delete(levantTasks[alloc.ID], taskName)
 
 			case nomadStructs.TaskStatePending:
-				logging.Debug("levant/job_status_checker: task %s in allocation %s now in running state",
-					taskName, alloc.ID)
+				logging.Debug("levant/job_status_checker: task %s in allocation %s now in %s state",
+					taskName, alloc.ID, nomadStructs.TaskStatePending)
 
 			// If the task is dead, incrament the deadTask counter and remove the task
 			// from tracking.
 			case nomadStructs.TaskStateDead:
-				logging.Error("levant/job_status_checker: task %s in allocation %s now in dead state",
-					taskName, alloc.ID)
+				logging.Error("levant/job_status_checker: task %s in allocation %s now in %s state",
+					taskName, alloc.ID, nomadStructs.TaskStateDead)
 				*deadTask++
 				delete(levantTasks[alloc.ID], taskName)
 			}
