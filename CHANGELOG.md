@@ -1,6 +1,7 @@
 ## 0.1.0 (Unreleased)
 
 IMPROVEMENTS:
+ * New 'dispatch' command which allows Levant to dispatch Nomad jobs which will go through Levants additional job checking [GH-128](https://github.com/jrasell/levant/pull/128)
  * New 'force-batch' deploy flag which allows users to trigger a periodic run on deployment independent of the schedule [GH-110](https://github.com/jrasell/levant/pull/110) 
  * Enhanced job status checking for non-service type jobs [GH-96](https://github.com/jrasell/levant/pull/96), [GH-109](https://github.com/jrasell/levant/pull/109)
  * Implement config struct for Levant to track config during run [GH-102](https://github.com/jrasell/levant/pull/102)
