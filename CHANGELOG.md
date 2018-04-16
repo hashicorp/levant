@@ -13,6 +13,7 @@ BUG FIXES:
  * Fix a small formatting issue with the deploy command arg help [GH-111](https://github.com/jrasell/levant/pull/111)
  * Do not run the auto-revert inspector if auto-promote fails [GH-122](https://github.com/jrasell/levant/pull/122)
  * Fix issue where allocationStatusChecker logged incorrectly [GH-131](https://github.com/jrasell/levant/pull/131)
+ * Add retry to auto-revert checker to ensure the correct deployment is monitored, and not the original [GH-134](https://github.com/jrasell/levant/pull/134)
 
 ## 0.0.4 (25 January 2018)
 
