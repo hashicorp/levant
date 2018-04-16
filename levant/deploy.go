@@ -161,8 +161,14 @@ func (l *levantDeployment) deploy() (success bool) {
 			return
 		}
 
-		// If the job is not a canary job, then run the auto-revert checker.
-		if *l.config.Job.Update.Canary == 0 {
+		// If the job is not a canary job, then run the auto-revert checker, the
+		// current checking mechanism is slightly hacky and should be updated.
+		// The reason for this is currently the config.Job is populate from the
+		// rendered job and so a user could potentially not set canary meaning
+		// the field shows a null.
+		if l.config.Job.Update.Canary == nil {
+			l.checkAutoRevert(dep)
+		} else if *l.config.Job.Update.Canary == 0 {
 			l.checkAutoRevert(dep)
 		}
 
