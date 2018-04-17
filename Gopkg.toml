@@ -25,7 +25,7 @@
   name = "github.com/Sirupsen/logrus"
   version = "1.0.3"
 
-[[override]]
+[[constraint]]
   name = "github.com/hashicorp/nomad"
   version = "0.8.0"
 
