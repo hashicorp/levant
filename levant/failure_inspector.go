@@ -135,6 +135,11 @@ func (l *levantDeployment) allocInspector(allocID string, wg *sync.WaitGroup) {
 			if desc != "" {
 				logging.Error("levant/failure_inspector: alloc %s incurred event %s because %s",
 					allocID, strings.ToLower(event.Type), strings.TrimSpace(desc))
+			} else {
+				logging.Error("levant/failure_inspector: alloc %s logged for failure; event_type: %s; message: %s",
+					allocID,
+					strings.ToLower(event.Type),
+					strings.ToLower(event.DisplayMessage))
 			}
 		}
 	}
