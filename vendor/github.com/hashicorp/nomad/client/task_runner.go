@@ -329,7 +329,7 @@ func (r *TaskRunner) pre060StateFilePath() string {
 // executor.
 func (r *TaskRunner) RestoreState() (string, error) {
 	// COMPAT: Remove in 0.7.0
-	// 0.6.0 transistioned from individual state files to a single bolt-db.
+	// 0.6.0 transitioned from individual state files to a single bolt-db.
 	// The upgrade path is to:
 	// Check if old state exists
 	//   If so, restore from that and delete old state
@@ -648,7 +648,7 @@ func (r *TaskRunner) validateTask() error {
 		// Verify the artifact doesn't escape the task directory.
 		if err := artifact.Validate(); err != nil {
 			// If this error occurs there is potentially a server bug or
-			// mallicious, server spoofing.
+			// malicious, server spoofing.
 			r.logger.Printf("[ERR] client: allocation %q, task %v, artifact %#v (%v) fails validation: %v",
 				r.alloc.ID, r.task.Name, artifact, i, err)
 			mErr.Errors = append(mErr.Errors, fmt.Errorf("artifact (%d) failed validation: %v", i, err))
@@ -854,6 +854,13 @@ func (r *TaskRunner) deriveVaultToken() (token string, exit bool) {
 			return tokens[r.task.Name], false
 		}
 
+		// Check if this is a server side error
+		if structs.IsServerSide(err) {
+			r.logger.Printf("[ERR] client: failed to derive Vault token for task %v on alloc %q: %v",
+				r.task.Name, r.alloc.ID, err)
+			r.Kill("vault", fmt.Sprintf("server error deriving vault token: %v", err), true)
+			return "", true
+		}
 		// Check if we can't recover from the error
 		if !structs.IsRecoverable(err) {
 			r.logger.Printf("[ERR] client: failed to derive Vault token for task %v on alloc %q: %v",
@@ -1039,7 +1046,7 @@ func (r *TaskRunner) prestart(alloc *structs.Allocation, task *structs.Task, res
 
 		// Block for consul-template
 		// TODO Hooks should register themselves as blocking and then we can
-		// perioidcally enumerate what we are still blocked on
+		// periodically enumerate what we are still blocked on
 		select {
 		case <-r.unblockCh:
 			// Send the start signal
@@ -1440,6 +1447,21 @@ func (r *TaskRunner) startTask() error {
 
 	}
 
+	// Log driver network information
+	if sresp.Network != nil && sresp.Network.IP != "" {
+		if sresp.Network.AutoAdvertise {
+			r.logger.Printf("[INFO] client: alloc %s task %s auto-advertising detected IP %s",
+				r.alloc.ID, r.task.Name, sresp.Network.IP)
+		} else {
+			r.logger.Printf("[TRACE] client: alloc %s task %s detected IP %s but not auto-advertising",
+				r.alloc.ID, r.task.Name, sresp.Network.IP)
+		}
+	}
+
+	if sresp.Network == nil || sresp.Network.IP == "" {
+		r.logger.Printf("[TRACE] client: alloc %s task %s could not detect a driver IP", r.alloc.ID, r.task.Name)
+	}
+
 	// Update environment with the network defined by the driver's Start method.
 	r.envBuilder.SetDriverNetwork(sresp.Network)
 
@@ -1575,7 +1597,7 @@ func (r *TaskRunner) collectResourceUsageStats(stopCollection <-chan struct{}) {
 				// race between the stopCollection channel being closed and calling
 				// Stats on the handle.
 				if !strings.Contains(err.Error(), "connection is shut down") {
-					r.logger.Printf("[WARN] client: error fetching stats of task %v: %v", r.task.Name, err)
+					r.logger.Printf("[DEBUG] client: error fetching stats of task %v: %v", r.task.Name, err)
 				}
 				continue
 			}

@@ -24,13 +24,6 @@ var basicResources = &structs.Resources{
 	CPU:      250,
 	MemoryMB: 256,
 	DiskMB:   20,
-	Networks: []*structs.NetworkResource{
-		{
-			IP:            "0.0.0.0",
-			ReservedPorts: []structs.Port{{Label: "main", Value: 12345}},
-			DynamicPorts:  []structs.Port{{Label: "HTTP", Value: 43330}},
-		},
-	},
 }
 
 func init() {
@@ -421,7 +414,7 @@ func TestCreatedResources_CopyRemove(t *testing.T) {
 	}
 
 	if expected := []string{"v2", "v3"}; !reflect.DeepEqual(expected, res2.Resources["k1"]) {
-		t.Fatalf("unpexpected list for k1: %#v", res2.Resources["k1"])
+		t.Fatalf("unexpected list for k1: %#v", res2.Resources["k1"])
 	}
 
 	// Assert removing the only value from a key removes the key

@@ -25,9 +25,9 @@
   name = "github.com/Sirupsen/logrus"
   version = "1.0.3"
 
-[[constraint]]
+[[override]]
   name = "github.com/hashicorp/nomad"
-  version = "0.7.1"
+  version = "0.8.0"
 
 [[constraint]]
   name = "github.com/hashicorp/terraform"

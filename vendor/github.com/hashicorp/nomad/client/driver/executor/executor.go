@@ -129,7 +129,7 @@ type nomadPid struct {
 	cpuStatsSys   *stats.CpuStats
 }
 
-// SyslogServerState holds the address and islation information of a launched
+// SyslogServerState holds the address and isolation information of a launched
 // syslog server
 type SyslogServerState struct {
 	IsolationConfig *dstructs.IsolationConfig
@@ -207,7 +207,7 @@ func (e *UniversalExecutor) SetContext(ctx *ExecutorContext) error {
 // LaunchCmd launches the main process and returns its state. It also
 // configures an applies isolation on certain platforms.
 func (e *UniversalExecutor) LaunchCmd(command *ExecCommand) (*ProcessState, error) {
-	e.logger.Printf("[DEBUG] executor: launching command %v %v", command.Cmd, strings.Join(command.Args, " "))
+	e.logger.Printf("[INFO] executor: launching command %v %v", command.Cmd, strings.Join(command.Args, " "))
 
 	// Ensure the context has been set first
 	if e.ctx == nil {
@@ -425,7 +425,7 @@ func (e *UniversalExecutor) wait() {
 			}
 		}
 	} else {
-		e.logger.Printf("[DEBUG] executor: unexpected Wait() error type: %v", err)
+		e.logger.Printf("[WARN] executor: unexpected Cmd.Wait() error type: %v", err)
 	}
 
 	e.exitState = &ProcessState{Pid: 0, ExitCode: exitCode, Signal: signal, IsolationConfig: ic, Time: time.Now()}
@@ -438,7 +438,7 @@ var (
 )
 
 // ClientCleanup is the cleanup routine that a Nomad Client uses to remove the
-// reminants of a child UniversalExecutor.
+// remnants of a child UniversalExecutor.
 func ClientCleanup(ic *dstructs.IsolationConfig, pid int) error {
 	return clientCleanup(ic, pid)
 }

@@ -74,12 +74,13 @@ does not automatically enable service discovery.
   define multiple checks for the service. At this time, Nomad supports the
   `script`<sup><small>1</small></sup>, `http` and `tcp` checks.
 
-- `name` `(string: "<job>-<group>-<task>")` - Specifies the name of this
-  service. If not supplied, this will default to the name of the job, group, and
-  task concatenated together with a dash, like `"docs-example-server"`. Each
-  service must have a unique name within the cluster. Names must adhere to
-  [RFC-1123 §2.1](https://tools.ietf.org/html/rfc1123#section-2) and are limited
-  to alphanumeric and hyphen characters (i.e. `[a-z0-9\-]`), and be less than 64
+- `name` `(string: "<job>-<group>-<task>")` - Specifies the name this service
+  will be advertised as in Consul.  If not supplied, this will default to the
+  name of the job, group, and task concatenated together with a dash, like
+  `"docs-example-server"`. Each service must have a unique name within the
+  cluster. Names must adhere to [RFC-1123
+  §2.1](https://tools.ietf.org/html/rfc1123#section-2) and are limited to
+  alphanumeric and hyphen characters (i.e. `[a-z0-9\-]`), and be less than 64
   characters in length.
 
     In addition to the standard [Nomad interpolation][interpolation], the
@@ -96,12 +97,16 @@ does not automatically enable service discovery.
     interpolated and revalidated. This can cause certain service names to pass validation at submit time but fail 
     at runtime.
     
-- `port` `(string: <optional>)` - Specifies the label of the port on which this
-  service is running. Note this is the _label_ of the port and not the port
-  number unless `address_mode = driver`. The port label must match one defined
-   in the [`network`][network] stanza unless you're also using
-  `address_mode="driver"`. Numeric ports may be used when in driver addressing
-   mode.
+- `port` `(string: <optional>)` - Specifies the port to advertise for this
+  service. The value of `port` depends on which [`address_mode`](#address_mode)
+  is being used:
+
+  - `driver` - Advertise the port determined by the driver (eg Docker or rkt).
+    The `port` may be a numeric port or a port label specified in the driver's
+    `port_map`.
+
+  - `host` - Advertise the host port for this service. `port` must match a port
+    _label_ specified in the [`network`][network] stanza.
 
 - `tags` `(array<string>: [])` - Specifies the list of tags to associate with
   this service. If this is not supplied, no tags will be assigned to the service
@@ -167,7 +172,8 @@ scripts.
   checks.
 
 - `name` `(string: "service: <name> check")` - Specifies the name of the health
-  check.
+  check. If the name is not specified Nomad generates one based on the service name.
+  If you have more than one check you must specify the name.
 
 - `path` `(string: <varies>)` - Specifies the path of the HTTP endpoint which
   Consul will query to query the health of a service. Nomad will automatically
@@ -319,6 +325,7 @@ checks must be passing in order for the service to register as healthy.
 ```hcl
 service {
   check {
+    name     = "HTTP Check"
     type     = "http"
     port     = "lb"
     path     = "/_healthz"
@@ -327,6 +334,7 @@ service {
   }
 
   check {
+    name     = "HTTPS Check"
     type     = "http"
     protocol = "https"
     port     = "lb"
@@ -337,6 +345,7 @@ service {
   }
 
   check {
+    name     = "Postgres Check"
     type     = "script"
     command  = "/usr/local/bin/pg-tools"
     args     = ["verify", "database" "prod", "up"]
@@ -461,6 +470,109 @@ job "example" {
 In this case Nomad doesn't need to assign Redis any host ports. The `service`
 and `check` stanzas can both specify the port number to advertise and check
 directly since Nomad isn't managing any port assignments.
+
+### IPv6 Docker containers
+
+The [Docker](/docs/drivers/docker.html#advertise_ipv6_address) driver supports the
+`advertise_ipv6_address` parameter in it's configuration.
+
+Services will automatically advertise the IPv6 address when `advertise_ipv6_address` 
+is used.
+
+Unlike services, checks do not have an `auto` address mode as there's no way
+for Nomad to know which is the best address to use for checks. Consul needs
+access to the address for any HTTP or TCP checks.
+
+So you have to set `address_mode` parameter in the `check` stanza to `driver`. 
+
+For example using `auto` address mode:
+
+```hcl
+job "example" {
+  datacenters = ["dc1"]
+  group "cache" {
+
+    task "redis" {
+      driver = "docker"
+
+      config {
+        image = "redis:3.2"
+        advertise_ipv6_address = true
+        port_map {
+          db = 6379
+        }
+      }
+
+      resources {
+        cpu    = 500 # 500 MHz
+        memory = 256 # 256MB
+        network {
+          mbits = 10
+          port "db" {}
+        }
+      }
+
+      service {
+        name = "ipv6-redis"
+        port = db
+        check {
+          name     = "ipv6-redis-check"
+          type     = "tcp"
+          interval = "10s"
+          timeout  = "2s"
+          port     = db
+          address_mode = "driver"
+        }
+      }
+    }
+  }
+}
+```
+
+Or using `address_mode=driver` for `service` and `check` with numeric ports:
+
+```hcl
+job "example" {
+  datacenters = ["dc1"]
+  group "cache" {
+
+    task "redis" {
+      driver = "docker"
+
+      config {
+        image = "redis:3.2"
+        advertise_ipv6_address = true
+        # No port map required!
+      }
+
+      resources {
+        cpu    = 500 # 500 MHz
+        memory = 256 # 256MB
+        network {
+          mbits = 10
+        }
+      }
+
+      service {
+        name = "ipv6-redis"
+        port = 6379
+        address_mode = "driver"
+        check {
+          name     = "ipv6-redis-check"
+          type     = "tcp"
+          interval = "10s"
+          timeout  = "2s"
+          port     = 6379
+          address_mode = "driver"
+        }
+      }
+    }
+  }
+}
+```
+
+The `service` and `check` stanzas can both specify the port number to 
+advertise and check directly since Nomad isn't managing any port assignments.
 
 
 - - -

@@ -14,6 +14,7 @@ import (
 
 	"github.com/armon/go-metrics"
 	memdb "github.com/hashicorp/go-memdb"
+	"github.com/hashicorp/go-version"
 	"github.com/hashicorp/nomad/helper/uuid"
 	"github.com/hashicorp/nomad/nomad/state"
 	"github.com/hashicorp/nomad/nomad/structs"
@@ -36,6 +37,8 @@ const (
 	// while leader.
 	barrierWriteTimeout = 2 * time.Minute
 )
+
+var minAutopilotVersion = version.Must(version.NewVersion("0.8.0"))
 
 // monitorLeadership is used to monitor if we acquire or lose our role
 // as the leader in the Raft cluster. There is some work the leader is
@@ -81,7 +84,7 @@ func (s *Server) monitorLeadership() {
 }
 
 // leaderLoop runs as long as we are the leader to run various
-// maintence activities
+// maintenance activities
 func (s *Server) leaderLoop(stopCh chan struct{}) {
 	var reconcileCh chan serf.Member
 	establishedLeader := false
@@ -104,8 +107,16 @@ RECONCILE:
 	if !establishedLeader {
 		if err := s.establishLeadership(stopCh); err != nil {
 			s.logger.Printf("[ERR] nomad: failed to establish leadership: %v", err)
+
+			// Immediately revoke leadership since we didn't successfully
+			// establish leadership.
+			if err := s.revokeLeadership(); err != nil {
+				s.logger.Printf("[ERR] nomad: failed to revoke leadership: %v", err)
+			}
+
 			goto WAIT
 		}
+
 		establishedLeader = true
 		defer func() {
 			if err := s.revokeLeadership(); err != nil {
@@ -154,6 +165,8 @@ WAIT:
 // previously inflight transactions have been committed and that our
 // state is up-to-date.
 func (s *Server) establishLeadership(stopCh chan struct{}) error {
+	defer metrics.MeasureSince([]string{"nomad", "leader", "establish_leadership"}, time.Now())
+
 	// Generate a leader ACL token. This will allow the leader to issue work
 	// that requires a valid ACL token.
 	s.setLeaderAcl(uuid.Generate())
@@ -167,6 +180,10 @@ func (s *Server) establishLeadership(stopCh chan struct{}) error {
 			s.workers[i].SetPause(true)
 		}
 	}
+
+	// Initialize and start the autopilot routine
+	s.getOrCreateAutopilotConfig()
+	s.autopilot.Start()
 
 	// Enable the plan queue, since we are now the leader
 	s.planQueue.SetEnabled(true)
@@ -182,9 +199,10 @@ func (s *Server) establishLeadership(stopCh chan struct{}) error {
 	s.blockedEvals.SetTimetable(s.fsm.TimeTable())
 
 	// Enable the deployment watcher, since we are now the leader
-	if err := s.deploymentWatcher.SetEnabled(true, s.State()); err != nil {
-		return err
-	}
+	s.deploymentWatcher.SetEnabled(true, s.State())
+
+	// Enable the NodeDrainer
+	s.nodeDrainer.SetEnabled(true, s.State())
 
 	// Restore the eval broker state
 	if err := s.restoreEvals(); err != nil {
@@ -632,8 +650,13 @@ func (s *Server) publishJobSummaryMetrics(stopCh chan struct{}) {
 // revokeLeadership is invoked once we step down as leader.
 // This is used to cleanup any state that may be specific to a leader.
 func (s *Server) revokeLeadership() error {
+	defer metrics.MeasureSince([]string{"nomad", "leader", "revoke_leadership"}, time.Now())
+
 	// Clear the leader token since we are no longer the leader.
 	s.setLeaderAcl("")
+
+	// Disable autopilot
+	s.autopilot.Stop()
 
 	// Disable the plan queue, since we are no longer leader
 	s.planQueue.SetEnabled(false)
@@ -651,9 +674,10 @@ func (s *Server) revokeLeadership() error {
 	s.vault.SetActive(false)
 
 	// Disable the deployment watcher as it is only useful as a leader.
-	if err := s.deploymentWatcher.SetEnabled(false, nil); err != nil {
-		return err
-	}
+	s.deploymentWatcher.SetEnabled(false, nil)
+
+	// Disable the node drainer
+	s.nodeDrainer.SetEnabled(false, nil)
 
 	// Disable any enterprise systems required.
 	if err := s.revokeEnterpriseLeadership(); err != nil {
@@ -746,8 +770,8 @@ func (s *Server) addRaftPeer(m serf.Member, parts *serverParts) error {
 	}
 
 	// Check for possibility of multiple bootstrap nodes
+	members := s.serf.Members()
 	if parts.Bootstrap {
-		members := s.serf.Members()
 		for _, member := range members {
 			valid, p := isNomadServer(member)
 			if valid && member.Name != m.Name && p.Bootstrap {
@@ -757,12 +781,10 @@ func (s *Server) addRaftPeer(m serf.Member, parts *serverParts) error {
 		}
 	}
 
-	// TODO (alexdadgar) - This will need to be changed once we support node IDs.
-	addr := (&net.TCPAddr{IP: m.Addr, Port: parts.Port}).String()
-
 	// See if it's already in the configuration. It's harmless to re-add it
 	// but we want to avoid doing that if possible to prevent useless Raft
 	// log entries.
+	addr := (&net.TCPAddr{IP: m.Addr, Port: parts.Port}).String()
 	configFuture := s.raft.GetConfiguration()
 	if err := configFuture.Error(); err != nil {
 		s.logger.Printf("[ERR] nomad: failed to get raft configuration: %v", err)
@@ -774,21 +796,69 @@ func (s *Server) addRaftPeer(m serf.Member, parts *serverParts) error {
 		}
 	}
 
-	// Attempt to add as a peer
-	addFuture := s.raft.AddPeer(raft.ServerAddress(addr))
-	if err := addFuture.Error(); err != nil {
-		s.logger.Printf("[ERR] nomad: failed to add raft peer: %v", err)
+	// See if it's already in the configuration. It's harmless to re-add it
+	// but we want to avoid doing that if possible to prevent useless Raft
+	// log entries. If the address is the same but the ID changed, remove the
+	// old server before adding the new one.
+	minRaftProtocol, err := s.autopilot.MinRaftProtocol()
+	if err != nil {
 		return err
-	} else if err == nil {
-		s.logger.Printf("[INFO] nomad: added raft peer: %v", parts)
 	}
+	for _, server := range configFuture.Configuration().Servers {
+		// No-op if the raft version is too low
+		if server.Address == raft.ServerAddress(addr) && (minRaftProtocol < 2 || parts.RaftVersion < 3) {
+			return nil
+		}
+
+		// If the address or ID matches an existing server, see if we need to remove the old one first
+		if server.Address == raft.ServerAddress(addr) || server.ID == raft.ServerID(parts.ID) {
+			// Exit with no-op if this is being called on an existing server
+			if server.Address == raft.ServerAddress(addr) && server.ID == raft.ServerID(parts.ID) {
+				return nil
+			}
+			future := s.raft.RemoveServer(server.ID, 0, 0)
+			if server.Address == raft.ServerAddress(addr) {
+				if err := future.Error(); err != nil {
+					return fmt.Errorf("error removing server with duplicate address %q: %s", server.Address, err)
+				}
+				s.logger.Printf("[INFO] nomad: removed server with duplicate address: %s", server.Address)
+			} else {
+				if err := future.Error(); err != nil {
+					return fmt.Errorf("error removing server with duplicate ID %q: %s", server.ID, err)
+				}
+				s.logger.Printf("[INFO] nomad: removed server with duplicate ID: %s", server.ID)
+			}
+		}
+	}
+
+	// Attempt to add as a peer
+	switch {
+	case minRaftProtocol >= 3:
+		addFuture := s.raft.AddNonvoter(raft.ServerID(parts.ID), raft.ServerAddress(addr), 0, 0)
+		if err := addFuture.Error(); err != nil {
+			s.logger.Printf("[ERR] nomad: failed to add raft peer: %v", err)
+			return err
+		}
+	case minRaftProtocol == 2 && parts.RaftVersion >= 3:
+		addFuture := s.raft.AddVoter(raft.ServerID(parts.ID), raft.ServerAddress(addr), 0, 0)
+		if err := addFuture.Error(); err != nil {
+			s.logger.Printf("[ERR] nomad: failed to add raft peer: %v", err)
+			return err
+		}
+	default:
+		addFuture := s.raft.AddPeer(raft.ServerAddress(addr))
+		if err := addFuture.Error(); err != nil {
+			s.logger.Printf("[ERR] nomad: failed to add raft peer: %v", err)
+			return err
+		}
+	}
+
 	return nil
 }
 
 // removeRaftPeer is used to remove a Raft peer when a Nomad server leaves
 // or is reaped
 func (s *Server) removeRaftPeer(m serf.Member, parts *serverParts) error {
-	// TODO (alexdadgar) - This will need to be changed once we support node IDs.
 	addr := (&net.TCPAddr{IP: m.Addr, Port: parts.Port}).String()
 
 	// See if it's already in the configuration. It's harmless to re-remove it
@@ -799,21 +869,37 @@ func (s *Server) removeRaftPeer(m serf.Member, parts *serverParts) error {
 		s.logger.Printf("[ERR] nomad: failed to get raft configuration: %v", err)
 		return err
 	}
-	for _, server := range configFuture.Configuration().Servers {
-		if server.Address == raft.ServerAddress(addr) {
-			goto REMOVE
-		}
-	}
-	return nil
 
-REMOVE:
-	// Attempt to remove as a peer.
-	future := s.raft.RemovePeer(raft.ServerAddress(addr))
-	if err := future.Error(); err != nil {
-		s.logger.Printf("[ERR] nomad: failed to remove raft peer '%v': %v",
-			parts, err)
+	minRaftProtocol, err := s.autopilot.MinRaftProtocol()
+	if err != nil {
 		return err
 	}
+
+	// Pick which remove API to use based on how the server was added.
+	for _, server := range configFuture.Configuration().Servers {
+		// If we understand the new add/remove APIs and the server was added by ID, use the new remove API
+		if minRaftProtocol >= 2 && server.ID == raft.ServerID(parts.ID) {
+			s.logger.Printf("[INFO] nomad: removing server by ID: %q", server.ID)
+			future := s.raft.RemoveServer(raft.ServerID(parts.ID), 0, 0)
+			if err := future.Error(); err != nil {
+				s.logger.Printf("[ERR] nomad: failed to remove raft peer '%v': %v",
+					server.ID, err)
+				return err
+			}
+			break
+		} else if server.Address == raft.ServerAddress(addr) {
+			// If not, use the old remove API
+			s.logger.Printf("[INFO] nomad: removing server by address: %q", server.Address)
+			future := s.raft.RemovePeer(raft.ServerAddress(addr))
+			if err := future.Error(); err != nil {
+				s.logger.Printf("[ERR] nomad: failed to remove raft peer '%v': %v",
+					addr, err)
+				return err
+			}
+			break
+		}
+	}
+
 	return nil
 }
 
@@ -1098,4 +1184,31 @@ func diffACLTokens(state *state.StateStore, minIndex uint64, remoteList []*struc
 		}
 	}
 	return
+}
+
+// getOrCreateAutopilotConfig is used to get the autopilot config, initializing it if necessary
+func (s *Server) getOrCreateAutopilotConfig() *structs.AutopilotConfig {
+	state := s.fsm.State()
+	_, config, err := state.AutopilotConfig()
+	if err != nil {
+		s.logger.Printf("[ERR] autopilot: failed to get config: %v", err)
+		return nil
+	}
+	if config != nil {
+		return config
+	}
+
+	if !ServersMeetMinimumVersion(s.Members(), minAutopilotVersion) {
+		s.logger.Printf("[WARN] autopilot: can't initialize until all servers are >= %s", minAutopilotVersion.String())
+		return nil
+	}
+
+	config = s.config.AutopilotConfig
+	req := structs.AutopilotSetConfigRequest{Config: *config}
+	if _, _, err = s.raftApply(structs.AutopilotRequestType, req); err != nil {
+		s.logger.Printf("[ERR] autopilot: failed to initialize config: %v", err)
+		return nil
+	}
+
+	return config
 }
