@@ -204,7 +204,7 @@ func (p *localPrevAlloc) Migrate(ctx context.Context, dest *allocdir.AllocDir) e
 	return moveErr
 }
 
-// remotePrevAlloc is a prevAllcWatcher for previous allocations on remote
+// remotePrevAlloc is a prevAllocWatcher for previous allocations on remote
 // nodes as an updated allocation.
 type remotePrevAlloc struct {
 	// allocID is the ID of the alloc being blocked
@@ -260,7 +260,7 @@ func (p *remotePrevAlloc) IsMigrating() bool {
 	return b
 }
 
-// Wait until the remote previousl allocation has terminated.
+// Wait until the remote previous allocation has terminated.
 func (p *remotePrevAlloc) Wait(ctx context.Context) error {
 	p.waitingLock.Lock()
 	p.waiting = true
@@ -489,7 +489,7 @@ func (p *remotePrevAlloc) streamAllocDir(ctx context.Context, resp io.ReadCloser
 			// Error snapshotting on the remote side, try to read
 			// the message out of the file and return it.
 			errBuf := make([]byte, int(hdr.Size))
-			if _, err := tr.Read(errBuf); err != nil {
+			if _, err := tr.Read(errBuf); err != nil && err != io.EOF {
 				return fmt.Errorf("error streaming previous alloc %q for new alloc %q; failed reading error message: %v",
 					p.prevAllocID, p.allocID, err)
 			}
@@ -499,7 +499,15 @@ func (p *remotePrevAlloc) streamAllocDir(ctx context.Context, resp io.ReadCloser
 
 		// If the header is for a directory we create the directory
 		if hdr.Typeflag == tar.TypeDir {
-			os.MkdirAll(filepath.Join(dest, hdr.Name), os.FileMode(hdr.Mode))
+			name := filepath.Join(dest, hdr.Name)
+			os.MkdirAll(name, os.FileMode(hdr.Mode))
+
+			// Can't change owner if not root or on Windows.
+			if euid == 0 {
+				if err := os.Chown(name, hdr.Uid, hdr.Gid); err != nil {
+					return fmt.Errorf("error chowning directory %v", err)
+				}
+			}
 			continue
 		}
 		// If the header is for a symlink we create the symlink
@@ -522,8 +530,7 @@ func (p *remotePrevAlloc) streamAllocDir(ctx context.Context, resp io.ReadCloser
 				return fmt.Errorf("error chmoding file %v", err)
 			}
 
-			// Can't change owner if not root. Returns false on
-			// Windows as Chown always errors there.
+			// Can't change owner if not root or on Windows.
 			if euid == 0 {
 				if err := f.Chown(hdr.Uid, hdr.Gid); err != nil {
 					f.Close()
@@ -535,16 +542,19 @@ func (p *remotePrevAlloc) streamAllocDir(ctx context.Context, resp io.ReadCloser
 			// is still alive
 			for !canceled() {
 				n, err := tr.Read(buf)
+				if n > 0 && (err == nil || err == io.EOF) {
+					if _, err := f.Write(buf[:n]); err != nil {
+						f.Close()
+						return fmt.Errorf("error writing to file %q: %v", f.Name(), err)
+					}
+				}
+
 				if err != nil {
 					f.Close()
 					if err != io.EOF {
 						return fmt.Errorf("error reading snapshot: %v", err)
 					}
 					break
-				}
-				if _, err := f.Write(buf[:n]); err != nil {
-					f.Close()
-					return fmt.Errorf("error writing to file %q: %v", f.Name(), err)
 				}
 			}
 

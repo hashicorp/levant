@@ -27,7 +27,7 @@
 
 [[constraint]]
   name = "github.com/hashicorp/nomad"
-  version = "0.7.1"
+  version = "0.8.0"
 
 [[constraint]]
   name = "github.com/hashicorp/terraform"

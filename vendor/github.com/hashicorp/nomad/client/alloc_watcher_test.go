@@ -10,18 +10,20 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
 	"github.com/hashicorp/nomad/client/allocdir"
 	"github.com/hashicorp/nomad/client/config"
+	"github.com/hashicorp/nomad/client/testutil"
 	"github.com/hashicorp/nomad/nomad/mock"
 )
 
 // TestPrevAlloc_LocalPrevAlloc asserts that when a previous alloc runner is
 // set a localPrevAlloc will block on it.
 func TestPrevAlloc_LocalPrevAlloc(t *testing.T) {
-	_, prevAR := testAllocRunner(false)
+	_, prevAR := testAllocRunner(t, false)
 	prevAR.alloc.Job.TaskGroups[0].Tasks[0].Config["run_for"] = "10s"
 
 	newAlloc := mock.Alloc()
@@ -73,6 +75,7 @@ func TestPrevAlloc_LocalPrevAlloc(t *testing.T) {
 // TestPrevAlloc_StreamAllocDir_Ok asserts that streaming a tar to an alloc dir
 // works.
 func TestPrevAlloc_StreamAllocDir_Ok(t *testing.T) {
+	testutil.RequireRoot(t)
 	t.Parallel()
 	dir, err := ioutil.TempDir("", "")
 	if err != nil {
@@ -80,18 +83,29 @@ func TestPrevAlloc_StreamAllocDir_Ok(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
-	if err := os.Mkdir(filepath.Join(dir, "foo"), 0777); err != nil {
+	// Create foo/
+	fooDir := filepath.Join(dir, "foo")
+	if err := os.Mkdir(fooDir, 0777); err != nil {
 		t.Fatalf("err: %v", err)
 	}
-	dirInfo, err := os.Stat(filepath.Join(dir, "foo"))
+
+	// Change ownership of foo/ to test #3702 (any non-root user is fine)
+	const uid, gid = 1, 1
+	if err := os.Chown(fooDir, uid, gid); err != nil {
+		t.Fatalf("err : %v", err)
+	}
+
+	dirInfo, err := os.Stat(fooDir)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
-	f, err := os.Create(filepath.Join(dir, "foo", "bar"))
+
+	// Create foo/bar
+	f, err := os.Create(filepath.Join(fooDir, "bar"))
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
-	if _, err := f.WriteString("foo"); err != nil {
+	if _, err := f.WriteString("123"); err != nil {
 		t.Fatalf("err: %v", err)
 	}
 	if err := f.Chmod(0644); err != nil {
@@ -102,6 +116,8 @@ func TestPrevAlloc_StreamAllocDir_Ok(t *testing.T) {
 		t.Fatalf("err: %v", err)
 	}
 	f.Close()
+
+	// Create foo/baz -> bar symlink
 	if err := os.Symlink("bar", filepath.Join(dir, "foo", "baz")); err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -161,7 +177,7 @@ func TestPrevAlloc_StreamAllocDir_Ok(t *testing.T) {
 	}
 	defer os.RemoveAll(dir1)
 
-	c1 := testClient(t, func(c *config.Config) {
+	c1 := TestClient(t, func(c *config.Config) {
 		c.RPCHandler = nil
 	})
 	defer c1.Shutdown()
@@ -180,6 +196,11 @@ func TestPrevAlloc_StreamAllocDir_Ok(t *testing.T) {
 	}
 	if fi.Mode() != dirInfo.Mode() {
 		t.Fatalf("mode: %v", fi.Mode())
+	}
+	stat := fi.Sys().(*syscall.Stat_t)
+	if stat.Uid != uid || stat.Gid != gid {
+		t.Fatalf("foo/ has incorrect ownership: expected %d:%d found %d:%d",
+			uid, gid, stat.Uid, stat.Gid)
 	}
 
 	fi1, err := os.Stat(filepath.Join(dir1, "bar"))

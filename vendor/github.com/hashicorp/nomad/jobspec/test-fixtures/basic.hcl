@@ -48,6 +48,11 @@ job "binstore-storagelocker" {
       mode     = "delay"
     }
 
+    reschedule {
+       attempts = 5
+       interval = "12h"
+    }
+
     ephemeral_disk {
         sticky = true
         size = 150
@@ -60,6 +65,13 @@ job "binstore-storagelocker" {
         healthy_deadline = "1m"
         auto_revert = false
         canary = 2
+    }
+
+    migrate {
+        max_parallel = 2
+        health_check = "task_states"
+        min_healthy_time = "11s"
+        healthy_deadline = "11m"
     }
 
     task "binstore" {
