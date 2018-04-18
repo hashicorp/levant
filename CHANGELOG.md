@@ -1,4 +1,4 @@
-## 0.1.0 (Unreleased)
+## 0.1.0 (18 April 2018)
 
 IMPROVEMENTS:
  * New 'dispatch' command which allows Levant to dispatch Nomad jobs which will go through Levants additional job checking [GH-128](https://github.com/jrasell/levant/pull/128)
