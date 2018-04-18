@@ -8,6 +8,8 @@ Levant is an open source templating and deployment tool for [HashiCorp Nomad](ht
 
 * **Realtime Feedback**: Using watchers, Levant provides realtime feedback on Nomad job deployments allowing for greater insight and knowledge about application deployments.
 
+* **Advanced Job Status Checking**: Particulary for system and batch jobs, Levant will ensure the job, evaluations and allocations all reach the desired state providing feedback at every stage.
+
 * **Dynamic Job Group Counts**: If the Nomad job is currently running on the cluster, Levant will dynamically update the rendered template with the relevant job group counts before deployment.
 
 * **Failure Inspection**: Upon a deployment failure, Levant will inspect each allocation and log information about each event, providing useful information for debugging without the need for querying the cluster retrospectively.
@@ -20,7 +22,7 @@ Levant is an open source templating and deployment tool for [HashiCorp Nomad](ht
 
 ## Download
 
-* The Levant binary can be downloaded from the [GitHub releases page](https://github.com/jrasell/levant/releases) using `curl -L https://github.com/jrasell/levant/releases/download/0.0.4/linux-amd64-levant -o levant`
+* The Levant binary can be downloaded from the [GitHub releases page](https://github.com/jrasell/levant/releases) using `curl -L https://github.com/jrasell/levant/releases/download/0.1.0/linux-amd64-levant -o levant`
 
 * A docker image can be found on [Docker Hub](hub.docker.com/jrasell/levant), the latest version can be downloaded using `docker pull jrasell/levant`.
 
@@ -55,7 +57,7 @@ Levant supports a number of command line arguments which provide control over th
 
 ### Command: `deploy`
 
-`Deploy` is the main entry point into Levant for deploying a Nomad job and supports the following flags which should then be proceeded by the Nomad job template you which to deploy. An example deployment command would look like `levant deploy -log-level=debug example.nomad`.
+`deploy` is the main entry point into Levant for deploying a Nomad job and supports the following flags which should then be proceeded by the Nomad job template you which to deploy. An example deployment command would look like `levant deploy -log-level=debug example.nomad`.
 
 * **-address** (string: "http://localhost:4646") The HTTP API endpoint for Nomad where all calls will be made.
 
@@ -73,6 +75,24 @@ Full example:
 
 ```
 levant deploy -log-level=debug -address=nomad.devoops -var-file=var.yaml -var 'var=test' example.nomad
+```
+
+### Dispatch: `dispatch`
+
+`dispatch` allows you to dispatch an instance of a Nomad parameterized job and utilise Levant's advanced job checking features to ensure the job reaches the correct running state.
+
+* **-address** (string: "http://localhost:4646") The HTTP API endpoint for Nomad where all calls will be made.
+
+* **-log-level** (string: "INFO") The level at which Levant will log to. Valid values are DEBUG, INFO, WARNING, ERROR and FATAL.
+
+* **-meta** (string: "key=vaule") The metadata key will be merged into the job's metadata. The job may define a default value for the key which is overridden when dispatching. The flag can be provided more than once to inject multiple metadata key/value pairs. Arbitrary keys are not allowed. The parameterized job must allow the key to be merged.
+
+The command also supports the ability to send data payload to the dispatched instance. This can be provided via stdin by using "-" for the input source or by specifying a path to a file.
+
+Full example:
+
+```
+levant dispatch -log-level=debug -address=nomad.devoops -meta key=value dispatch_job payload_item
 ```
 
 ### Command: `render`
