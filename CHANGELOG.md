@@ -6,6 +6,7 @@ IMPROVEMENTS:
  * Enhanced job status checking for non-service type jobs [GH-96](https://github.com/jrasell/levant/pull/96), [GH-109](https://github.com/jrasell/levant/pull/109)
  * Implement config struct for Levant to track config during run [GH-102](https://github.com/jrasell/levant/pull/102)
  * Test and build Levant with Go version 1.10 [GH-119](https://github.com/jrasell/levant/pull/119), [GH-116](https://github.com/jrasell/levant/pull/116)
+ * Add a catchall for unhandled failure cases to log more useful information for the operator [GH-138](https://github.com/jrasell/levant/pull/138)
  
 BUG FIXES:
  * Service jobs that don't have an update stanza do not produce deployments and should skip the deployment watcher [GH-99](https://github.com/jrasell/levant/pull/99)
