@@ -7,6 +7,7 @@ IMPROVEMENTS:
  * Implement config struct for Levant to track config during run [GH-102](https://github.com/jrasell/levant/pull/102)
  * Test and build Levant with Go version 1.10 [GH-119](https://github.com/jrasell/levant/pull/119), [GH-116](https://github.com/jrasell/levant/pull/116)
  * Add a catchall for unhandled failure cases to log more useful information for the operator [GH-138](https://github.com/jrasell/levant/pull/138)
+ * Updated vendored dependancy of Nomad to 0.8.0 [GH-137](https://github.com/jrasell/levant/pull/137)
  
 BUG FIXES:
  * Service jobs that don't have an update stanza do not produce deployments and should skip the deployment watcher [GH-99](https://github.com/jrasell/levant/pull/99)
