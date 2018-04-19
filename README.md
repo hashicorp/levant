@@ -65,6 +65,8 @@ Levant supports a number of command line arguments which provide control over th
 
 * **-force-count** (bool: false) Use the taskgroup count from the Nomad job file instead of the count that is obtained from the running job count.
 
+* **-force-batch** (bool: false) Forces a new instance of the periodic job. A new instance will be created even if it violates the job's prohibit_overlap settings.
+
 * **-log-level** (string: "INFO") The level at which Levant will log to. Valid values are DEBUG, INFO, WARNING, ERROR and FATAL.
 
 * **-var-file** (string: "") The variables file to render the template with.
