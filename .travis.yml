@@ -4,12 +4,9 @@ language: go
 go:
 - 1.9.x
 - "1.10.x"
-install:
-- go get github.com/golang/lint/golint
-- go get github.com/mitchellh/gox
-- go get github.com/client9/misspell/cmd/misspell
 script:
-- make test
+- make tools
+- make
 after_success:
 - if [[ -n "$TRAVIS_TAG" ]]; then make release; fi
 notifications:
