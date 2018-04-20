@@ -2,7 +2,6 @@ sudo: false
 dist: trusty
 language: go
 go:
-- 1.9.x
 - "1.10.x"
 install:
 - go get github.com/golang/lint/golint
