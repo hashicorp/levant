@@ -4,6 +4,7 @@ tools: ## Install the tools used to test and build
 	@echo "==> Installing build tools"
 	go get github.com/mitchellh/gox
 	go get github.com/alecthomas/gometalinter
+	go get github.com/goreleaser/goreleaser
 	gometalinter --install
 
 build: ## Build Levant for development purposes
