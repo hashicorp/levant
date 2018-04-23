@@ -13,7 +13,6 @@ import (
 // RenderCommand is the command implementation that allows users to render a
 // Nomad job template based on passed templates and variables.
 type RenderCommand struct {
-	args []string
 	Meta
 }
 

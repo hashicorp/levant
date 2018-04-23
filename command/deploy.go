@@ -15,7 +15,6 @@ import (
 // DeployCommand is the command implementation that allows users to deploy a
 // Nomad job based on passed templates and variables.
 type DeployCommand struct {
-	args []string
 	Meta
 }
 

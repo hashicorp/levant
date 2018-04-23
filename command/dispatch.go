@@ -14,7 +14,6 @@ import (
 // DispatchCommand is the command implementation that allows users to
 // dispatch a Nomad job.
 type DispatchCommand struct {
-	args []string
 	Meta
 }
 

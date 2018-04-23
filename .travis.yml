@@ -3,12 +3,9 @@ dist: trusty
 language: go
 go:
 - "1.10.x"
-install:
-- go get github.com/golang/lint/golint
-- go get github.com/goreleaser/goreleaser
-- go get github.com/client9/misspell/cmd/misspell
 script:
-- make test
+- make tools
+- make
 after_success:
 - if [[ -n "$TRAVIS_TAG" ]]; then make release; fi
 notifications:
