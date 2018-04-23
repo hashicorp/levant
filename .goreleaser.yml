@@ -35,7 +35,7 @@ builds:
     # - Version (Tag with the `v` prefix stripped)
     # The default is `-s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}`
     # Date format is `2006-01-02_15:04:05`
-    ldflags: -s -w -X main.Name={{ .ProjectName }} -X main.Version={{.Version}} -X main.GitCommit={{.Commit}}"
+    ldflags: -s -w -X main.Name={{ .ProjectName }} -X main.Version={{.Version}} -X main.GitCommit={{.Commit}} -X main.BuildDate={{.Date}} -X main.GitBranch={{.Tag}} -X main.GitState={{.Tag}} -X main.GitSummary={{.Commit}}"
 
 archive:
   # You can change the name of the archive.

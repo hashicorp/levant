@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 
+	"github.com/jrasell/levant/buildtime"
 	"github.com/mitchellh/cli"
 )
 
@@ -39,5 +40,10 @@ func (c *VersionCommand) Run(_ []string) int {
 	}
 
 	c.UI.Output(versionString.String())
+	c.UI.Output(fmt.Sprintf("Date: %s", buildtime.BuildDate))
+	c.UI.Output(fmt.Sprintf("Commit: %s", buildtime.GitCommit))
+	c.UI.Output(fmt.Sprintf("Branch: %s", buildtime.GitBranch))
+	c.UI.Output(fmt.Sprintf("State: %s", buildtime.GitState))
+	c.UI.Output(fmt.Sprintf("Summary: %s", buildtime.GitSummary))
 	return 0
 }

@@ -2,14 +2,14 @@ default: check test build
 
 tools: ## Install the tools used to test and build
 	@echo "==> Installing build tools"
-	go get github.com/mitchellh/gox
+	go get github.com/ahmetb/govvv
 	go get github.com/alecthomas/gometalinter
 	go get github.com/goreleaser/goreleaser
 	gometalinter --install
 
 build: ## Build Levant for development purposes
 	@echo "==> Running $@..."
-	@go build -tags "$(BUILDTAGS) cgo" -o levant-local .
+	govvv build -o levant-local . -version local
 
 test: ## Run the Levant test suite with coverage
 	@echo "==> Running $@..."
@@ -18,7 +18,7 @@ test: ## Run the Levant test suite with coverage
 
 release: ## Trigger the release build script
 	@echo "==> Running $@..."
-	./scripts/build.sh
+	@goreleaser --rm-dist
 
 .PHONY: check
 check: ## Run the gometalinter suite
