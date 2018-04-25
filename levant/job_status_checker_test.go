@@ -9,19 +9,10 @@ import (
 
 func TestJobStatusChecker_allocationStatusChecker(t *testing.T) {
 
-	// Setup our LevantTask structures.
-	levantTasks1 := make(map[string]map[string]string)
-	levantTasks1["10246d87-ecd7-21ad-13b2-f0c564647d64"] = make(map[string]string)
-	levantTasks1["10246d87-ecd7-21ad-13b2-f0c564647d64"]["task1"] = initialTaskHealth
-
-	levantTasks2 := make(map[string]map[string]string)
-	levantTasks2["20246d87-ecd7-21ad-13b2-f0c564647d64"] = make(map[string]string)
-	levantTasks2["20246d87-ecd7-21ad-13b2-f0c564647d64"]["task1"] = initialTaskHealth
-	levantTasks2["20246d87-ecd7-21ad-13b2-f0c564647d64"]["task2"] = initialTaskHealth
-
-	levantTasks3 := make(map[string]map[string]string)
-	levantTasks3["30246d87-ecd7-21ad-13b2-f0c564647d64"] = make(map[string]string)
-	levantTasks3["30246d87-ecd7-21ad-13b2-f0c564647d64"]["task1"] = initialTaskHealth
+	// Build our task status maps
+	levantTasks1 := make(map[TaskCoordinate]string)
+	levantTasks2 := make(map[TaskCoordinate]string)
+	levantTasks3 := make(map[TaskCoordinate]string)
 
 	// Build a small AllocationListStubs with required information.
 	var allocs1 []*nomad.AllocationListStub
@@ -50,43 +41,43 @@ func TestJobStatusChecker_allocationStatusChecker(t *testing.T) {
 	})
 
 	cases := []struct {
-		levantTasks    map[string]map[string]string
-		allocs         []*nomad.AllocationListStub
-		dead           int
-		expectedDead   int
-		expectedAllocs int
+		levantTasks      map[TaskCoordinate]string
+		allocs           []*nomad.AllocationListStub
+		dead             int
+		expectedDead     int
+		expectedComplete bool
 	}{
 		{
 			levantTasks1,
 			allocs1,
 			0,
 			0,
-			0,
+			true,
 		},
 		{
 			levantTasks2,
 			allocs2,
 			0,
 			0,
-			1,
+			false,
 		},
 		{
 			levantTasks3,
 			allocs3,
 			0,
 			1,
-			0,
+			true,
 		},
 	}
 
 	for _, tc := range cases {
-		allocationStatusChecker(tc.levantTasks, tc.allocs, &tc.dead)
+		complete, dead := allocationStatusChecker(tc.levantTasks, tc.allocs)
 
-		if len(tc.levantTasks) != tc.expectedAllocs {
-			t.Fatalf("expected %v but got %v", tc.expectedAllocs, len(tc.levantTasks))
+		if complete != tc.expectedComplete {
+			t.Fatalf("expected complete to be %v but got %v", tc.expectedComplete, complete)
 		}
-		if tc.dead != tc.expectedDead {
-			t.Fatalf("expected %v dead task(s) but got %v", tc.expectedDead, tc.dead)
+		if dead != tc.expectedDead {
+			t.Fatalf("expected %v dead task(s) but got %v", tc.expectedDead, dead)
 		}
 	}
 }
