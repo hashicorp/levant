@@ -6,10 +6,6 @@ import (
 	"github.com/jrasell/levant/logging"
 )
 
-// initialTaskHealth is the Levant health status associated to a Task when it is
-// initially discovered as part of the deployment.
-const initialTaskHealth = "unknown"
-
 // TaskCoordinate is a coordinate for an allocation/task combination
 type TaskCoordinate struct {
 	Alloc    string
