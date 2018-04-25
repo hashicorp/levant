@@ -2,6 +2,9 @@
 
 IMPROVEMENTS:
  * Use govvv for builds and to supply additional version information in the version command output [GH-151](https://github.com/jrasell/levant/pull/151)
+ 
+BUG FIXES:
+ * Fix occasional panic when performing batch job deployment [GH-150](https://github.com/jrasell/levant/pull/150)
 
 ## 0.1.0 (18 April 2018)
 
