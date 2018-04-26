@@ -96,6 +96,12 @@ func (l *levantDeployment) deploy() (success bool) {
 		}
 	}
 
+	// Trigger a Nomad plan and Levants functionality to log all planned changes
+	// upon job registration.
+	if !l.plan() {
+		return
+	}
+
 	logging.Info("levant/deploy: triggering a deployment of job %s", *l.config.Job.Name)
 
 	eval, _, err := l.nomad.Jobs().Register(l.config.Job, nil)
