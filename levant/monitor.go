@@ -151,8 +151,7 @@ func (l *levantDeployment) monitorJobInfo(jobName string, jobChan chan<- *nomad.
 				time.Sleep(time.Second * 5)
 				continue
 			}
-			//logging.Info("lastIndex: %v", meta.LastIndex)
-			// only take action if the informaiton has changed
+			// only take action if the information has changed
 			if meta.LastIndex > q.WaitIndex {
 				q.WaitIndex = meta.LastIndex
 				jobChan <- job

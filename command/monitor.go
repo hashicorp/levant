@@ -9,7 +9,7 @@ import (
 )
 
 // MonitorCommand is the command implementation that allows users to monitor
-// a deploy until it completes
+// a job until it completes
 type MonitorCommand struct {
 	args []string
 	Meta
@@ -29,12 +29,11 @@ Arguments:
 General Options:
 	
   -timeout=<int>
-	  Number of seconds to allow until we exit with an error.
+    Number of seconds to allow until we exit with an error.
 
   -log-level=<level>
-		Specify the verbosity level of Levant's logs. Valid values include DEBUG,
-		INFO, and WARN, in decreasing order of verbosity. The default is INFO.
-
+    Specify the verbosity level of Levant's logs. Valid values include DEBUG,
+    INFO, and WARN, in decreasing order of verbosity. The default is INFO.
 `
 	return strings.TrimSpace(helpText)
 }
