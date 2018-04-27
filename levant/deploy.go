@@ -62,6 +62,12 @@ func TriggerDeployment(config *structs.Config) bool {
 		return false
 	}
 
+	preDep := levantDep.preDeploy()
+	if !preDep {
+		logging.Error("levant/deploy: pre-deployment process of job %s failed", *config.Job.Name)
+		return false
+	}
+
 	// Start the main deployment function.
 	success := levantDep.deploy()
 	if !success {
@@ -73,9 +79,7 @@ func TriggerDeployment(config *structs.Config) bool {
 	return true
 }
 
-// deploy triggers a register of the job resulting in a Nomad deployment which
-// is monitored to determine the eventual state.
-func (l *levantDeployment) deploy() (success bool) {
+func (l *levantDeployment) preDeploy() (success bool) {
 
 	// Validate the job to check it is syntactically correct.
 	if _, _, err := l.nomad.Jobs().Validate(l.config.Job, nil); err != nil {
@@ -101,6 +105,13 @@ func (l *levantDeployment) deploy() (success bool) {
 	if !l.plan() {
 		return
 	}
+
+	return true
+}
+
+// deploy triggers a register of the job resulting in a Nomad deployment which
+// is monitored to determine the eventual state.
+func (l *levantDeployment) deploy() (success bool) {
 
 	logging.Info("levant/deploy: triggering a deployment of job %s", *l.config.Job.Name)
 
