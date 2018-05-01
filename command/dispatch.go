@@ -37,6 +37,10 @@ General Options:
     Specify the verbosity level of Levant's logs. Valid values include DEBUG,
     INFO, and WARN, in decreasing order of verbosity. The default is INFO.
 
+  -log-format=<format>
+    Specify the format of Levant's logs. Valid values are HUMAN or JSON. The
+    default is HUMAN.
+
 Dispatch Options:
 
   -meta <key>=<value>
@@ -58,13 +62,14 @@ func (c *DispatchCommand) Synopsis() string {
 func (c *DispatchCommand) Run(args []string) int {
 
 	var meta []string
-	var addr, logLevel string
+	var addr, logLevel, logFormat string
 
 	flags := c.Meta.FlagSet("dispatch", FlagSetVars)
 	flags.Usage = func() { c.UI.Output(c.Help()) }
 	flags.Var((*flaghelper.StringFlag)(&meta), "meta", "")
 	flags.StringVar(&addr, "address", "", "")
 	flags.StringVar(&logLevel, "log-level", "INFO", "")
+	flags.StringVar(&logFormat, "log-format", "human", "")
 
 	if err := flags.Parse(args); err != nil {
 		return 1
@@ -76,7 +81,10 @@ func (c *DispatchCommand) Run(args []string) int {
 		return 1
 	}
 
-	logging.SetLevel(logLevel)
+	err := logging.SetupLogger(logLevel, logFormat)
+	if err != nil {
+		c.UI.Error(fmt.Sprintf("Error setting up logging: %v", err))
+	}
 
 	job := args[0]
 	var payload []byte

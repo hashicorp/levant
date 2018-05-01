@@ -5,7 +5,7 @@ import (
 
 	nomad "github.com/hashicorp/nomad/api"
 	nomadStructs "github.com/hashicorp/nomad/nomad/structs"
-	"github.com/jrasell/levant/logging"
+	"github.com/rs/zerolog/log"
 )
 
 var (
@@ -19,12 +19,12 @@ var (
 // no planned changes here, return false to indicate we should stop the process.
 func (l *levantDeployment) plan() bool {
 
-	logging.Debug("levant/plan: triggering Nomad plan against job %s", *l.config.Job.Name)
+	log.Debug().Msg("levant/plan: triggering Nomad plan")
 
 	// Run a plan using the rendered job.
 	resp, _, err := l.nomad.Jobs().Plan(l.config.Job, true, nil)
 	if err != nil {
-		logging.Error("levant/plan: unable to run a job plan %v", err)
+		log.Error().Err(err).Msg("levant/plan: unable to run a job plan")
 		return false
 	}
 
@@ -33,13 +33,13 @@ func (l *levantDeployment) plan() bool {
 	// If the job is new, then don't print the entire diff but just log that it
 	// is a new registration.
 	case diffTypeAdded:
-		logging.Info("levant/plan: job %s is a new addition to the cluster", *l.config.Job.Name)
+		log.Info().Msg("levant/plan: job is a new addition to the cluster")
 		return true
 
 	// If there are no changes, then log an error so the user can see this and
 	// exit the deployment.
 	case diffTypeNone:
-		logging.Error("levant/plan: no changes detected for job %v", *l.config.Job.Name)
+		log.Error().Msg("levant/plan: no changes detected for job")
 		return false
 
 	// If there are changes, run the planDiff function which is responsible for
@@ -127,5 +127,5 @@ func logDiffObj(g, t, objName, fName, fOld, fNew string) {
 		l = lEnd
 	}
 
-	logging.Info("levant/plan: %s", l)
+	log.Info().Msgf("levant/plan: %s", l)
 }

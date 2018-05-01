@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/jrasell/levant/logging"
+	"github.com/rs/zerolog/log"
 )
 
 // GetDefaultTmplFile checks the current working directory for *.nomad files.
@@ -13,7 +13,7 @@ func GetDefaultTmplFile() (templateFile string) {
 	if matches, _ := filepath.Glob("*.nomad"); matches != nil {
 		if len(matches) == 1 {
 			templateFile = matches[0]
-			logging.Debug("helper/files: using templatefile `%v`", templateFile)
+			log.Debug().Msgf("helper/files: using templatefile `%v`", templateFile)
 			return templateFile
 		}
 	}
@@ -24,17 +24,17 @@ func GetDefaultTmplFile() (templateFile string) {
 // The first match is returned.
 func GetDefaultVarFile() (varFile string) {
 	if _, err := os.Stat("levant.yaml"); !os.IsNotExist(err) {
-		logging.Debug("helper/files: using default var-file `levant.yaml`")
+		log.Debug().Msg("helper/files: using default var-file `levant.yaml`")
 		return "levant.yaml"
 	}
 	if _, err := os.Stat("levant.yml"); !os.IsNotExist(err) {
-		logging.Debug("helper/files: using default var-file `levant.yml`")
+		log.Debug().Msg("helper/files: using default var-file `levant.yml`")
 		return "levant.yml"
 	}
 	if _, err := os.Stat("levant.tf"); !os.IsNotExist(err) {
-		logging.Debug("helper/files: using default var-file `levant.tf`")
+		log.Debug().Msg("helper/files: using default var-file `levant.tf`")
 		return "levant.tf"
 	}
-	logging.Debug("helper/files: no default var-file found")
+	log.Debug().Msg("helper/files: no default var-file found")
 	return ""
 }

@@ -52,6 +52,10 @@ General Options:
     Specify the verbosity level of Levant's logs. Valid values include DEBUG,
     INFO, and WARN, in decreasing order of verbosity. The default is INFO.
 
+  -log-format=<format>
+    Specify the format of Levant's logs. Valid values are HUMAN or JSON. The
+    default is HUMAN.
+
   -var-file=<file>
     Used in conjunction with the -job-file will deploy a templated job to your
     Nomad cluster. [default: levant.(yaml|yml|tf)]
@@ -78,6 +82,7 @@ func (c *DeployCommand) Run(args []string) int {
 	flags.BoolVar(&config.ForceBatch, "force-batch", false, "")
 	flags.BoolVar(&config.ForceCount, "force-count", false, "")
 	flags.StringVar(&config.LogLevel, "log-level", "INFO", "")
+	flags.StringVar(&config.LogFormat, "log-format", "HUMAN", "")
 	flags.StringVar(&config.VaiableFile, "var-file", "", "")
 
 	if err = flags.Parse(args); err != nil {
@@ -86,7 +91,10 @@ func (c *DeployCommand) Run(args []string) int {
 
 	args = flags.Args()
 
-	logging.SetLevel(config.LogLevel)
+	if err = logging.SetupLogger(config.LogLevel, config.LogFormat); err != nil {
+		c.UI.Error(err.Error())
+		return 1
+	}
 
 	if len(args) == 1 {
 		config.TemplateFile = args[0]

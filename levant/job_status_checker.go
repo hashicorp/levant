@@ -3,7 +3,7 @@ package levant
 import (
 	nomad "github.com/hashicorp/nomad/api"
 	nomadStructs "github.com/hashicorp/nomad/nomad/structs"
-	"github.com/jrasell/levant/logging"
+	"github.com/rs/zerolog/log"
 )
 
 // TaskCoordinate is a coordinate for an allocation/task combination
@@ -17,8 +17,7 @@ type TaskCoordinate struct {
 // more checks.
 func (l *levantDeployment) jobStatusChecker(evalID *string) bool {
 
-	logging.Debug("levant/job_status_checker: running job status checker for job %s",
-		*l.config.Job.Name)
+	log.Debug().Msgf("levant/job_status_checker: running job status checker for job")
 
 	// Run the initial job status check to ensure the job reaches a state of
 	// running.
@@ -43,14 +42,13 @@ func (l *levantDeployment) jobStatusChecker(evalID *string) bool {
 // evaluations at least reach a job status of running.
 func (l *levantDeployment) simpleJobStatusChecker(jobID string) bool {
 
-	j := l.config.Job.Name
 	q := &nomad.QueryOptions{WaitIndex: 1}
 
 	for {
 
-		job, meta, err := l.nomad.Jobs().Info(*j, q)
+		job, meta, err := l.nomad.Jobs().Info(*l.config.Job.Name, q)
 		if err != nil {
-			logging.Error("levant/job_status_checker: unable to query job %s: %v", *j, err)
+			log.Error().Err(err).Msg("levant/job_status_checker: unable to query job information from Nomad")
 			return false
 		}
 
@@ -63,13 +61,14 @@ func (l *levantDeployment) simpleJobStatusChecker(jobID string) bool {
 		// Checks the status of the job and proceed as expected depending on this.
 		switch *job.Status {
 		case nomadStructs.JobStatusRunning:
-			logging.Info("levant/job_status_checker: job %s has status %s", *j, *job.Status)
+			log.Info().Msgf("levant/job_status_checker: job has status %s", *job.Status)
 			return true
 		case nomadStructs.JobStatusPending:
+			log.Debug().Msgf("levant/job_status_checker: job has status %s", *job.Status)
 			q.WaitIndex = meta.LastIndex
 			continue
 		case nomadStructs.JobStatusDead:
-			logging.Error("levant/job_status_checker: job %s has status %s", *j, *job.Status)
+			log.Error().Msgf("levant/job_status_checker: job has status %s", *job.Status)
 			return false
 		}
 	}
@@ -79,7 +78,6 @@ func (l *levantDeployment) simpleJobStatusChecker(jobID string) bool {
 // jobs that do not support Nomad deployments.
 func (l *levantDeployment) jobAllocationChecker(evalID *string) bool {
 
-	j := l.config.Job.Name
 	q := &nomad.QueryOptions{WaitIndex: 1}
 
 	// Build our small internal checking struct.
@@ -89,8 +87,7 @@ func (l *levantDeployment) jobAllocationChecker(evalID *string) bool {
 
 		allocs, meta, err := l.nomad.Evaluations().Allocations(*evalID, q)
 		if err != nil {
-			logging.Error("levant/job_status_checker: unable to query allocs of job %s: %v",
-				*j, err)
+			log.Error().Err(err).Msg("levant/job_status_checker: unable to query allocs of job from Nomad")
 			return false
 		}
 
@@ -109,7 +106,7 @@ func (l *levantDeployment) jobAllocationChecker(evalID *string) bool {
 		// If we have no allocations left to track then we can exit and log
 		// information depending on the success.
 		if complete && deadTasks == 0 {
-			logging.Info("levant/job_status_checker: all allocations in deployment of job %s are running", *j)
+			log.Info().Msg("levant/job_status_checker: all allocations in deployment of job are running")
 			return true
 		} else if complete && deadTasks > 0 {
 			return false
@@ -130,7 +127,7 @@ func allocationStatusChecker(levantTasks map[TaskCoordinate]string, allocs []*no
 		for taskName, task := range alloc.TaskStates {
 			// if the state is one we haven't seen yet then we print a message
 			if levantTasks[TaskCoordinate{alloc.ID, taskName}] != task.State {
-				logging.Info("levant/job_status_checker: task %s in allocation %s now in %s state",
+				log.Info().Msgf("levant/job_status_checker: task %s in allocation %s now in %s state",
 					taskName, alloc.ID, task.State)
 				// then we record the new state
 				levantTasks[TaskCoordinate{alloc.ID, taskName}] = task.State

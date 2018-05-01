@@ -2,56 +2,84 @@ package logging
 
 import (
 	"fmt"
+	"io"
+	stdlog "log"
+	"os"
 	"strings"
 
-	log "github.com/Sirupsen/logrus"
+	isatty "github.com/mattn/go-isatty"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+	"github.com/sean-/conswriter"
 )
 
-// Formatter is the struct used in the logging package.
-type Formatter struct {
-}
+var acceptedLogLevels = []string{"DEBUG", "INFO", "WARN", "ERROR", "FATAL"}
+var acceptedLogFormat = []string{"HUMAN", "JSON"}
 
-// Format builds the log desired log format.
-func (c *Formatter) Format(entry *log.Entry) ([]byte, error) {
-	return []byte(fmt.Sprintf("%s [%s] %s\n", entry.Time.Format("2006/01/02 15:04:05 MST"), strings.ToUpper(entry.Level.String()), entry.Message)), nil
-}
-
-func init() {
-	log.SetFormatter(&Formatter{})
-}
-
-// SetLevel sets the log level.
+// SetupLogger sets the log level and outout format.
 // Accepted levels are panic, fatal, error, warn, info and debug.
-func SetLevel(level string) {
-	lvl, err := log.ParseLevel(level)
-	if err != nil {
-		Fatal(fmt.Sprintf(`not a valid level: "%s"`, level))
+// Accepted formats are human or json.
+func SetupLogger(level, format string) (err error) {
+
+	if err = setLogFormat(strings.ToUpper(format)); err != nil {
+		return err
 	}
-	log.SetLevel(lvl)
+
+	if err = setLogLevel(strings.ToUpper(level)); err != nil {
+		return err
+	}
+
+	return nil
 }
 
-// Debug logs a message with severity DEBUG.
-func Debug(format string, v ...interface{}) {
-	log.Debug(fmt.Sprintf(format, v...))
+func setLogLevel(level string) error {
+	switch level {
+	case "DEBUG":
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	case "INFO":
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	case "WARN":
+		zerolog.SetGlobalLevel(zerolog.WarnLevel)
+	case "ERROR":
+		zerolog.SetGlobalLevel(zerolog.ErrorLevel)
+	case "FATAL":
+		zerolog.SetGlobalLevel(zerolog.FatalLevel)
+	default:
+		return fmt.Errorf("unsupported log level: %q (supported levels: %s)", level,
+			strings.Join(acceptedLogLevels, " "))
+	}
+	return nil
 }
 
-// Info logs a message with severity INFO.
-func Info(format string, v ...interface{}) {
-	log.Info(fmt.Sprintf(format, v...))
-}
+func setLogFormat(format string) error {
 
-// Warning logs a message with severity WARNING.
-func Warning(format string, v ...interface{}) {
-	log.Warning(fmt.Sprintf(format, v...))
-}
+	var logWriter io.Writer
+	var zLog zerolog.Logger
 
-// Error logs a message with severity ERROR.
-func Error(format string, v ...interface{}) {
-	log.Error(fmt.Sprintf(format, v...))
-}
+	if isatty.IsTerminal(os.Stdout.Fd()) ||
+		isatty.IsCygwinTerminal(os.Stdout.Fd()) {
+		logWriter = conswriter.GetTerminal()
+	} else {
+		logWriter = os.Stdout
+	}
 
-// Fatal logs a message with severity ERROR which is then followed by a call
-// to os.Exit().
-func Fatal(format string, v ...interface{}) {
-	log.Fatal(fmt.Sprintf(format, v...))
+	switch format {
+	case "HUMAN":
+		w := zerolog.ConsoleWriter{
+			Out:     logWriter,
+			NoColor: true,
+		}
+		zLog = zerolog.New(w).With().Timestamp().Logger()
+	case "JSON":
+		zLog = zerolog.New(logWriter).With().Timestamp().Logger()
+	default:
+		return fmt.Errorf("unsupported log format: %q (supported formats: %s)", format,
+			strings.Join(acceptedLogFormat, " "))
+	}
+
+	log.Logger = zLog
+	stdlog.SetFlags(0)
+	stdlog.SetOutput(zLog)
+
+	return nil
 }

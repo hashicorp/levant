@@ -27,6 +27,9 @@ type Config struct {
 	// LogLevel is the level at which Levant will log.
 	LogLevel string
 
+	// LogFormat is the format Levant will use for logging.
+	LogFormat string
+
 	// TemplateFile is the job specification template which will be rendered
 	// before being deployed to the cluster.
 	TemplateFile string

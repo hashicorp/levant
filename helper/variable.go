@@ -1,6 +1,8 @@
 package helper
 
-import "github.com/jrasell/levant/logging"
+import (
+	"github.com/rs/zerolog/log"
+)
 
 // VariableMerge merges the passed file variables with the flag variabes to
 // provide a single set of variables. The flagVars will always prevale over file
@@ -10,17 +12,17 @@ func VariableMerge(fileVars *map[string]interface{}, flagVars *map[string]string
 	out := make(map[string]interface{})
 
 	for k, v := range *flagVars {
-		logging.Info("helper/variable: using command line variable with key %s and value %s", k, v)
+		log.Info().Msgf("helper/variable: using command line variable with key %s and value %s", k, v)
 		out[k] = v
 	}
 
 	for k, v := range *fileVars {
 		if _, ok := out[k]; ok {
-			logging.Debug("helper/variable: variable from file with key %s and value %s overridden by CLI var",
+			log.Debug().Msgf("helper/variable: variable from file with key %s and value %s overridden by CLI var",
 				k, v)
 			continue
 		}
-		logging.Info("helper/variable: using variable with key %s and value %v from file", k, v)
+		log.Info().Msgf("helper/variable: using variable with key %s and value %v from file", k, v)
 		out[k] = v
 	}
 

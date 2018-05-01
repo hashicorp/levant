@@ -8,7 +8,11 @@ import (
 	nomad "github.com/hashicorp/nomad/api"
 	nomadStructs "github.com/hashicorp/nomad/nomad/structs"
 	"github.com/jrasell/levant/levant/structs"
-	"github.com/jrasell/levant/logging"
+	"github.com/rs/zerolog/log"
+)
+
+const (
+	jobIDContextField = "job_id"
 )
 
 // levantDeployment is the all deployment related objects for this Levant
@@ -48,6 +52,9 @@ func newLevantDeployment(config *structs.Config) (*levantDeployment, error) {
 		return nil, err
 	}
 
+	// Add the JobID as a log context field.
+	log.Logger = log.With().Str(jobIDContextField, *config.Job.ID).Logger()
+
 	return dep, nil
 }
 
@@ -58,24 +65,24 @@ func TriggerDeployment(config *structs.Config) bool {
 	// Create our new deployment object.
 	levantDep, err := newLevantDeployment(config)
 	if err != nil {
-		logging.Error("levant/deploy: unable to setup Levant deployment: %v", err)
+		log.Error().Err(err).Msg("levant/deploy: unable to setup Levant deployment")
 		return false
 	}
 
 	preDep := levantDep.preDeploy()
 	if !preDep {
-		logging.Error("levant/deploy: pre-deployment process of job %s failed", *config.Job.Name)
+		log.Error().Msg("levant/deploy: pre-deployment process failed")
 		return false
 	}
 
 	// Start the main deployment function.
 	success := levantDep.deploy()
 	if !success {
-		logging.Error("levant/deploy: deployment of job %v failed", *config.Job.Name)
+		log.Error().Msg("levant/deploy: job deployment failed")
 		return false
 	}
 
-	logging.Info("levant/deploy: deployment of job %v successful", *config.Job.Name)
+	log.Info().Msg("levant/deploy: job deployment successful")
 	return true
 }
 
@@ -83,13 +90,13 @@ func (l *levantDeployment) preDeploy() (success bool) {
 
 	// Validate the job to check it is syntactically correct.
 	if _, _, err := l.nomad.Jobs().Validate(l.config.Job, nil); err != nil {
-		logging.Error("levant/deploy: job validation failed: %v", err)
+		log.Error().Err(err).Msg("levant/deploy: job validation failed")
 		return
 	}
 
 	// If job.Type isn't set we can't continue
 	if l.config.Job.Type == nil {
-		logging.Error("levant/deploy: Nomad job `type` is not set; should be set to `%s`, `%s` or `%s`",
+		log.Error().Msgf("levant/deploy: Nomad job `type` is not set; should be set to `%s`, `%s` or `%s`",
 			nomadStructs.JobTypeBatch, nomadStructs.JobTypeSystem, nomadStructs.JobTypeService)
 		return
 	}
@@ -113,18 +120,17 @@ func (l *levantDeployment) preDeploy() (success bool) {
 // is monitored to determine the eventual state.
 func (l *levantDeployment) deploy() (success bool) {
 
-	logging.Info("levant/deploy: triggering a deployment of job %s", *l.config.Job.Name)
+	log.Info().Msgf("levant/deploy: triggering a deployment")
 
 	eval, _, err := l.nomad.Jobs().Register(l.config.Job, nil)
 	if err != nil {
-		logging.Error("levant/deploy: unable to register job %s with Nomad: %v", *l.config.Job.Name, err)
+		log.Error().Err(err).Msg("levant/deploy: unable to register job with Nomad")
 		return
 	}
 
 	if l.config.ForceBatch {
 		if eval.EvalID, err = l.triggerPeriodic(l.config.Job.ID); err != nil {
-			logging.Error("levant/deploy: unable to trigger periodic instance of job %s: %v",
-				*l.config.Job.Name, err)
+			log.Error().Err(err).Msg("levant/deploy: unable to trigger periodic instance of job")
 			return
 		}
 	}
@@ -140,7 +146,7 @@ func (l *levantDeployment) deploy() (success bool) {
 		// failure in an evaluation means no allocs will be placed so we exit here.
 		err = l.evaluationInspector(&eval.EvalID)
 		if err != nil {
-			logging.Error("levant/deploy: %v", err)
+			log.Error().Err(err).Msg("levant/deploy: something")
 			return
 		}
 	}
@@ -151,18 +157,17 @@ func (l *levantDeployment) deploy() (success bool) {
 		// If the service job doesn't have an update stanza, the job will not use
 		// Nomad deployments.
 		if l.config.Job.Update == nil {
-			logging.Info("levant/deploy: job %s is not configured with update stanza, consider adding to use deployments",
-				*l.config.Job.Name)
+			log.Info().Msg("levant/deploy: job is not configured with update stanza, consider adding to use deployments")
 			return l.jobStatusChecker(&eval.EvalID)
 		}
 
-		logging.Info("levant/deploy: beginning deployment watcher for job %s", *l.config.Job.Name)
+		log.Info().Msgf("levant/deploy: beginning deployment watcher for job")
 
 		// Get the deploymentID from the evaluationID so that we can watch the
 		// deployment for end status.
 		depID, err := l.getDeploymentID(eval.EvalID)
 		if err != nil {
-			logging.Error("levant/deploy: unable to get info of evaluation %s: %v", eval.EvalID, err)
+			log.Error().Err(err).Msgf("levant/deploy: unable to get info of evaluation %s", eval.EvalID)
 			return
 		}
 
@@ -173,8 +178,7 @@ func (l *levantDeployment) deploy() (success bool) {
 
 		dep, _, err := l.nomad.Deployments().Info(depID, nil)
 		if err != nil {
-			logging.Error("levant/deploy: unable to query deployment %s for auto-revert check: %v",
-				dep.ID, err)
+			log.Error().Err(err).Msgf("levant/deploy: unable to query deployment %s for auto-revert check", dep.ID)
 			return
 		}
 
@@ -196,7 +200,7 @@ func (l *levantDeployment) deploy() (success bool) {
 		return l.jobStatusChecker(&eval.EvalID)
 
 	default:
-		logging.Debug("levant/deploy: Levant does not support advanced deployments of job type %s",
+		log.Debug().Msgf("levant/deploy: Levant does not support advanced deployments of job type %s",
 			*l.config.Job.Type)
 		success = true
 	}
@@ -214,7 +218,7 @@ func (l *levantDeployment) evaluationInspector(evalID *string) error {
 		switch evalInfo.Status {
 		case nomadStructs.EvalStatusComplete, nomadStructs.EvalStatusFailed, nomadStructs.EvalStatusCancelled:
 			if len(evalInfo.FailedTGAllocs) == 0 {
-				logging.Info("levant/deploy: evaluation %s finished successfully", *evalID)
+				log.Info().Msgf("levant/deploy: evaluation %s finished successfully", *evalID)
 				return nil
 			}
 
@@ -230,7 +234,7 @@ func (l *levantDeployment) evaluationInspector(evalID *string) error {
 					for d := range metrics.DimensionExhausted {
 						dimension = append(dimension, d)
 					}
-					logging.Error("levant/deploy: task group %s failed to place allocs, failed on %v and exhausted %v",
+					log.Error().Msgf("levant/deploy: task group %s failed to place allocs, failed on %v and exhausted %v",
 						group, exhausted, dimension)
 				}
 
@@ -238,7 +242,7 @@ func (l *levantDeployment) evaluationInspector(evalID *string) error {
 				// failures.
 				if len(metrics.ClassFiltered) > 0 {
 					for f := range metrics.ClassFiltered {
-						logging.Error("levant/deploy: task group %s failed to place %v allocs as class \"%s\" was filtered",
+						log.Error().Msgf("levant/deploy: task group %s failed to place %v allocs as class \"%s\" was filtered",
 							group, len(metrics.ClassFiltered), f)
 					}
 				}
@@ -247,7 +251,7 @@ func (l *levantDeployment) evaluationInspector(evalID *string) error {
 				// failures.
 				if len(metrics.ConstraintFiltered) > 0 {
 					for cf := range metrics.ConstraintFiltered {
-						logging.Error("levant/deploy: task group %s failed to place %v allocs as constraint \"%s\" was filtered",
+						log.Error().Msgf("levant/deploy: task group %s failed to place %v allocs as constraint \"%s\" was filtered",
 							group, len(metrics.ConstraintFiltered), cf)
 					}
 				}
@@ -283,7 +287,7 @@ func (l *levantDeployment) deploymentWatcher(depID string) (success bool) {
 	for {
 
 		dep, meta, err := l.nomad.Deployments().Info(depID, q)
-		logging.Debug("levant/deploy: deployment %v running for %.2fs", depID, time.Since(t).Seconds())
+		log.Debug().Msgf("levant/deploy: deployment %v running for %.2fs", depID, time.Since(t).Seconds())
 
 		// Listen for the deploymentChan closing which indicates Levant should exit
 		// the deployment watcher.
@@ -295,7 +299,7 @@ func (l *levantDeployment) deploymentWatcher(depID string) (success bool) {
 		}
 
 		if err != nil {
-			logging.Error("levant/deploy: unable to get info of deployment %s: %v", depID, err)
+			log.Error().Err(err).Msgf("levant/deploy: unable to get info of deployment %s", depID)
 			return
 		}
 
@@ -322,17 +326,17 @@ func (l *levantDeployment) checkDeploymentStatus(dep *nomad.Deployment, shutdown
 
 	switch dep.Status {
 	case nomadStructs.DeploymentStatusSuccessful:
-		logging.Info("levant/deploy: deployment %v has completed successfully", dep.ID)
+		log.Info().Msgf("levant/deploy: deployment %v has completed successfully", dep.ID)
 		return false, nil
 	case nomadStructs.DeploymentStatusRunning:
 		return true, nil
 	default:
 		if shutdownChan != nil {
-			logging.Debug("levant/deploy: deployment %v meaning canary auto promote will shutdown", dep.Status)
+			log.Debug().Msgf("levant/deploy: deployment %v meaning canary auto promote will shutdown", dep.Status)
 			close(shutdownChan)
 		}
 
-		logging.Error("levant/deploy: deployment %v has status %s", dep.ID, dep.Status)
+		log.Error().Msgf("levant/deploy: deployment %v has status %s", dep.ID, dep.Status)
 
 		// Launch the failure inspector.
 		l.checkFailedDeployment(&dep.ID)
@@ -350,28 +354,28 @@ func (l *levantDeployment) canaryAutoPromote(depID string, waitTime int, shutdow
 	for {
 		select {
 		case <-autoPromote:
-			logging.Info("levant/deploy: auto-promote period %vs has been reached for deployment %s",
+			log.Info().Msgf("levant/deploy: auto-promote period %vs has been reached for deployment %s",
 				waitTime, depID)
 
 			// Check the deployment is healthy before promoting.
 			if healthy := l.checkCanaryDeploymentHealth(depID); !healthy {
-				logging.Error("levant/deploy: the canary deployment %s has unhealthy allocations, unable to promote", depID)
+				log.Error().Msgf("levant/deploy: the canary deployment %s has unhealthy allocations, unable to promote", depID)
 				close(deploymentChan)
 				return
 			}
 
-			logging.Info("levant/deploy: triggering auto promote of deployment %s", depID)
+			log.Info().Msgf("levant/deploy: triggering auto promote of deployment %s", depID)
 
 			// Promote the deployment.
 			_, _, err := l.nomad.Deployments().PromoteAll(depID, nil)
 			if err != nil {
-				logging.Error("levant/deploy: unable to promote deployment %s: %v", depID, err)
+				log.Error().Err(err).Msgf("levant/deploy: unable to promote deployment %s", depID)
 				close(deploymentChan)
 				return
 			}
 
 		case <-shutdownChan:
-			logging.Info("levant/deploy: canary auto promote has been shutdown")
+			log.Info().Msg("levant/deploy: canary auto promote has been shutdown")
 			return
 		}
 	}
@@ -385,7 +389,7 @@ func (l *levantDeployment) checkCanaryDeploymentHealth(depID string) (healthy bo
 
 	dep, _, err := l.nomad.Deployments().Info(depID, &nomad.QueryOptions{AllowStale: true})
 	if err != nil {
-		logging.Error("levant/deploy: unable to query deployment %s for health: %v", depID, err)
+		log.Error().Err(err).Msgf("levant/deploy: unable to query deployment %s for health: %v", depID)
 		return
 	}
 
@@ -394,19 +398,19 @@ func (l *levantDeployment) checkCanaryDeploymentHealth(depID string) (healthy bo
 	for taskName, taskInfo := range dep.TaskGroups {
 		// skip any task groups which are not configured for canary deployments
 		if taskInfo.DesiredCanaries == 0 {
-			logging.Debug("levant/deploy: task %s has no desired canaries, skipping health checks in deployment %s", taskName, depID)
+			log.Debug().Msgf("levant/deploy: task %s has no desired canaries, skipping health checks in deployment %s", taskName, depID)
 			continue
 		}
 
 		if taskInfo.DesiredCanaries != taskInfo.HealthyAllocs {
-			logging.Error("levant/deploy: task %s has unhealthy allocations in deployment %s", taskName, depID)
+			log.Error().Msgf("levant/deploy: task %s has unhealthy allocations in deployment %s", taskName, depID)
 			unhealthy++
 		}
 	}
 
 	// If zero unhealthy tasks were found, continue with the auto promotion.
 	if unhealthy == 0 {
-		logging.Debug("levant/deploy: deployment %s has 0 unhealthy allocations", depID)
+		log.Debug().Msgf("levant/deploy: deployment %s has 0 unhealthy allocations", depID)
 		healthy = true
 	}
 
@@ -418,7 +422,7 @@ func (l *levantDeployment) checkCanaryDeploymentHealth(depID string) (healthy bo
 // checked in the same fashion as other jobs.
 func (l *levantDeployment) triggerPeriodic(jobID *string) (evalID string, err error) {
 
-	logging.Info("levant/deploy: triggering a run of periodic job %s", *jobID)
+	log.Info().Msg("levant/deploy: triggering a run of periodic job")
 
 	// Trigger the run if possible and just returning both the evalID and the err.
 	// There is no need to check this here as the caller does this.
@@ -440,7 +444,7 @@ func (l *levantDeployment) getDeploymentID(evalID string) (depID string, err err
 		}
 
 		if evalInfo.DeploymentID == "" {
-			logging.Debug("levant/deploy: Nomad returned an empty deployment for evaluation %v; retrying", evalID)
+			log.Debug().Msgf("levant/deploy: Nomad returned an empty deployment for evaluation %v; retrying", evalID)
 			time.Sleep(2 * time.Second)
 			continue
 		} else {
@@ -463,10 +467,10 @@ func (l *levantDeployment) dynamicGroupCountUpdater() error {
 	// indicates the job is not running, not that there was an error in the API
 	// call.
 	if err != nil && strings.Contains(err.Error(), "404") {
-		logging.Info("levant/deploy: job %s not running, using template file group counts", *l.config.Job.Name)
+		log.Info().Msg("levant/deploy: job is not running, using template file group counts")
 		return nil
 	} else if err != nil {
-		logging.Error("levant/deploy: unable to perform job evaluation: %v", err)
+		log.Error().Err(err).Msgf("levant/deploy: unable to perform job evaluation: %v")
 		return err
 	}
 
@@ -476,15 +480,15 @@ func (l *levantDeployment) dynamicGroupCountUpdater() error {
 		return nil
 	}
 
-	logging.Debug("levant/deploy: running dynamic job count updater for job %s", *l.config.Job.Name)
+	log.Debug().Msgf("levant/deploy: running dynamic job count updater")
 
 	// Iterate the templated job and the Nomad returned job and update group count
 	// based on matches.
 	for _, rGroup := range rJob.TaskGroups {
 		for _, group := range l.config.Job.TaskGroups {
 			if *rGroup.Name == *group.Name {
-				logging.Info("levant/deploy: using dynamic count %v for job %s and group %s",
-					*rGroup.Count, *l.config.Job.Name, *group.Name)
+				log.Info().Msgf("levant/deploy: using dynamic count %v for group %s",
+					*rGroup.Count, *group.Name)
 				group.Count = rGroup.Count
 			}
 		}
