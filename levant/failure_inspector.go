@@ -7,7 +7,7 @@ import (
 
 	nomad "github.com/hashicorp/nomad/api"
 	nomadStructs "github.com/hashicorp/nomad/nomad/structs"
-	"github.com/jrasell/levant/logging"
+	"github.com/rs/zerolog/log"
 )
 
 // checkFailedDeployment helps log information about deployment failures.
@@ -17,7 +17,7 @@ func (l *levantDeployment) checkFailedDeployment(depID *string) {
 
 	allocs, _, err := l.nomad.Deployments().Allocations(*depID, nil)
 	if err != nil {
-		logging.Error("levant/failure_inspector: unable to query deployment allocations for deployment %s",
+		log.Error().Msgf("levant/failure_inspector: unable to query deployment allocations for deployment %s",
 			depID)
 	}
 
@@ -36,7 +36,7 @@ func (l *levantDeployment) checkFailedDeployment(depID *string) {
 
 	// Inspect each allocation.
 	for _, id := range allocIDS {
-		logging.Debug("levant/failure_inspector: launching allocation inspector for alloc %v", id)
+		log.Debug().Msgf("levant/failure_inspector: launching allocation inspector for alloc %v", id)
 		go l.allocInspector(id, &wg)
 	}
 
@@ -52,7 +52,7 @@ func (l *levantDeployment) allocInspector(allocID string, wg *sync.WaitGroup) {
 
 	resp, _, err := l.nomad.Allocations().Info(allocID, nil)
 	if err != nil {
-		logging.Error("levant/failure_inspector: unable to query alloc %v: %v", allocID, err)
+		log.Error().Msgf("levant/failure_inspector: unable to query alloc %v: %v", allocID, err)
 		return
 	}
 
@@ -133,10 +133,10 @@ func (l *levantDeployment) allocInspector(allocID string, wg *sync.WaitGroup) {
 			// If we have matched and have an updated desc then log the appropriate
 			// information.
 			if desc != "" {
-				logging.Error("levant/failure_inspector: alloc %s incurred event %s because %s",
+				log.Error().Msgf("levant/failure_inspector: alloc %s incurred event %s because %s",
 					allocID, strings.ToLower(event.Type), strings.TrimSpace(desc))
 			} else {
-				logging.Error("levant/failure_inspector: alloc %s logged for failure; event_type: %s; message: %s",
+				log.Error().Msgf("levant/failure_inspector: alloc %s logged for failure; event_type: %s; message: %s",
 					allocID,
 					strings.ToLower(event.Type),
 					strings.ToLower(event.DisplayMessage))

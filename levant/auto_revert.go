@@ -4,7 +4,7 @@ import (
 	"time"
 
 	nomad "github.com/hashicorp/nomad/api"
-	"github.com/jrasell/levant/logging"
+	"github.com/rs/zerolog/log"
 )
 
 func (l *levantDeployment) autoRevert(jobID, depID *string) {
@@ -16,26 +16,26 @@ func (l *levantDeployment) autoRevert(jobID, depID *string) {
 
 		dep, _, err := l.nomad.Jobs().LatestDeployment(*jobID, nil)
 		if err != nil {
-			logging.Error("levant/auto_revert: unable to query latest deployment of job %s", *jobID)
+			log.Error().Msgf("levant/auto_revert: unable to query latest deployment of job %s", *jobID)
 			return
 		}
 
 		// Check whether we have got the original deployment ID as a return from
 		// Nomad, and if so, continue the loop to try again.
 		if dep.ID == *depID {
-			logging.Debug("levant/auto_revert: auto-revert deployment not triggered for job %s, rechecking", *jobID)
+			log.Debug().Msgf("levant/auto_revert: auto-revert deployment not triggered for job %s, rechecking", *jobID)
 			time.Sleep(1 * time.Second)
 			continue
 		}
 
-		logging.Info("levant/auto_revert: beginning deployment watcher for job %s", *jobID)
+		log.Info().Msgf("levant/auto_revert: beginning deployment watcher for job %s", *jobID)
 		success := l.deploymentWatcher(dep.ID)
 
 		if success {
-			logging.Info("levant/auto_revert: auto-revert of job %s was successful", *jobID)
+			log.Info().Msgf("levant/auto_revert: auto-revert of job %s was successful", *jobID)
 			break
 		} else {
-			logging.Error("levant/auto_revert: auto-revert of job %s failed; POTENTIAL OUTAGE SITUATION", *jobID)
+			log.Error().Msgf("levant/auto_revert: auto-revert of job %s failed; POTENTIAL OUTAGE SITUATION", *jobID)
 			l.checkFailedDeployment(&dep.ID)
 			break
 		}
@@ -44,7 +44,7 @@ func (l *levantDeployment) autoRevert(jobID, depID *string) {
 	// At this point we have not been able to get the latest deploymentID that
 	// is different from the original so we can't perform auto-revert checking.
 	if i == 5 {
-		logging.Error("levant/auto_revert: unable to check auto-revert of job %s", *jobID)
+		log.Error().Msgf("levant/auto_revert: unable to check auto-revert of job %s", *jobID)
 	}
 }
 
@@ -64,12 +64,12 @@ func (l *levantDeployment) checkAutoRevert(dep *nomad.Deployment) {
 	}
 
 	if revert {
-		logging.Info("levant/auto_revert: job %v has entered auto-revert state; launching auto-revert checker",
+		log.Info().Msgf("levant/auto_revert: job %v has entered auto-revert state; launching auto-revert checker",
 			dep.JobID)
 
 		// Run the levant autoRevert function.
 		l.autoRevert(&dep.JobID, &dep.ID)
 	} else {
-		logging.Info("levant/auto_revert: job %v is not in auto-revert; POTENTIAL OUTAGE SITUATION", dep.JobID)
+		log.Info().Msgf("levant/auto_revert: job %v is not in auto-revert; POTENTIAL OUTAGE SITUATION", dep.JobID)
 	}
 }

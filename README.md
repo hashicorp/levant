@@ -70,6 +70,8 @@ Levant supports a number of command line arguments which provide control over th
 
 * **-log-level** (string: "INFO") The level at which Levant will log to. Valid values are DEBUG, INFO, WARNING, ERROR and FATAL.
 
+* **-log-format** (string: "HUMAN") Specify the format of Levant's logs. Valid values are HUMAN or JSON
+
 * **-var-file** (string: "") The variables file to render the template with.
 
 The `deploy` command also supports passing variables individually on the command line. Multiple commands can be passed in the format of `-var 'key=value'`. Variables passed via the command line take precedence over the same variable declared within a passed variable file.
@@ -87,6 +89,8 @@ levant deploy -log-level=debug -address=nomad.devoops -var-file=var.yaml -var 'v
 * **-address** (string: "http://localhost:4646") The HTTP API endpoint for Nomad where all calls will be made.
 
 * **-log-level** (string: "INFO") The level at which Levant will log to. Valid values are DEBUG, INFO, WARNING, ERROR and FATAL.
+
+* **-log-format** (string: "HUMAN") Specify the format of Levant's logs. Valid values are HUMAN or JSON
 
 * **-meta** (string: "key=vaule") The metadata key will be merged into the job's metadata. The job may define a default value for the key which is overridden when dispatching. The flag can be provided more than once to inject multiple metadata key/value pairs. Arbitrary keys are not allowed. The parameterized job must allow the key to be merged.
 

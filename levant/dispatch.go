@@ -3,7 +3,7 @@ package levant
 import (
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/jrasell/levant/levant/structs"
-	"github.com/jrasell/levant/logging"
+	"github.com/rs/zerolog/log"
 )
 
 // TriggerDispatch provides the main entry point into a Levant dispatch and
@@ -12,7 +12,7 @@ func TriggerDispatch(job string, metaMap map[string]string, payload []byte, addr
 
 	client, err := newNomadClient(address)
 	if err != nil {
-		logging.Error("levant/dispatch: unable to setup Levant dispatch: %v", err)
+		log.Error().Msgf("levant/dispatch: unable to setup Levant dispatch: %v", err)
 		return false
 	}
 
@@ -24,11 +24,11 @@ func TriggerDispatch(job string, metaMap map[string]string, payload []byte, addr
 
 	success := dep.dispatch(job, metaMap, payload)
 	if !success {
-		logging.Error("levant/dispatch: dispatch of job %v failed", job)
+		log.Error().Msgf("levant/dispatch: dispatch of job %v failed", job)
 		return false
 	}
 
-	logging.Info("levant/dispatch: dispatch of job %v successful", job)
+	log.Info().Msgf("levant/dispatch: dispatch of job %v successful", job)
 	return true
 }
 
@@ -40,15 +40,15 @@ func (l *levantDeployment) dispatch(job string, metaMap map[string]string, paylo
 	// Initiate the dispatch with the passed meta parameters.
 	eval, _, err := l.nomad.Jobs().Dispatch(job, metaMap, payload, nil)
 	if err != nil {
-		logging.Error("levant/dispatch: %v", err)
+		log.Error().Msgf("levant/dispatch: %v", err)
 		return false
 	}
 
-	logging.Info("levant/dispatch: triggering dispatch against job %s", job)
+	log.Info().Msgf("levant/dispatch: triggering dispatch against job %s", job)
 
 	// If we didn't get an EvaluationID then we cannot continue.
 	if eval.EvalID == "" {
-		logging.Error("levant/dispatch: dispatched job %s did not return evaluation", job)
+		log.Error().Msgf("levant/dispatch: dispatched job %s did not return evaluation", job)
 		return false
 	}
 
@@ -62,7 +62,7 @@ func (l *levantDeployment) dispatch(job string, metaMap map[string]string, paylo
 	// errors in triggering the dispatch job.
 	err = l.evaluationInspector(&eval.EvalID)
 	if err != nil {
-		logging.Error("levant/dispatch: %v", err)
+		log.Error().Msgf("levant/dispatch: %v", err)
 		return false
 	}
 

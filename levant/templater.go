@@ -8,7 +8,7 @@ import (
 	"text/template"
 
 	"github.com/jrasell/levant/helper"
-	"github.com/jrasell/levant/logging"
+	"github.com/rs/zerolog/log"
 	yaml "gopkg.in/yaml.v2"
 
 	nomad "github.com/hashicorp/nomad/api"
@@ -39,9 +39,9 @@ func RenderJob(templateFile, variableFile string, flagVars *map[string]string) (
 // passed variables file.
 func RenderTemplate(templateFile, variableFile string, flagVars *map[string]string) (tpl *bytes.Buffer, err error) {
 	if variableFile == "" {
-		logging.Debug("levant/templater: no variable file passed, trying defaults")
+		log.Debug().Msgf("levant/templater: no variable file passed, trying defaults")
 		if variableFile = helper.GetDefaultVarFile(); variableFile != "" {
-			logging.Debug("levant/templater: found default variable file, using %s", variableFile)
+			log.Debug().Msgf("levant/templater: found default variable file, using %s", variableFile)
 		}
 	}
 
@@ -49,7 +49,7 @@ func RenderTemplate(templateFile, variableFile string, flagVars *map[string]stri
 	// correctly rendered.
 	var ext string
 	if ext = path.Ext(variableFile); ext != "" {
-		logging.Debug("levant/templater: variable file extension %s detected", ext)
+		log.Debug().Msgf("levant/templater: variable file extension %s detected", ext)
 	}
 
 	src, err := ioutil.ReadFile(templateFile)
@@ -60,7 +60,7 @@ func RenderTemplate(templateFile, variableFile string, flagVars *map[string]stri
 	// If no command line variables are passed; log this as DEBUG to provide much
 	// greater feedback.
 	if len(*flagVars) == 0 {
-		logging.Debug("levant/templater: no command line variables passed")
+		log.Debug().Msgf("levant/templater: no command line variables passed")
 	}
 
 	switch ext {
@@ -73,7 +73,7 @@ func RenderTemplate(templateFile, variableFile string, flagVars *map[string]stri
 
 	case "":
 		// No variables file passed; render using any passed CLI variables.
-		logging.Debug("levant/templater: variable file not passed")
+		log.Debug().Msgf("levant/templater: variable file not passed")
 		tpl, err = readJobFile(string(src), flagVars)
 
 	default:
