@@ -3,6 +3,7 @@
 IMPROVEMENTS:
  * Use govvv for builds and to supply additional version information in the version command output [GH-151](https://github.com/jrasell/levant/pull/151)
  * Levant will now run Nomad plan before deployments to log the plan diff [GH-153](https://github.com/jrasell/levant/pull/153)
+ * Logging can now be output in JSON format and uses contextual data for better processing ability [GH-157](https://github.com/jrasell/levant/pull/157)
  
 BUG FIXES:
  * Fix occasional panic when performing deployment check of a batch job deployment [GH-150](https://github.com/jrasell/levant/pull/150)
