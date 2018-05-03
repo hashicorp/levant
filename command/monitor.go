@@ -11,7 +11,6 @@ import (
 // MonitorCommand is the command implementation that allows users to monitor
 // a job until it completes
 type MonitorCommand struct {
-	args []string
 	Meta
 }
 
