@@ -62,7 +62,10 @@ func (c *MonitorCommand) Run(args []string) int {
 
 	args = flags.Args()
 
-	logging.SetLevel(config.LogLevel)
+	if err = logging.SetupLogger(config.LogLevel, config.LogFormat); err != nil {
+		c.UI.Error(err.Error())
+		return 1
+	}
 
 	if len(args) == 1 {
 		evalID = args[0]

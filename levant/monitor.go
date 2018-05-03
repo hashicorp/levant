@@ -8,7 +8,7 @@ import (
 	nomad "github.com/hashicorp/nomad/api"
 	nomadStructs "github.com/hashicorp/nomad/nomad/structs"
 	"github.com/jrasell/levant/levant/structs"
-	"github.com/jrasell/levant/logging"
+	"github.com/rs/zerolog/log"
 )
 
 // StartMonitor will start monitoring a job
@@ -16,7 +16,7 @@ func StartMonitor(config *structs.Config, evalID *string, timeoutSeconds uint64,
 	// Create our new deployment object.                                                           |~
 	levantDep, err := newLevantDeployment(config)
 	if err != nil {
-		logging.Error("levant/monitor: unable to setup Levant deployment: %v", err)
+		log.Error().Err(err).Msgf("levant/monitor: unable to setup Levant deployment: %v", err)
 		return err
 	}
 
@@ -45,7 +45,7 @@ func (l *levantDeployment) monitor(evalID *string, timeoutSeconds uint64) error 
 	// get the evaluation
 	eval, _, err := l.nomad.Evaluations().Info(*evalID, nil)
 	if err != nil {
-		logging.Error("levant/monitor: unable to get evaluation %v: %v", *evalID, err)
+		log.Error().Err(err).Msgf("levant/monitor: unable to get evaluation %v: %v", *evalID, err)
 		return err
 	}
 
@@ -58,13 +58,13 @@ func (l *levantDeployment) monitor(evalID *string, timeoutSeconds uint64) error 
 	for {
 		select {
 		case <-timeout:
-			logging.Error("levant/monitor: timeout reached while monitoring job %s", jobName)
+			log.Error().Err(err).Msgf("levant/monitor: timeout reached while monitoring job %s", jobName)
 			// run the allocation inspector
 			var allocIDS []string
 			// get some additional information about the exit of the job
 			allocs, _, err := l.nomad.Evaluations().Allocations(*evalID, nil)
 			if err != nil {
-				logging.Error("levant/monitor: unable to get allocations from evaluation %s: %v", evalID, err)
+				log.Error().Err(err).Msgf("levant/monitor: unable to get allocations from evaluation %s: %v", evalID, err)
 				return err
 			}
 			// check to see if any of our allocations failed
@@ -82,8 +82,8 @@ func (l *levantDeployment) monitor(evalID *string, timeoutSeconds uint64) error 
 			l.inspectAllocs(allocIDS)
 			return errors.New("timeout reached")
 		case err = <-errChan:
-			logging.Error("levant/monitor: unable to query job %s: %v", jobName, err)
-			logging.Error("Retrying...")
+			log.Error().Err(err).Msgf("levant/monitor: unable to query job %s: %v", jobName, err)
+			log.Error().Err(err).Msg("Retrying...")
 
 		case job := <-jobChan:
 			// depending on the state of the job we do different things
@@ -94,7 +94,7 @@ func (l *levantDeployment) monitor(evalID *string, timeoutSeconds uint64) error 
 				// get some additional information about the exit of the job
 				allocs, _, err := l.nomad.Evaluations().Allocations(*evalID, nil)
 				if err != nil {
-					logging.Error("levant/monitor: unable to get allocations from evaluation %s: %v", evalID, err)
+					log.Error().Err(err).Msgf("levant/monitor: unable to get allocations from evaluation %s: %v", evalID, err)
 					return err
 				}
 				// check to see if any of our allocations failed
@@ -110,21 +110,21 @@ func (l *levantDeployment) monitor(evalID *string, timeoutSeconds uint64) error 
 					return errors.New("Some or all allocations failed")
 				}
 				// otherwise we print a message and just return no error
-				logging.Info("levant/monitor: job %s has status %s", jobName, *job.Status)
+				log.Info().Msgf("levant/monitor: job %s has status %s", jobName, *job.Status)
 				return nil
 			case nomadStructs.JobStatusRunning:
-				logging.Info("levant/monitor: job %s has status %s", jobName, *job.Status)
+				log.Info().Msgf("levant/monitor: job %s has status %s", jobName, *job.Status)
 				// if its a paramaterized or periodic job we stop here
 				if job.IsParameterized() {
-					logging.Info("levant/monitor: job %s is parameterized.  Running is its final state.", jobName)
+					log.Info().Msgf("levant/monitor: job %s is parameterized.  Running is its final state.", jobName)
 					return nil
 				}
 				if job.IsPeriodic() {
-					logging.Info("levant/monitor: job %s is periodic.  Running is its final state.", jobName)
+					log.Info().Msgf("levant/monitor: job %s is periodic.  Running is its final state.", jobName)
 					return nil
 				}
 			default:
-				logging.Debug("levant/monitor: got job state %s.  Don't know what to do with that.", *job.Status)
+				log.Debug().Msgf("levant/monitor: got job state %s.  Don't know what to do with that.", *job.Status)
 			}
 		}
 	}
@@ -157,7 +157,7 @@ func (l *levantDeployment) monitorJobInfo(jobName string, jobChan chan<- *nomad.
 				jobChan <- job
 			} else {
 				// log a debug message
-				logging.Debug("levant/monitor: job %s currently has status %s", jobName, *job.Status)
+				log.Debug().Msgf("levant/monitor: job %s currently has status %s", jobName, *job.Status)
 			}
 		}
 	}
@@ -174,7 +174,7 @@ func (l *levantDeployment) inspectAllocs(allocs []string) {
 
 		// Inspect each allocation.
 		for _, id := range allocs {
-			logging.Debug("levant/monitor: launching allocation inspector for alloc %v", id)
+			log.Debug().Msgf("levant/monitor: launching allocation inspector for alloc %v", id)
 			go l.allocInspector(id, &wg)
 		}
 
