@@ -1,4 +1,4 @@
-## 0.1.1 (12 May 2018)
+## 0.1.1 (13 May 2018)
 
 IMPROVEMENTS:
  * Use govvv for builds and to supply additional version information in the version command output [GH-151](https://github.com/jrasell/levant/pull/151)
