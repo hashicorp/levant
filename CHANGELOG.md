@@ -1,5 +1,8 @@
 ## 0.2.0 (Unreleased)
 
+BUG FIXES:
+ * Fix formatting with version summary output which had erronous quote [GH-170](https://github.com/jrasell/levant/pull/170)
+
 ## 0.1.1 (13 May 2018)
 
 IMPROVEMENTS:
