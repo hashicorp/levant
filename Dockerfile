@@ -1,6 +1,6 @@
 FROM alpine:latest
 
-LABEL maintainer James Rasell<(jamesrasell@gmail.com> (@jrasell)
+LABEL maintainer James Rasell<(jamesrasell@gmail.com)> (@jrasell)
 LABEL vendor "jrasell"
 
 ENV LEVANT_VERSION 0.1.1
