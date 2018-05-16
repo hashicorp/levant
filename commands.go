@@ -41,6 +41,16 @@ func Commands(metaPtr *command.Meta) map[string]cli.CommandFactory {
 				Meta: meta,
 			}, nil
 		},
+		"scale-in": func() (cli.Command, error) {
+			return &command.ScaleInCommand{
+				Meta: meta,
+			}, nil
+		},
+		"scale-out": func() (cli.Command, error) {
+			return &command.ScaleOutCommand{
+				Meta: meta,
+			}, nil
+		},
 		"version": func() (cli.Command, error) {
 			ver := version.Version
 			rel := version.VersionPrerelease

@@ -129,7 +129,7 @@ func (c *DeployCommand) Run(args []string) int {
 		}
 	}
 
-	success := levant.TriggerDeployment(config)
+	success := levant.TriggerDeployment(config, nil)
 	if !success {
 		return 1
 	}
