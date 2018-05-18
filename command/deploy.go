@@ -40,6 +40,10 @@ General Options:
   -canary-auto-promote=<seconds>
     The time in seconds, after which Levant will auto-promote a canary job
     if all canaries within the deployment are healthy.
+		
+  -consul-address=<addr>
+    The Consul host and port to use when making Consul KeyValue lookups for
+    template rendering.
 
   -force-batch
     Forces a new instance of the periodic job. A new instance will be created
@@ -73,6 +77,7 @@ func (c *DeployCommand) Synopsis() string {
 func (c *DeployCommand) Run(args []string) int {
 
 	var err error
+	var addr string
 	config := &structs.Config{}
 
 	flags := c.Meta.FlagSet("deploy", FlagSetVars)
@@ -80,6 +85,7 @@ func (c *DeployCommand) Run(args []string) int {
 
 	flags.StringVar(&config.Addr, "address", "", "")
 	flags.IntVar(&config.Canary, "canary-auto-promote", 0, "")
+	flags.StringVar(&addr, "consul-address", "", "")
 	flags.BoolVar(&config.ForceBatch, "force-batch", false, "")
 	flags.BoolVar(&config.ForceCount, "force-count", false, "")
 	flags.StringVar(&config.LogLevel, "log-level", "INFO", "")
@@ -110,7 +116,7 @@ func (c *DeployCommand) Run(args []string) int {
 		return 1
 	}
 
-	config.Job, err = template.RenderJob(config.TemplateFile, config.VaiableFile, &c.Meta.flagVars)
+	config.Job, err = template.RenderJob(config.TemplateFile, config.VaiableFile, addr, &c.Meta.flagVars)
 	if err != nil {
 		c.UI.Error(fmt.Sprintf("[ERROR] levant/command: %v", err))
 		return 1
