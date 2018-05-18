@@ -1,4 +1,4 @@
-package levant
+package template
 
 import (
 	"strings"

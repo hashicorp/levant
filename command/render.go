@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/jrasell/levant/helper"
-	"github.com/jrasell/levant/levant"
+	"github.com/jrasell/levant/template"
 )
 
 // RenderCommand is the command implementation that allows users to render a
@@ -78,7 +78,7 @@ func (c *RenderCommand) Run(args []string) int {
 		return 1
 	}
 
-	tpl, err = levant.RenderTemplate(templateFile, variables, &c.Meta.flagVars)
+	tpl, err = template.RenderTemplate(templateFile, variables, &c.Meta.flagVars)
 	if err != nil {
 		c.UI.Error(fmt.Sprintf("[ERROR] levant/command: %v", err))
 		return 1
