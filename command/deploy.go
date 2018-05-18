@@ -10,6 +10,7 @@ import (
 	"github.com/jrasell/levant/levant"
 	"github.com/jrasell/levant/levant/structs"
 	"github.com/jrasell/levant/logging"
+	"github.com/jrasell/levant/template"
 )
 
 // DeployCommand is the command implementation that allows users to deploy a
@@ -109,7 +110,7 @@ func (c *DeployCommand) Run(args []string) int {
 		return 1
 	}
 
-	config.Job, err = levant.RenderJob(config.TemplateFile, config.VaiableFile, &c.Meta.flagVars)
+	config.Job, err = template.RenderJob(config.TemplateFile, config.VaiableFile, &c.Meta.flagVars)
 	if err != nil {
 		c.UI.Error(fmt.Sprintf("[ERROR] levant/command: %v", err))
 		return 1
