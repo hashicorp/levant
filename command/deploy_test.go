@@ -30,7 +30,7 @@ func TestDeploy_checkCanaryAutoPromote(t *testing.T) {
 	}
 
 	for i, c := range cases {
-		job, err := template.RenderJob(c.File, "", &fVars)
+		job, err := template.RenderJob(c.File, "", "", &fVars)
 		if err != nil {
 			t.Fatalf("case %d failed: %v", i, err)
 		}
@@ -61,7 +61,7 @@ func TestDeploy_checkForceBatch(t *testing.T) {
 	}
 
 	for i, c := range cases {
-		job, err := template.RenderJob(c.File, "", &fVars)
+		job, err := template.RenderJob(c.File, "", "", &fVars)
 		if err != nil {
 			t.Fatalf("case %d failed: %v", i, err)
 		}

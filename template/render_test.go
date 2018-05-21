@@ -21,7 +21,7 @@ func TestTemplater_RenderTemplate(t *testing.T) {
 	fVars := make(map[string]string)
 
 	// Test basic TF template render.
-	job, err = RenderJob("test-fixtures/single_templated.nomad", "test-fixtures/test.tf", &fVars)
+	job, err = RenderJob("test-fixtures/single_templated.nomad", "test-fixtures/test.tf", "", &fVars)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,7 +30,7 @@ func TestTemplater_RenderTemplate(t *testing.T) {
 	}
 
 	// Test basic YAML template render.
-	job, err = RenderJob("test-fixtures/single_templated.nomad", "test-fixtures/test.yaml", &fVars)
+	job, err = RenderJob("test-fixtures/single_templated.nomad", "test-fixtures/test.yaml", "", &fVars)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +39,7 @@ func TestTemplater_RenderTemplate(t *testing.T) {
 	}
 
 	// Test empty var-args and empty variable file render.
-	job, err = RenderJob("test-fixtures/none_templated.nomad", "", &fVars)
+	job, err = RenderJob("test-fixtures/none_templated.nomad", "", "", &fVars)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func TestTemplater_RenderTemplate(t *testing.T) {
 
 	// Test var-args only render.
 	fVars["job_name"] = testJobName
-	job, err = RenderJob("test-fixtures/single_templated.nomad", "", &fVars)
+	job, err = RenderJob("test-fixtures/single_templated.nomad", "", "", &fVars)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestTemplater_RenderTemplate(t *testing.T) {
 	// Test var-args and variables file render.
 	delete(fVars, "job_name")
 	fVars["datacentre"] = testDCName
-	job, err = RenderJob("test-fixtures/multi_templated.nomad", "test-fixtures/test.yaml", &fVars)
+	job, err = RenderJob("test-fixtures/multi_templated.nomad", "test-fixtures/test.yaml", "", &fVars)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func TestTemplater_RenderTemplate(t *testing.T) {
 
 	// Test var-args only render.
 	fVars["job_name"] = testJobName
-	_, err = RenderTemplate("test-fixtures/missing_var.nomad", "", &fVars)
+	_, err = RenderTemplate("test-fixtures/missing_var.nomad", "", "", &fVars)
 	if err == nil {
 		t.Fatal("expected err to not be nil")
 	}

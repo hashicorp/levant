@@ -29,6 +29,10 @@ Arguments:
     If no argument is given we look for a single *.nomad file
 
 General Options:
+
+  -consul-address=<addr>
+    The Consul host and port to use when making Consul KeyValue lookups for
+    template rendering.
 	
   -out=<file>
     Specify the path to write the rendered template out to, if a file exists at
@@ -49,13 +53,14 @@ func (c *RenderCommand) Synopsis() string {
 // Run triggers a run of the Levant template functions.
 func (c *RenderCommand) Run(args []string) int {
 
-	var variables, outPath, templateFile string
+	var addr, variables, outPath, templateFile string
 	var err error
 	var tpl *bytes.Buffer
 
 	flags := c.Meta.FlagSet("render", FlagSetVars)
 	flags.Usage = func() { c.UI.Output(c.Help()) }
 
+	flags.StringVar(&addr, "consul-address", "", "")
 	flags.StringVar(&variables, "var-file", "", "")
 	flags.StringVar(&outPath, "out", "", "")
 
@@ -78,7 +83,7 @@ func (c *RenderCommand) Run(args []string) int {
 		return 1
 	}
 
-	tpl, err = template.RenderTemplate(templateFile, variables, &c.Meta.flagVars)
+	tpl, err = template.RenderTemplate(templateFile, variables, addr, &c.Meta.flagVars)
 	if err != nil {
 		c.UI.Error(fmt.Sprintf("[ERROR] levant/command: %v", err))
 		return 1
