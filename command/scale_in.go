@@ -47,8 +47,8 @@ Scale In Options:
     one of count or percent can be passed.
 
   -task-group=<name>
-    The name of the task group you wish to target for scaling. Is this is not
-    speicified all task groups within the job will be scaled.
+    The name of the task group you wish to target for scaling. If this is not
+    specified, all task groups within the job will be scaled.
 `
 	return strings.TrimSpace(helpText)
 }
