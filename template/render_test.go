@@ -8,10 +8,10 @@ import (
 )
 
 const (
-	testJobName 			= "levantExample"
-	testJobNameOverwrite 	= "levantExampleOverwrite"
-	testJobNameOverwrite2 	= "levantExampleOverwrite2"
-	testDCName  			= "dc13"
+	testJobName           = "levantExample"
+	testJobNameOverwrite  = "levantExampleOverwrite"
+	testJobNameOverwrite2 = "levantExampleOverwrite2"
+	testDCName            = "dc13"
 )
 
 func TestTemplater_RenderTemplate(t *testing.T) {
@@ -41,7 +41,7 @@ func TestTemplater_RenderTemplate(t *testing.T) {
 	}
 
 	// Test multiple var-files
-	job, err = RenderJob("test-fixtures/single_templated.nomad", []string{"test-fixtures/test.yaml","test-fixtures/test-overwrite.yaml"}, "", &fVars)
+	job, err = RenderJob("test-fixtures/single_templated.nomad", []string{"test-fixtures/test.yaml", "test-fixtures/test-overwrite.yaml"}, "", &fVars)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func TestTemplater_RenderTemplate(t *testing.T) {
 	}
 
 	// Test multiple var-files of different types
-	job, err = RenderJob("test-fixtures/single_templated.nomad", []string{"test-fixtures/test.tf","test-fixtures/test-overwrite.yaml"}, "", &fVars)
+	job, err = RenderJob("test-fixtures/single_templated.nomad", []string{"test-fixtures/test.tf", "test-fixtures/test-overwrite.yaml"}, "", &fVars)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestTemplater_RenderTemplate(t *testing.T) {
 
 	// Test multiple var-files with var-args
 	fVars["job_name"] = testJobNameOverwrite2
-	job, err = RenderJob("test-fixtures/single_templated.nomad", []string{"test-fixtures/test.tf","test-fixtures/test-overwrite.yaml"}, "", &fVars)
+	job, err = RenderJob("test-fixtures/single_templated.nomad", []string{"test-fixtures/test.tf", "test-fixtures/test-overwrite.yaml"}, "", &fVars)
 	if err != nil {
 		t.Fatal(err)
 	}
