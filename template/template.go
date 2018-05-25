@@ -12,7 +12,7 @@ type tmpl struct {
 	consulClient    *consul.Client
 	flagVariables   *map[string]string
 	jobTemplateFile string
-	variableFile    string
+	variableFile    []string
 }
 
 const (

@@ -40,7 +40,7 @@ type Config struct {
 	// before being deployed to the cluster.
 	TemplateFile string
 
-	// VaiableFile contains the variables which will be substituted into the
+	// VariableFiles contains the variables which will be substituted into the
 	// templateFile before deployment.
-	VaiableFile string
+	VariableFiles []string
 }

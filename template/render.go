@@ -18,7 +18,7 @@ import (
 
 // RenderJob takes in a template and variables performing a render of the
 // template followed by Nomad jobspec parse.
-func RenderJob(templateFile, variableFile, addr string, flagVars *map[string]string) (job *nomad.Job, err error) {
+func RenderJob(templateFile string, variableFile []string, addr string, flagVars *map[string]string) (job *nomad.Job, err error) {
 	var tpl *bytes.Buffer
 	tpl, err = RenderTemplate(templateFile, variableFile, addr, flagVars)
 	if err != nil {
@@ -31,7 +31,7 @@ func RenderJob(templateFile, variableFile, addr string, flagVars *map[string]str
 
 // RenderTemplate is the main entry point to render the template based on the
 // passed variables file.
-func RenderTemplate(templateFile, variableFile, addr string, flagVars *map[string]string) (tpl *bytes.Buffer, err error) {
+func RenderTemplate(templateFile string, variableFile []string, addr string, flagVars *map[string]string) (tpl *bytes.Buffer, err error) {
 
 	t := &tmpl{}
 	t.flagVariables = flagVars
@@ -45,18 +45,41 @@ func RenderTemplate(templateFile, variableFile, addr string, flagVars *map[strin
 
 	t.consulClient = c
 
-	if variableFile == "" {
+	if len(variableFile) == 0 {
 		log.Debug().Msgf("template/render: no variable file passed, trying defaults")
-		if t.variableFile = helper.GetDefaultVarFile(); t.variableFile != "" {
-			log.Debug().Msgf("template/render: found default variable file, using %s", t.variableFile)
+		defaultVarFile := helper.GetDefaultVarFile()
+		if defaultVarFile != "" {
+			t.variableFile = make([]string, 1)
+			t.variableFile[0] = defaultVarFile
+			log.Debug().Msgf("template/render: found default variable file, using %s", t.variableFile[0])
 		}
 	}
 
-	// Process the variable file extension and log DEBUG so the template can be
-	// correctly rendered.
-	var ext string
-	if ext = path.Ext(t.variableFile); ext != "" {
-		log.Debug().Msgf("template/render: variable file extension %s detected", ext)
+	mergedVariables := make(map[string]interface{})
+	for _, varFile := range variableFile {
+		// Process the variable file extension and log DEBUG so the template can be
+		// correctly rendered.
+		var ext string
+		if ext = path.Ext(varFile); ext != "" {
+			log.Debug().Msgf("template/render: variable file extension %s detected", ext)
+		}
+
+		var variables map[string]interface{}
+		switch ext {
+		case terraformVarExtension:
+			variables, err = t.parseTFVars(varFile)
+		case yamlVarExtension, ymlVarExtension:
+			variables, err = t.parseYAMLVars(varFile)
+		default:
+			err = fmt.Errorf("variables file extension %v not supported", ext)
+		}
+
+		if err != nil {
+			return
+		}
+		for k, v := range variables {
+			mergedVariables[k] = v
+		}
 	}
 
 	src, err := ioutil.ReadFile(t.jobTemplateFile)
@@ -70,94 +93,42 @@ func RenderTemplate(templateFile, variableFile, addr string, flagVars *map[strin
 		log.Debug().Msgf("template/render: no command line variables passed")
 	}
 
-	switch ext {
-	case terraformVarExtension:
-		tpl, err = t.renderTF(string(src))
-
-	case yamlVarExtension, ymlVarExtension:
-		// Run the render using a YAML variable file.
-		tpl, err = t.renderYAMLVars(string(src))
-
-	case "":
-		// No variables file passed; render using any passed CLI variables.
-		log.Debug().Msgf("template/render: variable file not passed")
-		tpl, err = t.readJobFile(string(src))
-
-	default:
-		err = fmt.Errorf("variables file extension %v not supported", ext)
-	}
+	tpl, err = t.renderTemplate(string(src), mergedVariables)
 
 	return
 }
 
-func (t *tmpl) renderTF(src string) (tpl *bytes.Buffer, err error) {
+func (t *tmpl) parseTFVars(variableFile string) (variables map[string]interface{}, err error) {
 
 	c := &config.Config{}
-
-	// Setup our variables map and template
-	variables := make(map[string]interface{})
-	tpl = &bytes.Buffer{}
-
-	// Load the variables file
-	if c, err = config.LoadFile(t.variableFile); err != nil {
+	if c, err = config.LoadFile(variableFile); err != nil {
 		return
 	}
 
-	// Populate our map with the parsed variables
+	variables = make(map[string]interface{})
 	for _, variable := range c.Variables {
 		variables[variable.Name] = variable.Default
 	}
 
-	// Merge variables passed on the CLI with those passed through a variables
-	// file.
-	mergedVars := helper.VariableMerge(&variables, t.flagVariables)
-
-	// Setup the template file for rendering
-	tmpl := t.newTemplate()
-
-	if tmpl, err = tmpl.Parse(src); err != nil {
-		return
-	}
-
-	if err = tmpl.Execute(tpl, mergedVars); err != nil {
-		return
-	}
-	return tpl, nil
+	return variables, nil
 }
 
-func (t *tmpl) renderYAMLVars(src string) (tpl *bytes.Buffer, err error) {
+func (t *tmpl) parseYAMLVars(variableFile string) (variables map[string]interface{}, err error) {
 
-	// Setup our variables map and template
-	variables := make(map[string]interface{})
-	tpl = &bytes.Buffer{}
-
-	yamlFile, err := ioutil.ReadFile(t.variableFile)
+	yamlFile, err := ioutil.ReadFile(variableFile)
 	if err != nil {
 		return
 	}
 
+	variables = make(map[string]interface{})
 	if err = yaml.Unmarshal(yamlFile, &variables); err != nil {
 		return
 	}
 
-	// Merge variables passed on the CLI with those passed through a variables
-	// file.
-	mergedVars := helper.VariableMerge(&variables, t.flagVariables)
-
-	// Setup the template file for rendering
-	tmpl := t.newTemplate()
-	if tmpl, err = tmpl.Parse(string(src)); err != nil {
-		return
-	}
-
-	if err = tmpl.Execute(tpl, mergedVars); err != nil {
-		return
-	}
-
-	return tpl, nil
+	return variables, nil
 }
 
-func (t *tmpl) readJobFile(src string) (tpl *bytes.Buffer, err error) {
+func (t *tmpl) renderTemplate(src string, variables map[string]interface{}) (tpl *bytes.Buffer, err error) {
 
 	tpl = &bytes.Buffer{}
 
@@ -167,9 +138,14 @@ func (t *tmpl) readJobFile(src string) (tpl *bytes.Buffer, err error) {
 		return
 	}
 
-	if err = tmpl.Execute(tpl, t.flagVariables); err != nil {
-		return
+	if variables != nil {
+		// Merge variables passed on the CLI with those passed through a variables file.
+		err = tmpl.Execute(tpl, helper.VariableMerge(&variables, t.flagVariables))
+	} else {
+		// No variables file passed; render using any passed CLI variables.
+		log.Debug().Msgf("template/render: variable file not passed")
+		err = tmpl.Execute(tpl, t.flagVariables)
 	}
 
-	return tpl, nil
+	return tpl, err
 }
