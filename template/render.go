@@ -18,9 +18,9 @@ import (
 
 // RenderJob takes in a template and variables performing a render of the
 // template followed by Nomad jobspec parse.
-func RenderJob(templateFile string, variableFile []string, addr string, flagVars *map[string]string) (job *nomad.Job, err error) {
+func RenderJob(templateFile string, variableFiles []string, addr string, flagVars *map[string]string) (job *nomad.Job, err error) {
 	var tpl *bytes.Buffer
-	tpl, err = RenderTemplate(templateFile, variableFile, addr, flagVars)
+	tpl, err = RenderTemplate(templateFile, variableFiles, addr, flagVars)
 	if err != nil {
 		return
 	}
@@ -31,12 +31,12 @@ func RenderJob(templateFile string, variableFile []string, addr string, flagVars
 
 // RenderTemplate is the main entry point to render the template based on the
 // passed variables file.
-func RenderTemplate(templateFile string, variableFile []string, addr string, flagVars *map[string]string) (tpl *bytes.Buffer, err error) {
+func RenderTemplate(templateFile string, variableFiles []string, addr string, flagVars *map[string]string) (tpl *bytes.Buffer, err error) {
 
 	t := &tmpl{}
 	t.flagVariables = flagVars
 	t.jobTemplateFile = templateFile
-	t.variableFile = variableFile
+	t.variableFiles = variableFiles
 
 	c, err := client.NewConsulClient(addr)
 	if err != nil {
@@ -45,31 +45,31 @@ func RenderTemplate(templateFile string, variableFile []string, addr string, fla
 
 	t.consulClient = c
 
-	if len(variableFile) == 0 {
+	if len(variableFiles) == 0 {
 		log.Debug().Msgf("template/render: no variable file passed, trying defaults")
 		defaultVarFile := helper.GetDefaultVarFile()
 		if defaultVarFile != "" {
-			t.variableFile = make([]string, 1)
-			t.variableFile[0] = defaultVarFile
-			log.Debug().Msgf("template/render: found default variable file, using %s", t.variableFile[0])
+			t.variableFiles = make([]string, 1)
+			t.variableFiles[0] = defaultVarFile
+			log.Debug().Msgf("template/render: found default variable file, using %s", t.variableFiles[0])
 		}
 	}
 
 	mergedVariables := make(map[string]interface{})
-	for _, varFile := range variableFile {
+	for _, variableFile := range variableFiles {
 		// Process the variable file extension and log DEBUG so the template can be
 		// correctly rendered.
 		var ext string
-		if ext = path.Ext(varFile); ext != "" {
+		if ext = path.Ext(variableFile); ext != "" {
 			log.Debug().Msgf("template/render: variable file extension %s detected", ext)
 		}
 
 		var variables map[string]interface{}
 		switch ext {
 		case terraformVarExtension:
-			variables, err = t.parseTFVars(varFile)
+			variables, err = t.parseTFVars(variableFile)
 		case yamlVarExtension, ymlVarExtension:
-			variables, err = t.parseYAMLVars(varFile)
+			variables, err = t.parseYAMLVars(variableFile)
 		default:
 			err = fmt.Errorf("variables file extension %v not supported", ext)
 		}
