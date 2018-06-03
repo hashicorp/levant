@@ -45,6 +45,12 @@ General Options:
     The Consul host and port to use when making Consul KeyValue lookups for
     template rendering.
 
+  -exit-after-auto-revert
+    Determine whether Levant will exit (with non-zero exit code) after a 
+    deployment auto-reverts to the previous stable job. This flag is useful
+    if you want to be notified in case auto-revert happens (e.g. to fail your
+    CD pipeline).
+
   -force-batch
     Forces a new instance of the periodic job. A new instance will be created
     even if it violates the job's prohibit_overlap settings.
@@ -86,6 +92,7 @@ func (c *DeployCommand) Run(args []string) int {
 	flags.StringVar(&config.Addr, "address", "", "")
 	flags.IntVar(&config.Canary, "canary-auto-promote", 0, "")
 	flags.StringVar(&addr, "consul-address", "", "")
+	flags.BoolVar(&config.ExitAfterAutoRevert, "exit-after-auto-revert", false, "")
 	flags.BoolVar(&config.ForceBatch, "force-batch", false, "")
 	flags.BoolVar(&config.ForceCount, "force-count", false, "")
 	flags.StringVar(&config.LogLevel, "log-level", "INFO", "")

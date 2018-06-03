@@ -3,6 +3,8 @@ package levant
 import (
 	"time"
 
+	"os"
+
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/rs/zerolog/log"
 )
@@ -17,6 +19,9 @@ func (l *levantDeployment) autoRevert(jobID, depID *string) {
 		dep, _, err := l.nomad.Jobs().LatestDeployment(*jobID, nil)
 		if err != nil {
 			log.Error().Msgf("levant/auto_revert: unable to query latest deployment of job %s", *jobID)
+			if l.config.ExitAfterAutoRevert {
+				os.Exit(1)
+			}
 			return
 		}
 
@@ -33,10 +38,16 @@ func (l *levantDeployment) autoRevert(jobID, depID *string) {
 
 		if success {
 			log.Info().Msgf("levant/auto_revert: auto-revert of job %s was successful", *jobID)
+			if l.config.ExitAfterAutoRevert {
+				os.Exit(1)
+			}
 			break
 		} else {
 			log.Error().Msgf("levant/auto_revert: auto-revert of job %s failed; POTENTIAL OUTAGE SITUATION", *jobID)
 			l.checkFailedDeployment(&dep.ID)
+			if l.config.ExitAfterAutoRevert {
+				os.Exit(1)
+			}
 			break
 		}
 	}
@@ -45,6 +56,9 @@ func (l *levantDeployment) autoRevert(jobID, depID *string) {
 	// is different from the original so we can't perform auto-revert checking.
 	if i == 5 {
 		log.Error().Msgf("levant/auto_revert: unable to check auto-revert of job %s", *jobID)
+		if l.config.ExitAfterAutoRevert {
+			os.Exit(2)
+		}
 	}
 }
 

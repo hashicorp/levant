@@ -19,6 +19,11 @@ type Config struct {
 	// until attempting to perfrom autopromote.
 	Canary int
 
+	// ExitAfterAutoRevert is a boolean flag that determine whether Levant will exit (with non-zero exit code)
+	// after a deployment auto-reverts to the previous stable job. This flag is useful if you want to be notified
+	// in case auto-revert happens (e.g. to fail your CD pipeline).
+	ExitAfterAutoRevert bool
+
 	// ForceBatch is a boolean flag that can be used to force a run of a periodic
 	// job upon registration.
 	ForceBatch bool
