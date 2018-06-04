@@ -24,7 +24,11 @@ func (c *DeployCommand) Help() string {
 	helpText := `
 Usage: levant deploy [options] [TEMPLATE]
 
-  Deploy a Nomad job based on input templates and variable files.
+	Deploy a Nomad job based on input templates and variable files. The deploy 
+	command supports passing variables individually on the command line. Multiple
+	commands can be passed in the format of -var 'key=value'. Variables passed 
+	via the command line take precedence over the same variable declared within 
+	a passed variable file.
 
 Arguments:
 

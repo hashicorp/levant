@@ -21,7 +21,11 @@ func (c *RenderCommand) Help() string {
 	helpText := `
 Usage: levant render [options] [TEMPLATE]
 
-  Render a Nomad job template, useful for debugging.
+  Render a Nomad job template, useful for debugging. Like deploy, the render
+  command also supports passing variables individually on the command line. 
+  Multiple vars can be passed in the format of -var 'key=value'. Variables 
+  passed via the command line take precedence over the same variable declared
+  within a passed variable file.
 
 Arguments:
 
