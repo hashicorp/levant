@@ -39,7 +39,7 @@ func (l *levantDeployment) autoRevert(jobID, depID *string) {
 		if success {
 			log.Info().Msgf("levant/auto_revert: auto-revert of job %s was successful", *jobID)
 			if l.config.ExitAfterAutoRevert {
-				os.Exit(1)
+				os.Exit(2)
 			}
 			break
 		} else {
@@ -57,7 +57,7 @@ func (l *levantDeployment) autoRevert(jobID, depID *string) {
 	if i == 5 {
 		log.Error().Msgf("levant/auto_revert: unable to check auto-revert of job %s", *jobID)
 		if l.config.ExitAfterAutoRevert {
-			os.Exit(2)
+			os.Exit(1)
 		}
 	}
 }
