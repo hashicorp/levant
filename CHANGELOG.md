@@ -3,6 +3,7 @@
 IMPROVEMENTS:
  * New `scale-in` and `scale-out` commands  allow an operator to manually scale jobs and task groups based on counts or percentages [GH-172](https://github.com/jrasell/levant/pull/172)
  * New template functions allowing the lookup of variables from Consul KVs as well as ISO-8601 timestamp generation [GH-175](https://github.com/jrasell/levant/pull/175) 
+ * Provide better command help for deploy and render commands [GH-183](https://github.com/jrasell/levant/pull/184)
 
 BUG FIXES:
  * Fix formatting with version summary output which had erronous quote [GH-170](https://github.com/jrasell/levant/pull/170)
