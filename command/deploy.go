@@ -68,6 +68,9 @@ General Options:
   -var-file=<file>
     Used in conjunction with the -job-file will deploy a templated job to your
     Nomad cluster. [default: levant.(yaml|yml|tf)]
+
+  -allow-stale
+    Allow stale consistency mode for requests into nomad.
 `
 	return strings.TrimSpace(helpText)
 }
@@ -95,6 +98,7 @@ func (c *DeployCommand) Run(args []string) int {
 	flags.StringVar(&config.LogLevel, "log-level", "INFO", "")
 	flags.StringVar(&config.LogFormat, "log-format", "HUMAN", "")
 	flags.StringVar(&config.VaiableFile, "var-file", "", "")
+	flags.BoolVar(&config.AllowStale, "allow-stale", false, "")
 
 	if err = flags.Parse(args); err != nil {
 		return 1

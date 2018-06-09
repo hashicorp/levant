@@ -43,4 +43,7 @@ type Config struct {
 	// VaiableFile contains the variables which will be substituted into the
 	// templateFile before deployment.
 	VaiableFile string
+
+	// AllowStale sets consistency level for nomad query - https://www.nomadproject.io/api/index.html#consistency-modes
+	AllowStale bool
 }
