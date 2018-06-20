@@ -44,7 +44,8 @@ General Options:
     rendered to stdout if this is not set.
 
   -var-file=<file>
-    The variables file to render the template with. [default: levant.(yaml|yml|tf)]
+    The variables file to render the template with. You can repeat this flag multiple
+    times to supply multiple var-files. [default: levant.(yaml|yml|tf)]
 `
 	return strings.TrimSpace(helpText)
 }
@@ -57,7 +58,8 @@ func (c *RenderCommand) Synopsis() string {
 // Run triggers a run of the Levant template functions.
 func (c *RenderCommand) Run(args []string) int {
 
-	var addr, variables, outPath, templateFile string
+	var addr, outPath, templateFile string
+	var variables []string
 	var err error
 	var tpl *bytes.Buffer
 
@@ -65,7 +67,7 @@ func (c *RenderCommand) Run(args []string) int {
 	flags.Usage = func() { c.UI.Output(c.Help()) }
 
 	flags.StringVar(&addr, "consul-address", "", "")
-	flags.StringVar(&variables, "var-file", "", "")
+	flags.Var((*helper.FlagStringSlice)(&variables), "var-file", "")
 	flags.StringVar(&outPath, "out", "", "")
 
 	if err = flags.Parse(args); err != nil {

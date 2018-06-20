@@ -21,7 +21,33 @@
 
 [[projects]]
   name = "github.com/aws/aws-sdk-go"
-  packages = ["aws","aws/awserr","aws/awsutil","aws/client","aws/client/metadata","aws/corehandlers","aws/credentials","aws/credentials/ec2rolecreds","aws/credentials/endpointcreds","aws/credentials/stscreds","aws/defaults","aws/ec2metadata","aws/endpoints","aws/request","aws/session","aws/signer/v4","internal/shareddefaults","private/protocol","private/protocol/query","private/protocol/query/queryutil","private/protocol/rest","private/protocol/restxml","private/protocol/xml/xmlutil","service/s3","service/sts"]
+  packages = [
+    "aws",
+    "aws/awserr",
+    "aws/awsutil",
+    "aws/client",
+    "aws/client/metadata",
+    "aws/corehandlers",
+    "aws/credentials",
+    "aws/credentials/ec2rolecreds",
+    "aws/credentials/endpointcreds",
+    "aws/credentials/stscreds",
+    "aws/defaults",
+    "aws/ec2metadata",
+    "aws/endpoints",
+    "aws/request",
+    "aws/session",
+    "aws/signer/v4",
+    "internal/shareddefaults",
+    "private/protocol",
+    "private/protocol/query",
+    "private/protocol/query/queryutil",
+    "private/protocol/rest",
+    "private/protocol/restxml",
+    "private/protocol/xml/xmlutil",
+    "service/s3",
+    "service/sts"
+  ]
   revision = "88849eea79e8e48241987b1f0a11a7a0dcbb7716"
   version = "v1.10.46"
 
@@ -76,7 +102,10 @@
 [[projects]]
   branch = "master"
   name = "github.com/hashicorp/go-getter"
-  packages = [".","helper/url"]
+  packages = [
+    ".",
+    "helper/url"
+  ]
   revision = "56c651a79a6eec93e6ef074fe9e57fefb26b8b85"
 
 [[projects]]
@@ -118,24 +147,53 @@
 [[projects]]
   branch = "master"
   name = "github.com/hashicorp/golang-lru"
-  packages = [".","simplelru"]
+  packages = [
+    ".",
+    "simplelru"
+  ]
   revision = "0a025b7e63adc15a622f29b0b2c4c3848243bbf6"
 
 [[projects]]
   branch = "master"
   name = "github.com/hashicorp/hcl"
-  packages = [".","hcl/ast","hcl/parser","hcl/scanner","hcl/strconv","hcl/token","json/parser","json/scanner","json/token"]
+  packages = [
+    ".",
+    "hcl/ast",
+    "hcl/parser",
+    "hcl/scanner",
+    "hcl/strconv",
+    "hcl/token",
+    "json/parser",
+    "json/scanner",
+    "json/token"
+  ]
   revision = "68e816d1c783414e79bc65b3994d9ab6b0a722ab"
 
 [[projects]]
   branch = "master"
   name = "github.com/hashicorp/hil"
-  packages = [".","ast","parser","scanner"]
+  packages = [
+    ".",
+    "ast",
+    "parser",
+    "scanner"
+  ]
   revision = "fa9f258a92500514cc8e9c67020487709df92432"
 
 [[projects]]
   name = "github.com/hashicorp/nomad"
-  packages = ["acl","api","api/contexts","helper","helper/args","helper/flag-helpers","helper/flatmap","helper/uuid","jobspec","nomad/structs"]
+  packages = [
+    "acl",
+    "api",
+    "api/contexts",
+    "helper",
+    "helper/args",
+    "helper/flag-helpers",
+    "helper/flatmap",
+    "helper/uuid",
+    "jobspec",
+    "nomad/structs"
+  ]
   revision = "66935893f5ef3da7f2bea4df20becc3dc232c4a0"
   version = "v0.8.0"
 
@@ -153,7 +211,11 @@
 
 [[projects]]
   name = "github.com/hashicorp/terraform"
-  packages = ["config","helper/hilmapstructure","plugin/discovery"]
+  packages = [
+    "config",
+    "helper/hilmapstructure",
+    "plugin/discovery"
+  ]
   revision = "1f054df7525613cccbbc705d639024cb8ac2264a"
   version = "v0.10.5"
 
@@ -214,12 +276,22 @@
 [[projects]]
   branch = "master"
   name = "github.com/posener/complete"
-  packages = [".","cmd","cmd/install","match"]
+  packages = [
+    ".",
+    "cmd",
+    "cmd/install",
+    "match"
+  ]
   revision = "88e59760adaddb8276c9b15511302890690e2dae"
 
 [[projects]]
   name = "github.com/rs/zerolog"
-  packages = [".","internal/cbor","internal/json","log"]
+  packages = [
+    ".",
+    "internal/cbor",
+    "internal/json",
+    "log"
+  ]
   revision = "05eafee0eb17d0150591a8f30f0fa592cc9b7471"
   version = "v1.6.0"
 
@@ -243,20 +315,39 @@
 
 [[projects]]
   name = "github.com/ulikunitz/xz"
-  packages = [".","internal/hash","internal/xlog","lzma"]
+  packages = [
+    ".",
+    "internal/hash",
+    "internal/xlog",
+    "lzma"
+  ]
   revision = "0c6b41e72360850ca4f98dc341fd999726ea007f"
   version = "v0.5.4"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/crypto"
-  packages = ["bcrypt","blake2b","blowfish","cast5","openpgp","openpgp/armor","openpgp/elgamal","openpgp/errors","openpgp/packet","openpgp/s2k"]
+  packages = [
+    "bcrypt",
+    "blake2b",
+    "blowfish",
+    "cast5",
+    "openpgp",
+    "openpgp/armor",
+    "openpgp/elgamal",
+    "openpgp/errors",
+    "openpgp/packet",
+    "openpgp/s2k"
+  ]
   revision = "b0c9c05bfe149df95eb1d25642162cca051e0466"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/net"
-  packages = ["html","html/atom"]
+  packages = [
+    "html",
+    "html/atom"
+  ]
   revision = "8351a756f30f1297fe94bbf4b767ec589c6ea6d0"
 
 [[projects]]
@@ -274,6 +365,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "99971d885ab54cf4913a1612c02532f5f0b94a9bc0441cb7cf264fe52c13e17a"
+  inputs-digest = "98c29d0067c675b6f1606dd7879683558b13d18e2768244385d4bdf589855f89"
   solver-name = "gps-cdcl"
   solver-version = 1

@@ -67,7 +67,8 @@ General Options:
 
   -var-file=<file>
     Used in conjunction with the -job-file will deploy a templated job to your
-    Nomad cluster. [default: levant.(yaml|yml|tf)]
+    Nomad cluster. You can repeat this flag multiple times to supply multiple var-files.
+	[default: levant.(yaml|yml|tf)]
 `
 	return strings.TrimSpace(helpText)
 }
@@ -94,7 +95,7 @@ func (c *DeployCommand) Run(args []string) int {
 	flags.BoolVar(&config.ForceCount, "force-count", false, "")
 	flags.StringVar(&config.LogLevel, "log-level", "INFO", "")
 	flags.StringVar(&config.LogFormat, "log-format", "HUMAN", "")
-	flags.StringVar(&config.VaiableFile, "var-file", "", "")
+	flags.Var((*helper.FlagStringSlice)(&config.VariableFiles), "var-file", "")
 
 	if err = flags.Parse(args); err != nil {
 		return 1
@@ -120,7 +121,7 @@ func (c *DeployCommand) Run(args []string) int {
 		return 1
 	}
 
-	config.Job, err = template.RenderJob(config.TemplateFile, config.VaiableFile, addr, &c.Meta.flagVars)
+	config.Job, err = template.RenderJob(config.TemplateFile, config.VariableFiles, addr, &c.Meta.flagVars)
 	if err != nil {
 		c.UI.Error(fmt.Sprintf("[ERROR] levant/command: %v", err))
 		return 1
