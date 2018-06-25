@@ -29,28 +29,9 @@ Levant is an open source templating and deployment tool for [HashiCorp Nomad](ht
 
 * Levant can be built from source by firstly cloning the repository `git clone github.com/jrasell/levant.git`. Once cloned the binary can be built using the `make` command or invoking the `build.sh` script located in the scripts directory.
 
-## Variable File Examples
+## Templating
 
-Levant currently supports `.tf`, `.yaml` and `.yml` file extensions for the declaration of template variables and uses opening and closing double squared brackets `[[ ]]` within the templated job file. This is to ensure there is no clash with existing Nomad interpolation which uses the standard `{{ }}` notation.
-
-Job Template:
-```hcl
-job "[[.job_name]]" {
-  datacenters = ["dc1"]
-  ...
-```
-
-`.tf` variables file:
-```hcl
-variable "job_name" {
-  default = "jrasell-example"
-}
-```
-
-`.yaml` or `.yml` variables file:
-```yaml
-job_name: jrasell-example
-```
+Levant includes functionality to perform template variables substituion as well as trigger built-in template function to add timestamps or retrive information from Consul. For full details please check out the [templates](./docs/templates.md) documentation page.
 
 ## Commands
 
