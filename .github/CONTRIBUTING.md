@@ -62,24 +62,4 @@ Levant is linted, tested and built using make:
 make
 ```
 
-The resulting binary file will be stored in the project root directory and is named `Levant-local` which can be invoked as required. The binary is built by default for the host system only. You can cross-compile and build binaries for a number of different systems and architectures by invoking the build script:
-
-```
-./scripts/build.sh
-```
-
-The build script outputs the binary files to `/pkg`:
-
-```
-darwin-386-levant
-darwin-amd64-levant
-freebsd-386-levant
-freebsd-amd64-levant
-freebsd-arm-levant
-linux-386-levant
-linux-amd64-levant
-linux-arm-levant
-```
-
-See [docs](https://golang.org/doc/install/source) for the whole list of available `GOOS` and `GOARCH`
-values.
+The resulting binary file will be stored in the project root directory and is named `levant-local` which can be invoked as required. The binary is built by default for the host system only. If you wish to build for different architectures and operating systems please see the [golang docs](https://golang.org/doc/install/source) for the whole list of available `GOOS` and `GOARCH` values.
