@@ -37,19 +37,9 @@ Levant includes functionality to perform template variables substituion as well 
 
 Levant supports a number of command line arguments which provide control over the Levant binary. For detail about each commands and its supported flags, please head over to the [commands](./docs/commands.md) documentation page.
 
-## Nomad Client
+## Clients
 
-The project uses the Nomad [Default API Client](https://github.com/hashicorp/nomad/blob/master/api/api.go#L191) which means the following Nomad client parameters used by Levant are configurable via environment variables:
-
- * **NOMAD_ADDR** - The address of the Nomad server.
- * **NOMAD_REGION** - The region of the Nomad servers to forward commands to.
- * **NOMAD_NAMESPACE** - The target namespace for queries and actions bound to a namespace.
- * **NOMAD_CACERT** - Path to a PEM encoded CA cert file to use to verify the Nomad server SSL certificate.
- * **NOMAD_CAPATH** - Path to a directory of PEM encoded CA cert files to verify the Nomad server SSL certificate.
- * **NOMAD_CLIENT_CERT** - Path to a PEM encoded client certificate for TLS authentication to the Nomad server.
- * **NOMAD_CLIENT_KEY** - Path to an unencrypted PEM encoded private key matching the client certificate from `NOMAD_CLIENT_CERT`.
- * **NOMAD_SKIP_VERIFY** - Do not verify TLS certificate.
- * **NOMAD_TOKEN** - The SecretID of an ACL token to use to authenticate API requests with.
+Levant utilises the Nomad and Consul offical clients and configuration can be done via a number of environment variables. For detail about these please read through the [clients](./docs/clients.md) documentation page.
 
 ## Contributing
 
