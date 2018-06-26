@@ -3,7 +3,7 @@ package command
 import (
 	"testing"
 
-	"github.com/jrasell/levant/levant"
+	"github.com/jrasell/levant/template"
 )
 
 func TestDeploy_checkCanaryAutoPromote(t *testing.T) {
@@ -30,7 +30,7 @@ func TestDeploy_checkCanaryAutoPromote(t *testing.T) {
 	}
 
 	for i, c := range cases {
-		job, err := levant.RenderJob(c.File, "", &fVars)
+		job, err := template.RenderJob(c.File, []string{}, "", &fVars)
 		if err != nil {
 			t.Fatalf("case %d failed: %v", i, err)
 		}
@@ -61,7 +61,7 @@ func TestDeploy_checkForceBatch(t *testing.T) {
 	}
 
 	for i, c := range cases {
-		job, err := levant.RenderJob(c.File, "", &fVars)
+		job, err := template.RenderJob(c.File, []string{}, "", &fVars)
 		if err != nil {
 			t.Fatalf("case %d failed: %v", i, err)
 		}

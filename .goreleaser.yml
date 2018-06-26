@@ -17,14 +17,8 @@ builds:
     # For more info refer to https://golang.org/doc/install/source#environment
     goarch:
       - amd64
-      - i386
+      - 386
       - arm
-
-    # List of combinations of GOOS + GOARCH + GOARM to ignore.
-    # Default is empty.
-    ignore:
-      - goos: darwin
-        goarch: arm
 
     # Custom ldflags template.
     # This is parsed with Golang template engine and the following variables
@@ -35,7 +29,7 @@ builds:
     # - Version (Tag with the `v` prefix stripped)
     # The default is `-s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}`
     # Date format is `2006-01-02_15:04:05`
-    ldflags: -s -w -X main.Name={{ .ProjectName }} -X main.Version={{.Version}} -X main.GitCommit={{.Commit}} -X main.BuildDate={{.Date}} -X main.GitBranch={{.Tag}} -X main.GitState={{.Tag}} -X main.GitSummary={{.Commit}}"
+    ldflags: -s -w -X main.Version={{.Version}} -X main.GitCommit={{.Commit}} -X main.BuildDate={{.Date}} -X main.GitBranch={{.Tag}} -X main.GitState={{.Tag}} -X main.GitSummary={{.Commit}}
 
 archive:
   # You can change the name of the archive.
@@ -55,14 +49,6 @@ archive:
   # In that case name_template the below specified files are ignored.
   # Default is `tar.gz`
   format: binary
-
-  # Additional files/globs you want to add to the archive.
-  # Defaults are any files matching `LICENCE*`, `LICENSE*`,
-  # `README*` and `CHANGELOG*` (case-insensitive)
-  #files:
-  #  - LICENSE
-  #  - README.md
-  #  - CHANGELOG.md
 
 release:
   # Repo in which the release will be created.

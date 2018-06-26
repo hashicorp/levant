@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/jrasell/levant/helper"
-	"github.com/jrasell/levant/levant"
+	"github.com/jrasell/levant/template"
 )
 
 // RenderCommand is the command implementation that allows users to render a
@@ -21,7 +21,11 @@ func (c *RenderCommand) Help() string {
 	helpText := `
 Usage: levant render [options] [TEMPLATE]
 
-  Render a Nomad job template, useful for debugging.
+  Render a Nomad job template, useful for debugging. Like deploy, the render
+  command also supports passing variables individually on the command line. 
+  Multiple vars can be passed in the format of -var 'key=value'. Variables 
+  passed via the command line take precedence over the same variable declared
+  within a passed variable file.
 
 Arguments:
 
@@ -29,6 +33,10 @@ Arguments:
     If no argument is given we look for a single *.nomad file
 
 General Options:
+
+  -consul-address=<addr>
+    The Consul host and port to use when making Consul KeyValue lookups for
+    template rendering.
 	
   -out=<file>
     Specify the path to write the rendered template out to, if a file exists at
@@ -36,7 +44,8 @@ General Options:
     rendered to stdout if this is not set.
 
   -var-file=<file>
-    The variables file to render the template with. [default: levant.(yaml|yml|tf)]
+    The variables file to render the template with. You can repeat this flag multiple
+    times to supply multiple var-files. [default: levant.(yaml|yml|tf)]
 `
 	return strings.TrimSpace(helpText)
 }
@@ -49,14 +58,16 @@ func (c *RenderCommand) Synopsis() string {
 // Run triggers a run of the Levant template functions.
 func (c *RenderCommand) Run(args []string) int {
 
-	var variables, outPath, templateFile string
+	var addr, outPath, templateFile string
+	var variables []string
 	var err error
 	var tpl *bytes.Buffer
 
 	flags := c.Meta.FlagSet("render", FlagSetVars)
 	flags.Usage = func() { c.UI.Output(c.Help()) }
 
-	flags.StringVar(&variables, "var-file", "", "")
+	flags.StringVar(&addr, "consul-address", "", "")
+	flags.Var((*helper.FlagStringSlice)(&variables), "var-file", "")
 	flags.StringVar(&outPath, "out", "", "")
 
 	if err = flags.Parse(args); err != nil {
@@ -78,7 +89,7 @@ func (c *RenderCommand) Run(args []string) int {
 		return 1
 	}
 
-	tpl, err = levant.RenderTemplate(templateFile, variables, &c.Meta.flagVars)
+	tpl, err = template.RenderTemplate(templateFile, variables, addr, &c.Meta.flagVars)
 	if err != nil {
 		c.UI.Error(fmt.Sprintf("[ERROR] levant/command: %v", err))
 		return 1

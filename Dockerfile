@@ -1,13 +1,21 @@
-FROM golang:alpine as builder
-
-WORKDIR /go/src/github.com/jrasell/levant
-COPY . .
-RUN apk add --no-cache make \
-    && make install
-
 FROM alpine:latest
 
-RUN apk add --no-cache ca-certificates
+LABEL maintainer James Rasell<(jamesrasell@gmail.com)> (@jrasell)
+LABEL vendor "jrasell"
 
-COPY --from=builder /go/bin/levant /usr/bin/levant
+ENV LEVANT_VERSION 0.1.1
+
+WORKDIR /usr/bin/
+
+RUN buildDeps=' \
+                bash \
+                wget \
+        ' \
+        set -x \
+        && apk --no-cache add $buildDeps ca-certificates \
+        && wget -O levant https://github.com/jrasell/levant/releases/download/${LEVANT_VERSION}/linux-amd64-levant \
+        && chmod +x /usr/bin/levant \
+        && apk del $buildDeps \
+        && echo "Build complete."
+
 CMD ["levant", "--help"]

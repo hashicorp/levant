@@ -36,13 +36,23 @@ func Commands(metaPtr *command.Meta) map[string]cli.CommandFactory {
 				Meta: meta,
 			}, nil
 		},
+    "monitor": func() (cli.Command, error) {
+			return &command.MonitorCommand{
+        Meta: meta,
+      }, nil
+    },
 		"render": func() (cli.Command, error) {
 			return &command.RenderCommand{
 				Meta: meta,
 			}, nil
 		},
-		"monitor": func() (cli.Command, error) {
-			return &command.MonitorCommand{
+		"scale-in": func() (cli.Command, error) {
+			return &command.ScaleInCommand{
+				Meta: meta,
+			}, nil
+		},
+		"scale-out": func() (cli.Command, error) {
+			return &command.ScaleOutCommand{
 				Meta: meta,
 			}, nil
 		},

@@ -7,12 +7,9 @@ import (
 
 	nomad "github.com/hashicorp/nomad/api"
 	nomadStructs "github.com/hashicorp/nomad/nomad/structs"
+	"github.com/jrasell/levant/client"
 	"github.com/jrasell/levant/levant/structs"
 	"github.com/rs/zerolog/log"
-)
-
-const (
-	jobIDContextField = "job_id"
 )
 
 // levantDeployment is the all deployment related objects for this Levant
@@ -22,48 +19,36 @@ type levantDeployment struct {
 	config *structs.Config
 }
 
-// newNomadClient is used to create a new client to interact with Nomad.
-func newNomadClient(addr string) (*nomad.Client, error) {
-	config := nomad.DefaultConfig()
-
-	if addr != "" {
-		config.Address = addr
-	}
-
-	c, err := nomad.NewClient(config)
-	if err != nil {
-		return nil, err
-	}
-
-	return c, nil
-}
-
 // newLevantDeployment sets up the Levant deployment object and Nomad client
 // to interact with the Nomad API.
-func newLevantDeployment(config *structs.Config) (*levantDeployment, error) {
+func newLevantDeployment(config *structs.Config, nomadClient *nomad.Client) (*levantDeployment, error) {
 
 	var err error
 
 	dep := &levantDeployment{}
 	dep.config = config
 
-	dep.nomad, err = newNomadClient(config.Addr)
-	if err != nil {
-		return nil, err
+	if nomadClient == nil {
+		dep.nomad, err = client.NewNomadClient(config.Addr)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		dep.nomad = nomadClient
 	}
 
 	// Add the JobID as a log context field.
-	log.Logger = log.With().Str(jobIDContextField, *config.Job.ID).Logger()
+	log.Logger = log.With().Str(structs.JobIDContextField, *config.Job.ID).Logger()
 
 	return dep, nil
 }
 
 // TriggerDeployment provides the main entry point into a Levant deployment and
 // is used to setup the clients before triggering the deployment process.
-func TriggerDeployment(config *structs.Config) bool {
+func TriggerDeployment(config *structs.Config, nomadClient *nomad.Client) bool {
 
 	// Create our new deployment object.
-	levantDep, err := newLevantDeployment(config)
+	levantDep, err := newLevantDeployment(config, nomadClient)
 	if err != nil {
 		log.Error().Err(err).Msg("levant/deploy: unable to setup Levant deployment")
 		return false

@@ -2,6 +2,7 @@ package levant
 
 import (
 	nomad "github.com/hashicorp/nomad/api"
+	"github.com/jrasell/levant/client"
 	"github.com/jrasell/levant/levant/structs"
 	"github.com/rs/zerolog/log"
 )
@@ -10,7 +11,7 @@ import (
 // is used to setup the clients before triggering the dispatch process.
 func TriggerDispatch(job string, metaMap map[string]string, payload []byte, address string) bool {
 
-	client, err := newNomadClient(address)
+	client, err := client.NewNomadClient(address)
 	if err != nil {
 		log.Error().Msgf("levant/dispatch: unable to setup Levant dispatch: %v", err)
 		return false

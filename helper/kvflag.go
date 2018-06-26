@@ -28,3 +28,15 @@ func (v *Flag) Set(raw string) error {
 	(*v)[key] = value
 	return nil
 }
+
+// FlagStringSlice is a flag.Value implementation for parsing targets from the
+// command line, e.g. -var-file=aa -var-file=bb
+type FlagStringSlice []string
+
+func (v *FlagStringSlice) String() string {
+	return ""
+}
+func (v *FlagStringSlice) Set(raw string) error {
+	*v = append(*v, raw)
+	return nil
+}

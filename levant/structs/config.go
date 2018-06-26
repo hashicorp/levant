@@ -2,6 +2,12 @@ package structs
 
 import nomad "github.com/hashicorp/nomad/api"
 
+const (
+	// JobIDContextField is the logging context feild added when interacting
+	// with jobs.
+	JobIDContextField = "job_id"
+)
+
 // Config is the main struct used to configure and run a Levant deployment on
 // a given target job.
 type Config struct {
@@ -34,7 +40,7 @@ type Config struct {
 	// before being deployed to the cluster.
 	TemplateFile string
 
-	// VaiableFile contains the variables which will be substituted into the
+	// VariableFiles contains the variables which will be substituted into the
 	// templateFile before deployment.
-	VaiableFile string
+	VariableFiles []string
 }

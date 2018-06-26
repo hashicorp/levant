@@ -10,6 +10,7 @@ import (
 	"github.com/jrasell/levant/levant"
 	"github.com/jrasell/levant/levant/structs"
 	"github.com/jrasell/levant/logging"
+	"github.com/jrasell/levant/template"
 )
 
 // DeployCommand is the command implementation that allows users to deploy a
@@ -23,7 +24,11 @@ func (c *DeployCommand) Help() string {
 	helpText := `
 Usage: levant deploy [options] [TEMPLATE]
 
-  Deploy a Nomad job based on input templates and variable files.
+	Deploy a Nomad job based on input templates and variable files. The deploy 
+	command supports passing variables individually on the command line. Multiple
+	commands can be passed in the format of -var 'key=value'. Variables passed 
+	via the command line take precedence over the same variable declared within 
+	a passed variable file.
 
 Arguments:
 
@@ -39,6 +44,10 @@ General Options:
   -canary-auto-promote=<seconds>
     The time in seconds, after which Levant will auto-promote a canary job
     if all canaries within the deployment are healthy.
+		
+  -consul-address=<addr>
+    The Consul host and port to use when making Consul KeyValue lookups for
+    template rendering.
 
   -force-batch
     Forces a new instance of the periodic job. A new instance will be created
@@ -58,7 +67,8 @@ General Options:
 
   -var-file=<file>
     Used in conjunction with the -job-file will deploy a templated job to your
-    Nomad cluster. [default: levant.(yaml|yml|tf)]
+    Nomad cluster. You can repeat this flag multiple times to supply multiple var-files.
+	[default: levant.(yaml|yml|tf)]
 `
 	return strings.TrimSpace(helpText)
 }
@@ -72,6 +82,7 @@ func (c *DeployCommand) Synopsis() string {
 func (c *DeployCommand) Run(args []string) int {
 
 	var err error
+	var addr string
 	config := &structs.Config{}
 
 	flags := c.Meta.FlagSet("deploy", FlagSetVars)
@@ -79,11 +90,12 @@ func (c *DeployCommand) Run(args []string) int {
 
 	flags.StringVar(&config.Addr, "address", "", "")
 	flags.IntVar(&config.Canary, "canary-auto-promote", 0, "")
+	flags.StringVar(&addr, "consul-address", "", "")
 	flags.BoolVar(&config.ForceBatch, "force-batch", false, "")
 	flags.BoolVar(&config.ForceCount, "force-count", false, "")
 	flags.StringVar(&config.LogLevel, "log-level", "INFO", "")
 	flags.StringVar(&config.LogFormat, "log-format", "HUMAN", "")
-	flags.StringVar(&config.VaiableFile, "var-file", "", "")
+	flags.Var((*helper.FlagStringSlice)(&config.VariableFiles), "var-file", "")
 
 	if err = flags.Parse(args); err != nil {
 		return 1
@@ -109,7 +121,7 @@ func (c *DeployCommand) Run(args []string) int {
 		return 1
 	}
 
-	config.Job, err = levant.RenderJob(config.TemplateFile, config.VaiableFile, &c.Meta.flagVars)
+	config.Job, err = template.RenderJob(config.TemplateFile, config.VariableFiles, addr, &c.Meta.flagVars)
 	if err != nil {
 		c.UI.Error(fmt.Sprintf("[ERROR] levant/command: %v", err))
 		return 1
@@ -129,7 +141,7 @@ func (c *DeployCommand) Run(args []string) int {
 		}
 	}
 
-	success := levant.TriggerDeployment(config)
+	success := levant.TriggerDeployment(config, nil)
 	if !success {
 		return 1
 	}

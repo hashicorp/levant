@@ -3,7 +3,7 @@ package version
 import "fmt"
 
 // Version is the main version number that is being run at the moment.
-const Version = "0.1.1"
+const Version = "0.2.0"
 
 // VersionPrerelease is a pre-release marker for the version. If this is ""
 // (empty string) then it means that it is a final release. Otherwise, this is
