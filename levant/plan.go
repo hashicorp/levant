@@ -17,7 +17,7 @@ var (
 // plan is the entry point into running the Levant plan function which logs all
 // changes anticipated by Nomad of the upcoming job registration. If there are
 // no planned changes here, return false to indicate we should stop the process.
-func (l *levantDeployment) plan() bool {
+func (l *levantDeployment) plan() (bool, error) {
 
 	log.Debug().Msg("levant/plan: triggering Nomad plan")
 
@@ -25,7 +25,7 @@ func (l *levantDeployment) plan() bool {
 	resp, _, err := l.nomad.Jobs().Plan(l.config.Job, true, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("levant/plan: unable to run a job plan")
-		return false
+		return false, err
 	}
 
 	switch resp.Diff.Type {
@@ -34,13 +34,13 @@ func (l *levantDeployment) plan() bool {
 	// is a new registration.
 	case diffTypeAdded:
 		log.Info().Msg("levant/plan: job is a new addition to the cluster")
-		return true
+		return true, nil
 
 	// If there are no changes, then log an error so the user can see this and
 	// exit the deployment.
 	case diffTypeNone:
 		log.Error().Msg("levant/plan: no changes detected for job")
-		return false
+		return false, nil
 
 	// If there are changes, run the planDiff function which is responsible for
 	// iterating through the plan and logging all the planned changes.
@@ -48,7 +48,7 @@ func (l *levantDeployment) plan() bool {
 		planDiff(resp.Diff)
 	}
 
-	return true
+	return true, nil
 }
 
 func planDiff(plan *nomad.JobDiff) {

@@ -27,6 +27,10 @@ type Config struct {
 	// and force the count based on the rendered job file.
 	ForceCount bool
 
+	// IgnoreNoChanges is used to allow operators to force Levant to exit cleanly
+	// even if there are no changes found during the plan.
+	IgnoreNoChanges bool
+
 	// Job represents the Nomad Job definition that will be deployed.
 	Job *nomad.Job
 
