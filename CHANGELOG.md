@@ -5,6 +5,7 @@ IMPROVEMENTS:
  * New template functions allowing the lookup of variables from Consul KVs as well as ISO-8601 timestamp generation [GH-175](https://github.com/jrasell/levant/pull/175) 
  * Multiple variable files can be passed on each run, allowing for common configuration to be shared across jobs [GH-180](https://github.com/jrasell/levant/pull/180)
  * Provide better command help for deploy and render commands [GH-183](https://github.com/jrasell/levant/pull/184)
+ * Add `-ignore-no-changes` flag to deploy CLI command which allows the changing on behaviour to exit 0 even if Levant detects 0 changes on plan [GH-196](https://github.com/jrasell/levant/pull/196)
 
 BUG FIXES:
  * Fix formatting with version summary output which had erronous quote [GH-170](https://github.com/jrasell/levant/pull/170)
