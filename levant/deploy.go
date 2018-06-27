@@ -54,9 +54,27 @@ func TriggerDeployment(config *structs.Config, nomadClient *nomad.Client) bool {
 		return false
 	}
 
-	preDep := levantDep.preDeploy()
-	if !preDep {
-		log.Error().Msg("levant/deploy: pre-deployment process failed")
+	// Run the job validation steps and count updater.
+	preDepVal := levantDep.preDeployValidate()
+	if !preDepVal {
+		log.Error().Msg("levant/deploy: pre-deployment validation process failed")
+		return false
+	}
+
+	// Run the plan functionality and return if an error occurred during the run.
+	// This would have already been logged, so its just used to control the flow
+	// and pass the correct signal up the stack.
+	c, err := levantDep.plan()
+	if err != nil {
+		return false
+	}
+
+	// If no changes were detected, see whether the user wants to exit cleanly
+	// or wants to exit 1 if no changes were detected. GH-186.
+	if !c {
+		if levantDep.config.IgnoreNoChanges {
+			return true
+		}
 		return false
 	}
 
@@ -71,7 +89,7 @@ func TriggerDeployment(config *structs.Config, nomadClient *nomad.Client) bool {
 	return true
 }
 
-func (l *levantDeployment) preDeploy() (success bool) {
+func (l *levantDeployment) preDeployValidate() (success bool) {
 
 	// Validate the job to check it is syntactically correct.
 	if _, _, err := l.nomad.Jobs().Validate(l.config.Job, nil); err != nil {
@@ -90,12 +108,6 @@ func (l *levantDeployment) preDeploy() (success bool) {
 		if err := l.dynamicGroupCountUpdater(); err != nil {
 			return
 		}
-	}
-
-	// Trigger a Nomad plan and Levants functionality to log all planned changes
-	// upon job registration.
-	if !l.plan() {
-		return
 	}
 
 	return true
