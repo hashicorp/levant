@@ -13,8 +13,8 @@ build: ## Build Levant for development purposes
 
 test: ## Run the Levant test suite with coverage
 	@echo "==> Running $@..."
-	@go test -cover -v -tags \
-		"$(BUILDTAGS) cgo" $(shell go list ./... | grep -v vendor)
+	@go test -cover -v -tags -race \
+		"$(BUILDTAGS)" $(shell go list ./... | grep -v vendor)
 
 release: ## Trigger the release build script
 	@echo "==> Running $@..."
