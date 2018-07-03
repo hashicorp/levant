@@ -21,13 +21,15 @@ Levant is an open source templating and deployment tool for [HashiCorp Nomad](ht
 
 * **Auto Revert Checking**: In the event that a job deployment does not pass its healthy threshold and the job has auto-revert enabled; Levant will track the resulting rollback deployment so you can see the exact outcome of the deployment process.
 
-## Download
+## Download & Install
 
-* The Levant binary can be downloaded from the [GitHub releases page](https://github.com/jrasell/levant/releases) using `curl -L https://github.com/jrasell/levant/releases/download/0.1.0/linux-amd64-levant -o levant`
+* The Levant binary can be downloaded from the [GitHub releases page](https://github.com/jrasell/levant/releases) using `curl -L https://github.com/jrasell/levant/releases/download/0.1.1/linux-amd64-levant -o levant`
 
 * A docker image can be found on [Docker Hub](https://hub.docker.com/r/jrasell/levant/), the latest version can be downloaded using `docker pull jrasell/levant`.
 
 * Levant can be built from source by firstly cloning the repository `git clone github.com/jrasell/levant.git`. Once cloned the binary can be built using the `make` command or invoking the `build.sh` script located in the scripts directory.
+
+* There is a [Levant Ansible role](https://github.com/stevenscg/ansible-role-levant) available to help installation on machines. Thanks to @stevenscg for this.
 
 ## Templating
 
