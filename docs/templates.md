@@ -99,6 +99,40 @@ Render:
 localhost:3306
 ```
 
+#### loop
+
+Accepts varying parameters and differs its behavior based on those parameters as detailed below.
+
+If loop is given a signle int input, it will loop up to, but not including the given integer from index 0:
+
+Example:
+```
+[[ range $i := loop 3 ]]
+this-is-loop[[ $i ]][[ end ]]
+```
+
+Render:
+```
+this-is-output0
+this-is-output1
+this-is-output2
+```
+
+If given two integers, this function will begin at the first integer and loop up to but not including the second integer:
+
+Example:
+```
+[[ range $i := loop 3 6 ]]
+this-is-loop[[ $i ]][[ end ]]
+```
+
+Render:
+```
+this-is-output3
+this-is-output4
+this-is-output5
+```
+
 #### timeNow
 
 Returns the current ISO_8601 standard timestamp as a string in the timezone of the machine the rendering was triggered on.
