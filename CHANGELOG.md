@@ -1,4 +1,4 @@
-## 0.2.0 (Unreleased)
+## 0.2.0 (4 July 2018)
 
 IMPROVEMENTS:
  * New `scale-in` and `scale-out` commands  allow an operator to manually scale jobs and task groups based on counts or percentages [GH-172](https://github.com/jrasell/levant/pull/172)
