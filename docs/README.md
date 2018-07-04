@@ -5,7 +5,7 @@ Welcome to the Levant documentation. The `docs` directory aims to host detailed 
 ## Documentaion Pages
 
 * [Commands](./commands.md) - detail about the Levant CLI and flags assosiated with each command.
-* [Templates](./template.md) - detail about Levant's templating engine and functions.
+* [Templates](./templates.md) - detail about Levant's templating engine and functions.
 * [Clients](./clients.md) - information on Nomad and Consul client configuration options.
 
 ## Contributing
