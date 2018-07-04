@@ -58,7 +58,7 @@ levant dispatch -log-level=debug -address=nomad.devoops -meta key=value dispatch
 
 * **-var-file** (string: "") The variables file to render the template with. This flag can be specified multiple times to supply multiple variables files.
 
-* **-output** (string: "") The path to write the rendered template to. The template will be rendered to stdout if this is not set.
+* **-out** (string: "") The path to write the rendered template to. The template will be rendered to stdout if this is not set.
 
 Like `deploy`, the `render` command also supports passing variables individually on the command line. Multiple vars can be passed in the format of `-var 'key=value'`. Variables passed via the command line take precedence over the same variable declared within a passed variable file.
 
