@@ -31,6 +31,10 @@ func GetDefaultVarFile() (varFile string) {
 		log.Debug().Msg("helper/files: using default var-file `levant.yml`")
 		return "levant.yml"
 	}
+	if _, err := os.Stat("levant.json"); !os.IsNotExist(err) {
+		log.Debug().Msg("helper/files: using default var-file `levant.json`")
+		return "levant.json"
+	}
 	if _, err := os.Stat("levant.tf"); !os.IsNotExist(err) {
 		log.Debug().Msg("helper/files: using default var-file `levant.tf`")
 		return "levant.tf"

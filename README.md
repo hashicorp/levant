@@ -17,7 +17,7 @@ Levant is an open source templating and deployment tool for [HashiCorp Nomad](ht
 
 * **Canary Auto Promotion**: In environments with advanced automation and alerting, automatic promotion of canary deployments may be desirable after a certain time threshold. Levant allows the user to specify a `canary-auto-promote` time period, which if reached with a healthy set of canaries, will automatically promote the deployment.
 
-* **Multiple Variable File Formats**: Currently Levant supports `.tf`, `.yaml` and `.yml` file extensions for the declaration of template variables. *This is planned to increase in the near future.*
+* **Multiple Variable File Formats**: Currently Levant supports `.json`, `.tf`, `.yaml`, and `.yml` file extensions for the declaration of template variables.
 
 * **Auto Revert Checking**: In the event that a job deployment does not pass its healthy threshold and the job has auto-revert enabled; Levant will track the resulting rollback deployment so you can see the exact outcome of the deployment process.
 

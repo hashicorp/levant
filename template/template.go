@@ -16,6 +16,7 @@ type tmpl struct {
 }
 
 const (
+	jsonVarExtension      = ".json"
 	terraformVarExtension = ".tf"
 	yamlVarExtension      = ".yaml"
 	ymlVarExtension       = ".yml"
