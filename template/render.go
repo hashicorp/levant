@@ -2,6 +2,7 @@ package template
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"path"
@@ -70,6 +71,8 @@ func RenderTemplate(templateFile string, variableFiles []string, addr string, fl
 			variables, err = t.parseTFVars(variableFile)
 		case yamlVarExtension, ymlVarExtension:
 			variables, err = t.parseYAMLVars(variableFile)
+		case jsonVarExtension:
+			variables, err = t.parseJSONVars(variableFile)
 		default:
 			err = fmt.Errorf("variables file extension %v not supported", ext)
 		}
@@ -96,6 +99,21 @@ func RenderTemplate(templateFile string, variableFiles []string, addr string, fl
 	tpl, err = t.renderTemplate(string(src), mergedVariables)
 
 	return
+}
+
+func (t *tmpl) parseJSONVars(variableFile string) (variables map[string]interface{}, err error) {
+
+	jsonFile, err := ioutil.ReadFile(variableFile)
+	if err != nil {
+		return
+	}
+
+	variables = make(map[string]interface{})
+	if err = json.Unmarshal(jsonFile, &variables); err != nil {
+		return
+	}
+
+	return variables, nil
 }
 
 func (t *tmpl) parseTFVars(variableFile string) (variables map[string]interface{}, err error) {

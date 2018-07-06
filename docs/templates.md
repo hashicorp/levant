@@ -4,52 +4,96 @@ Alongside enhanced deployments of Nomad jobs; Levant provides templating functio
 
 ### Template Substitution
 
-Levant currently supports `.tf`, `.yaml` and `.yml` file extensions for the declaration of template variables and uses opening and closing double squared brackets `[[ ]]` within the templated job file. This is to ensure there is no clash with existing Nomad interpolation which uses the standard `{{ }}` notation.
+Levant currently supports `.json`, `.tf`, `.yaml`, and `.yml` file extensions for the declaration of template variables and uses opening and closing double squared brackets `[[ ]]` within the templated job file. This is to ensure there is no clash with existing Nomad interpolation which uses the standard `{{ }}` notation.
 
-Example Job Template:
+#### JSON
+
+JSON as well as YML provide the most flexible variable file format. It allows for descriptive and well organised jobs and variables file as shown below.
+
+Example job template:
 ```hcl
 resources {
-    cpu    = [[.cpu]]
-    memory = [[.memory]]
+    cpu    = [[.resources.cpu]]
+    memory = [[.resources.memory]]
 
     network {
-        mbits = [[.mbits]]
+        mbits = [[.resources.network.mbits]]
     }
 }
 ```
 
-`.tf` variables file:
-```hcl
-variable "cpu" {
-  default = 250
-}
-
-variable "memory" {
-  default = 512
-}
-
-variable "mbits" {
-  default = 10
+Example variable file:
+```json
+{
+    "resources":{
+        "cpu":250,
+        "memory":512,
+        "network":{
+            "mbits":10
+        }
+    }
 }
 ```
 
-`.yaml` or `.yml` variables file:
+#### Terraform
+
+Terraform (.tf) is probably the most inflexible of the variable file formats but does provide an easy to follow, descriptive manner in which to work. It may also be advantageous to use this format if you use Terraform for infrastructure as code thus allow you to use a consistant file format.
+
+Example job template:
+```hcl
+resources {
+    cpu    = [[.resources_cpu]]
+    memory = [[.resources_memory]]
+
+    network {
+        mbits = [[.resources_network_mbits]]
+    }
+}
+```
+
+Example variable file:
+```hcl
+variable "resources_cpu" {
+  description = "the CPU in MHz to allocate to the task group"
+  type        = "string"
+  default     = 250
+}
+
+variable "resources_memory" {
+  description = "the memory in MB to allocate to the task group"
+  type        = "string"
+  default     = 512
+}
+
+variable "resources_network_mbits" {
+  description = "the network bandwidth in MBits to allocate"
+  type        = "string"
+  default     = 10
+}
+```
+
+#### YAML
+
+Example job template:
+```hcl
+resources {
+    cpu    = [[.resources.cpu]]
+    memory = [[.resources.memory]]
+
+    network {
+        mbits = [[.resources.network.mbits]]
+    }
+}
+```
+
+Example variable file:
 ```yaml
-cpu: 250
-memory: 512
-mbits: 10
-```
-
-Render:
-```hcl
-resources {
-    cpu    = 250
-    memory = 512
-
-    network {
-        mbits = 10
-    }
-}
+---
+resources:
+  cpu: 250
+  memory: 512
+  network:
+    mbits: 10
 ```
 
 ### Template Functions

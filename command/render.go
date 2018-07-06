@@ -45,7 +45,7 @@ General Options:
 
   -var-file=<file>
     The variables file to render the template with. You can repeat this flag multiple
-    times to supply multiple var-files. [default: levant.(yaml|yml|tf)]
+    times to supply multiple var-files. [default: levant.(json|yaml|yml|tf)]
 `
 	return strings.TrimSpace(helpText)
 }
