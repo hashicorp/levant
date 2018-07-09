@@ -12,10 +12,11 @@ type tmpl struct {
 	consulClient    *consul.Client
 	flagVariables   *map[string]string
 	jobTemplateFile string
-	variableFile    string
+	variableFiles   []string
 }
 
 const (
+	jsonVarExtension      = ".json"
 	terraformVarExtension = ".tf"
 	yamlVarExtension      = ".yaml"
 	ymlVarExtension       = ".yml"

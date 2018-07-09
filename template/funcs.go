@@ -2,6 +2,7 @@ package template
 
 import (
 	"errors"
+	"fmt"
 	"text/template"
 	"time"
 
@@ -16,6 +17,7 @@ func funcMap(consulClient *consul.Client) template.FuncMap {
 		"consulKey":          consulKeyFunc(consulClient),
 		"consulKeyExists":    consulKeyExistsFunc(consulClient),
 		"consulKeyOrDefault": consulKeyOrDefaultFunc(consulClient),
+		"loop":               loop,
 		"timeNow":            timeNowFunc,
 		"timeNowUTC":         timeNowUTCFunc,
 		"timeNowTimezone":    timeNowTimezoneFunc(),
@@ -92,6 +94,30 @@ func consulKeyOrDefaultFunc(consulClient *consul.Client) func(string, string) (s
 
 		return v, nil
 	}
+}
+
+func loop(ints ...int64) (<-chan int64, error) {
+	var start, stop int64
+	switch len(ints) {
+	case 1:
+		start, stop = 0, ints[0]
+	case 2:
+		start, stop = ints[0], ints[1]
+	default:
+		return nil, fmt.Errorf("loop: wrong number of arguments, expected 1 or 2"+
+			", but got %d", len(ints))
+	}
+
+	ch := make(chan int64)
+
+	go func() {
+		for i := start; i < stop; i++ {
+			ch <- i
+		}
+		close(ch)
+	}()
+
+	return ch, nil
 }
 
 func timeNowFunc() string {

@@ -15,6 +15,9 @@ type Config struct {
 	// protocol and port.
 	Addr string
 
+	// AllowStale sets consistency level for nomad query - https://www.nomadproject.io/api/index.html#consistency-modes
+	AllowStale bool
+
 	// Canary enables canary autopromote and is the value in seconds to wait
 	// until attempting to perfrom autopromote.
 	Canary int
@@ -26,6 +29,10 @@ type Config struct {
 	// ForceCount is a boolean flag that can be used to ignore running job counts
 	// and force the count based on the rendered job file.
 	ForceCount bool
+
+	// IgnoreNoChanges is used to allow operators to force Levant to exit cleanly
+	// even if there are no changes found during the plan.
+	IgnoreNoChanges bool
 
 	// Job represents the Nomad Job definition that will be deployed.
 	Job *nomad.Job
@@ -40,10 +47,7 @@ type Config struct {
 	// before being deployed to the cluster.
 	TemplateFile string
 
-	// VaiableFile contains the variables which will be substituted into the
+	// VariableFiles contains the variables which will be substituted into the
 	// templateFile before deployment.
-	VaiableFile string
-
-	// AllowStale sets consistency level for nomad query - https://www.nomadproject.io/api/index.html#consistency-modes
-	AllowStale bool
+	VariableFiles []string
 }

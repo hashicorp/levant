@@ -24,11 +24,11 @@ func (c *DeployCommand) Help() string {
 	helpText := `
 Usage: levant deploy [options] [TEMPLATE]
 
-	Deploy a Nomad job based on input templates and variable files. The deploy 
-	command supports passing variables individually on the command line. Multiple
-	commands can be passed in the format of -var 'key=value'. Variables passed 
-	via the command line take precedence over the same variable declared within 
-	a passed variable file.
+  Deploy a Nomad job based on input templates and variable files. The deploy
+  command supports passing variables individually on the command line. Multiple
+  commands can be passed in the format of -var 'key=value'. Variables passed
+  via the command line take precedence over the same variable declared within
+  a passed variable file.
 
 Arguments:
 
@@ -40,6 +40,9 @@ General Options:
   -address=<http_address>
     The Nomad HTTP API address including port which Levant will use to make
     calls.
+
+  -allow-stale
+    Allow stale consistency mode for requests into nomad.
 
   -canary-auto-promote=<seconds>
     The time in seconds, after which Levant will auto-promote a canary job
@@ -57,6 +60,12 @@ General Options:
     Use the taskgroup count from the Nomad jobfile instead of the count that
     is currently set in a running job.
 
+  -ignore-no-changes
+    By default if no changes are detected when running a deployment Levant will
+    exit with a status 1 to indicate a deployment didn't happen. This behaviour
+    can be changed using this flag so that Levant will exit cleanly ensuring CD
+    pipelines don't fail when no changes are detected.
+
   -log-level=<level>
     Specify the verbosity level of Levant's logs. Valid values include DEBUG,
     INFO, and WARN, in decreasing order of verbosity. The default is INFO.
@@ -67,10 +76,8 @@ General Options:
 
   -var-file=<file>
     Used in conjunction with the -job-file will deploy a templated job to your
-    Nomad cluster. [default: levant.(yaml|yml|tf)]
-
-  -allow-stale
-    Allow stale consistency mode for requests into nomad.
+    Nomad cluster. You can repeat this flag multiple times to supply multiple var-files.
+    [default: levant.(json|yaml|yml|tf)]
 `
 	return strings.TrimSpace(helpText)
 }
@@ -95,10 +102,15 @@ func (c *DeployCommand) Run(args []string) int {
 	flags.StringVar(&addr, "consul-address", "", "")
 	flags.BoolVar(&config.ForceBatch, "force-batch", false, "")
 	flags.BoolVar(&config.ForceCount, "force-count", false, "")
+	flags.BoolVar(&config.IgnoreNoChanges, "ignore-no-changes", false, "")
 	flags.StringVar(&config.LogLevel, "log-level", "INFO", "")
 	flags.StringVar(&config.LogFormat, "log-format", "HUMAN", "")
+<<<<<<< HEAD
 	flags.StringVar(&config.VaiableFile, "var-file", "", "")
 	flags.BoolVar(&config.AllowStale, "allow-stale", false, "")
+=======
+	flags.Var((*helper.FlagStringSlice)(&config.VariableFiles), "var-file", "")
+>>>>>>> b4741ff0afd8ccfaef7c23a1676e455eceeb77cb
 
 	if err = flags.Parse(args); err != nil {
 		return 1
@@ -124,7 +136,7 @@ func (c *DeployCommand) Run(args []string) int {
 		return 1
 	}
 
-	config.Job, err = template.RenderJob(config.TemplateFile, config.VaiableFile, addr, &c.Meta.flagVars)
+	config.Job, err = template.RenderJob(config.TemplateFile, config.VariableFiles, addr, &c.Meta.flagVars)
 	if err != nil {
 		c.UI.Error(fmt.Sprintf("[ERROR] levant/command: %v", err))
 		return 1

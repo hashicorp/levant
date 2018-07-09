@@ -60,7 +60,14 @@ func RunCustom(args []string, commands map[string]cli.CommandFactory) int {
 
 	exitCode, err := cli.Run()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error executing CLI: %s\n", err.Error())
+		_, pErr := fmt.Fprintf(os.Stderr, "Error executing CLI: %s\n", err.Error())
+
+		// If we are unable to log to stderr; try just printing the error to
+		// provide some insight.
+		if pErr != nil {
+			fmt.Print(pErr)
+		}
+
 		return 1
 	}
 
