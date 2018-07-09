@@ -98,6 +98,7 @@ func (c *DeployCommand) Run(args []string) int {
 	flags.Usage = func() { c.UI.Output(c.Help()) }
 
 	flags.StringVar(&config.Addr, "address", "", "")
+	flags.BoolVar(&config.AllowStale, "allow-stale", false, "")d
 	flags.IntVar(&config.Canary, "canary-auto-promote", 0, "")
 	flags.StringVar(&addr, "consul-address", "", "")
 	flags.BoolVar(&config.ForceBatch, "force-batch", false, "")
@@ -105,12 +106,7 @@ func (c *DeployCommand) Run(args []string) int {
 	flags.BoolVar(&config.IgnoreNoChanges, "ignore-no-changes", false, "")
 	flags.StringVar(&config.LogLevel, "log-level", "INFO", "")
 	flags.StringVar(&config.LogFormat, "log-format", "HUMAN", "")
-<<<<<<< HEAD
-	flags.StringVar(&config.VaiableFile, "var-file", "", "")
-	flags.BoolVar(&config.AllowStale, "allow-stale", false, "")
-=======
 	flags.Var((*helper.FlagStringSlice)(&config.VariableFiles), "var-file", "")
->>>>>>> b4741ff0afd8ccfaef7c23a1676e455eceeb77cb
 
 	if err = flags.Parse(args); err != nil {
 		return 1
