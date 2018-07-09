@@ -98,7 +98,7 @@ func (c *DeployCommand) Run(args []string) int {
 	flags.Usage = func() { c.UI.Output(c.Help()) }
 
 	flags.StringVar(&config.Addr, "address", "", "")
-	flags.BoolVar(&config.AllowStale, "allow-stale", false, "")d
+	flags.BoolVar(&config.AllowStale, "allow-stale", false, "")
 	flags.IntVar(&config.Canary, "canary-auto-promote", 0, "")
 	flags.StringVar(&addr, "consul-address", "", "")
 	flags.BoolVar(&config.ForceBatch, "force-batch", false, "")
