@@ -8,8 +8,9 @@ import (
 	"github.com/mitchellh/cli"
 )
 
+// These variables are populated by govvv during build time to provide detailed
+// version output information.
 var (
-	// variables populated by govvv(1)
 	Version    = "dev"
 	BuildDate  string
 	GitCommit  string

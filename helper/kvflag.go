@@ -13,7 +13,8 @@ func (v *Flag) String() string {
 	return ""
 }
 
-// Set takes...
+// Set takes a flag variable argument and pulls the correct key and value to
+// create or add to a map.
 func (v *Flag) Set(raw string) error {
 	idx := strings.Index(raw, "=")
 	if idx == -1 {
@@ -36,6 +37,9 @@ type FlagStringSlice []string
 func (v *FlagStringSlice) String() string {
 	return ""
 }
+
+// Set is used to append a variable file flag argument to a list of file flag
+// args.
 func (v *FlagStringSlice) Set(raw string) error {
 	*v = append(*v, raw)
 	return nil

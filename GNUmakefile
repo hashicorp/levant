@@ -29,6 +29,7 @@ check: ## Run the gometalinter suite
 			--sort="path" \
 			--aggregate \
 			--disable-all \
+			--enable golint \
 			--enable-gc \
 			--enable goimports \
 			--enable misspell \
