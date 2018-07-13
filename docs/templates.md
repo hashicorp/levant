@@ -177,6 +177,95 @@ this-is-output4
 this-is-output5
 ```
 
+#### parseBool
+
+Takes the given string and parses it as a boolean value which can be helpful in performing conditional checks. In the below example if the key has a value of "true" we could use it to alter what tags are added to the job:
+
+Example:
+```
+[[ if key "service/config/beta" | parseBool ]][[ "beta-release" ]][[ end ]]
+```
+
+Render:
+```
+beta-release
+```
+
+#### parseFloat
+
+Takes the given string and parses it as a base-10 float64.
+
+Example:
+```
+[[ "3.14159265359" | parseFloat ]]
+```
+
+Render:
+```
+3.14159265359
+```
+
+#### parseInt
+
+Takes the given string and parses it as a base-10 int64 and is typically combined with other helpers such as loop:
+
+Example:
+```
+[[ with $i := consulKey "service/config/conn_pool" | parseInt ]][[ range $d := loop $i ]]
+conn-pool-id-[[ $d ]][[ end ]][[ end ]]
+```
+
+Render:
+```
+conn-pool-id-0
+conn-pool-id-1
+conn-pool-id-2
+```
+
+#### parseJSON
+
+Takes the given input and parses the result as JSON. This can allow you to wrap an entire job template as shown below and pull variables from Consul KV for template rendering. The below example is based on the template substition above and expects the Consul KV to be `{"resources":{"cpu":250,"memory":512,"network":{"mbits":10}}}`:
+
+Example:
+```
+[[ with $data := consulKey "service/config/variables" | parseJSON ]]
+resources {
+    cpu    = [[.resources.cpu]]
+    memory = [[.resources.memory]]
+
+    network {
+        mbits = [[.resources.network.mbits]]
+    }
+}
+[[ end ]]
+```
+
+Render:
+```
+resources {
+    cpu    = 250
+    memory = 512
+
+    network {
+        mbits = 10
+    }
+}
+```
+
+#### parseUint
+
+Takes the given string and parses it as a base-10 int64.
+
+Example:
+```
+[[ "100" | parseUint ]]
+```
+
+Render:
+```
+100
+```
+
 #### timeNow
 
 Returns the current ISO_8601 standard timestamp as a string in the timezone of the machine the rendering was triggered on.
