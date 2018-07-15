@@ -41,6 +41,9 @@ General Options:
     The Nomad HTTP API address including port which Levant will use to make
     calls.
 
+  -allow-stale
+    Allow stale consistency mode for requests into nomad.
+
   -canary-auto-promote=<seconds>
     The time in seconds, after which Levant will auto-promote a canary job
     if all canaries within the deployment are healthy.
@@ -95,6 +98,7 @@ func (c *DeployCommand) Run(args []string) int {
 	flags.Usage = func() { c.UI.Output(c.Help()) }
 
 	flags.StringVar(&config.Addr, "address", "", "")
+	flags.BoolVar(&config.AllowStale, "allow-stale", false, "")
 	flags.IntVar(&config.Canary, "canary-auto-promote", 0, "")
 	flags.StringVar(&addr, "consul-address", "", "")
 	flags.BoolVar(&config.ForceBatch, "force-batch", false, "")

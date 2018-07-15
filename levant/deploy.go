@@ -279,7 +279,7 @@ func (l *levantDeployment) deploymentWatcher(depID string) (success bool) {
 		go l.canaryAutoPromote(depID, l.config.Canary, canaryChan, deploymentChan)
 	}
 
-	q := &nomad.QueryOptions{WaitIndex: 1, AllowStale: true, WaitTime: wt}
+	q := &nomad.QueryOptions{WaitIndex: 1, AllowStale: l.config.AllowStale, WaitTime: wt}
 
 	for {
 
@@ -384,7 +384,7 @@ func (l *levantDeployment) checkCanaryDeploymentHealth(depID string) (healthy bo
 
 	var unhealthy int
 
-	dep, _, err := l.nomad.Deployments().Info(depID, &nomad.QueryOptions{AllowStale: true})
+	dep, _, err := l.nomad.Deployments().Info(depID, &nomad.QueryOptions{AllowStale: l.config.AllowStale})
 	if err != nil {
 		log.Error().Err(err).Msgf("levant/deploy: unable to query deployment %s for health: %v", depID)
 		return

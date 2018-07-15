@@ -15,6 +15,9 @@ type Config struct {
 	// protocol and port.
 	Addr string
 
+	// AllowStale sets consistency level for nomad query - https://www.nomadproject.io/api/index.html#consistency-modes
+	AllowStale bool
+
 	// Canary enables canary autopromote and is the value in seconds to wait
 	// until attempting to perfrom autopromote.
 	Canary int
