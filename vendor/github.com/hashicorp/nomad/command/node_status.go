@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -111,9 +112,11 @@ func (c *NodeStatusCommand) AutocompleteArgs() complete.Predictor {
 	})
 }
 
+func (c *NodeStatusCommand) Name() string { return "node-status" }
+
 func (c *NodeStatusCommand) Run(args []string) int {
 
-	flags := c.Meta.FlagSet("node-status", FlagSetClient)
+	flags := c.Meta.FlagSet(c.Name(), FlagSetClient)
 	flags.Usage = func() { c.Ui.Output(c.Help()) }
 	flags.BoolVar(&c.short, "short", false, "")
 	flags.BoolVar(&c.verbose, "verbose", false, "")
@@ -130,7 +133,8 @@ func (c *NodeStatusCommand) Run(args []string) int {
 	// Check that we got either a single node or none
 	args = flags.Args()
 	if len(args) > 1 {
-		c.Ui.Error(c.Help())
+		c.Ui.Error("This command takes either one or no arguments")
+		c.Ui.Error(commandErrorText(c))
 		return 1
 	}
 
@@ -296,6 +300,27 @@ func nodeDrivers(n *api.Node) []string {
 	return drivers
 }
 
+func formatDrain(n *api.Node) string {
+	if n.DrainStrategy != nil {
+		b := new(strings.Builder)
+		b.WriteString("true")
+		if n.DrainStrategy.DrainSpec.Deadline.Nanoseconds() < 0 {
+			b.WriteString("; force drain")
+		} else if n.DrainStrategy.ForceDeadline.IsZero() {
+			b.WriteString("; no deadline")
+		} else {
+			fmt.Fprintf(b, "; %s deadline", formatTime(n.DrainStrategy.ForceDeadline))
+		}
+
+		if n.DrainStrategy.IgnoreSystemJobs {
+			b.WriteString("; ignoring system jobs")
+		}
+		return b.String()
+	}
+
+	return strconv.FormatBool(n.Drain)
+}
+
 func (c *NodeStatusCommand) formatNode(client *api.Client, node *api.Node) int {
 	// Format the header output
 	basic := []string{
@@ -303,7 +328,7 @@ func (c *NodeStatusCommand) formatNode(client *api.Client, node *api.Node) int {
 		fmt.Sprintf("Name|%s", node.Name),
 		fmt.Sprintf("Class|%s", node.NodeClass),
 		fmt.Sprintf("DC|%s", node.Datacenter),
-		fmt.Sprintf("Drain|%v", node.Drain),
+		fmt.Sprintf("Drain|%v", formatDrain(node)),
 		fmt.Sprintf("Eligibility|%s", node.SchedulingEligibility),
 		fmt.Sprintf("Status|%s", node.Status),
 	}
@@ -406,6 +431,7 @@ func (c *NodeStatusCommand) outputTruncatedNodeDriverInfo(node *api.Node) string
 			drivers = append(drivers, driverName)
 		}
 	}
+	sort.Strings(drivers)
 	return strings.Trim(strings.Join(drivers, ","), ", ")
 }
 

@@ -3,6 +3,8 @@ package command
 import (
 	"fmt"
 	"strings"
+
+	"github.com/posener/complete"
 )
 
 type ServerJoinCommand struct {
@@ -29,8 +31,18 @@ func (c *ServerJoinCommand) Synopsis() string {
 	return "Join server nodes together"
 }
 
+func (c *ServerJoinCommand) AutocompleteFlags() complete.Flags {
+	return c.Meta.AutocompleteFlags(FlagSetClient)
+}
+
+func (c *ServerJoinCommand) AutocompleteArgs() complete.Predictor {
+	return complete.PredictNothing
+}
+
+func (c *ServerJoinCommand) Name() string { return "server join" }
+
 func (c *ServerJoinCommand) Run(args []string) int {
-	flags := c.Meta.FlagSet("server-join", FlagSetClient)
+	flags := c.Meta.FlagSet(c.Name(), FlagSetClient)
 	flags.Usage = func() { c.Ui.Output(c.Help()) }
 	if err := flags.Parse(args); err != nil {
 		return 1
@@ -39,7 +51,8 @@ func (c *ServerJoinCommand) Run(args []string) int {
 	// Check that we got at least one node
 	args = flags.Args()
 	if len(args) < 1 {
-		c.Ui.Error(c.Help())
+		c.Ui.Error("One or more node addresses must be given as arguments")
+		c.Ui.Error(commandErrorText(c))
 		return 1
 	}
 	nodes := args

@@ -83,11 +83,13 @@ func (c *AllocStatusCommand) AutocompleteArgs() complete.Predictor {
 	})
 }
 
+func (c *AllocStatusCommand) Name() string { return "alloc status" }
+
 func (c *AllocStatusCommand) Run(args []string) int {
 	var short, displayStats, verbose, json bool
 	var tmpl string
 
-	flags := c.Meta.FlagSet("alloc status", FlagSetClient)
+	flags := c.Meta.FlagSet(c.Name(), FlagSetClient)
 	flags.Usage = func() { c.Ui.Output(c.Help()) }
 	flags.BoolVar(&short, "short", false, "")
 	flags.BoolVar(&verbose, "verbose", false, "")
@@ -128,7 +130,10 @@ func (c *AllocStatusCommand) Run(args []string) int {
 	}
 
 	if len(args) != 1 {
-		c.Ui.Error(c.Help())
+		c.Ui.Error("This command takes one of the following argument conditions:")
+		c.Ui.Error(" * A single <allocation>")
+		c.Ui.Error(" * No arguments, with output format specified")
+		c.Ui.Error(commandErrorText(c))
 		return 1
 	}
 	allocID := args[0]
@@ -241,34 +246,22 @@ func formatAllocBasicInfo(alloc *api.Allocation, client *api.Client, uuidLength 
 
 	if alloc.DeploymentID != "" {
 		health := "unset"
-		if alloc.DeploymentStatus != nil && alloc.DeploymentStatus.Healthy != nil {
-			if *alloc.DeploymentStatus.Healthy {
-				health = "healthy"
-			} else {
-				health = "unhealthy"
+		canary := false
+		if alloc.DeploymentStatus != nil {
+			if alloc.DeploymentStatus.Healthy != nil {
+				if *alloc.DeploymentStatus.Healthy {
+					health = "healthy"
+				} else {
+					health = "unhealthy"
+				}
 			}
+
+			canary = alloc.DeploymentStatus.Canary
 		}
 
 		basic = append(basic,
 			fmt.Sprintf("Deployment ID|%s", limit(alloc.DeploymentID, uuidLength)),
 			fmt.Sprintf("Deployment Health|%s", health))
-
-		// Check if this allocation is a canary
-		deployment, _, err := client.Deployments().Info(alloc.DeploymentID, nil)
-		if err != nil {
-			return "", fmt.Errorf("Error querying deployment %q: %s", alloc.DeploymentID, err)
-		}
-
-		canary := false
-		if state, ok := deployment.TaskGroups[alloc.TaskGroup]; ok {
-			for _, id := range state.PlacedCanaries {
-				if id == alloc.ID {
-					canary = true
-					break
-				}
-			}
-		}
-
 		if canary {
 			basic = append(basic, fmt.Sprintf("Canary|%v", true))
 		}

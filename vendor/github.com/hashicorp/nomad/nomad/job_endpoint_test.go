@@ -458,6 +458,33 @@ func TestJobEndpoint_Register_ParameterizedJob(t *testing.T) {
 	}
 }
 
+func TestJobEndpoint_Register_Dispatched(t *testing.T) {
+	t.Parallel()
+	require := require.New(t)
+	s1 := TestServer(t, func(c *Config) {
+		c.NumSchedulers = 0 // Prevent automatic dequeue
+	})
+	defer s1.Shutdown()
+	codec := rpcClient(t, s1)
+	testutil.WaitForLeader(t, s1.RPC)
+
+	// Create the register request with a job with 'Dispatch' set to true
+	job := mock.Job()
+	job.Dispatched = true
+	req := &structs.JobRegisterRequest{
+		Job: job,
+		WriteRequest: structs.WriteRequest{
+			Region:    "global",
+			Namespace: job.Namespace,
+		},
+	}
+
+	// Fetch the response
+	var resp structs.JobRegisterResponse
+	err := msgpackrpc.CallWithCodec(codec, "Job.Register", req, &resp)
+	require.Error(err)
+	require.Contains(err.Error(), "job can't be submitted with 'Dispatched'")
+}
 func TestJobEndpoint_Register_EnforceIndex(t *testing.T) {
 	t.Parallel()
 	s1 := TestServer(t, func(c *Config) {
@@ -1295,6 +1322,81 @@ func TestJobEndpoint_Evaluate(t *testing.T) {
 	if eval.Status != structs.EvalStatusPending {
 		t.Fatalf("bad: %#v", eval)
 	}
+}
+
+func TestJobEndpoint_ForceRescheduleEvaluate(t *testing.T) {
+	require := require.New(t)
+	t.Parallel()
+	s1 := TestServer(t, func(c *Config) {
+		c.NumSchedulers = 0 // Prevent automatic dequeue
+	})
+	defer s1.Shutdown()
+	codec := rpcClient(t, s1)
+	testutil.WaitForLeader(t, s1.RPC)
+
+	// Create the register request
+	job := mock.Job()
+	req := &structs.JobRegisterRequest{
+		Job: job,
+		WriteRequest: structs.WriteRequest{
+			Region:    "global",
+			Namespace: job.Namespace,
+		},
+	}
+
+	// Fetch the response
+	var resp structs.JobRegisterResponse
+	err := msgpackrpc.CallWithCodec(codec, "Job.Register", req, &resp)
+	require.Nil(err)
+	require.NotEqual(0, resp.Index)
+
+	state := s1.fsm.State()
+	job, err = state.JobByID(nil, structs.DefaultNamespace, job.ID)
+	require.Nil(err)
+
+	// Create a failed alloc
+	alloc := mock.Alloc()
+	alloc.Job = job
+	alloc.JobID = job.ID
+	alloc.TaskGroup = job.TaskGroups[0].Name
+	alloc.Namespace = job.Namespace
+	alloc.ClientStatus = structs.AllocClientStatusFailed
+	err = s1.State().UpsertAllocs(resp.Index+1, []*structs.Allocation{alloc})
+	require.Nil(err)
+
+	// Force a re-evaluation
+	reEval := &structs.JobEvaluateRequest{
+		JobID:       job.ID,
+		EvalOptions: structs.EvalOptions{ForceReschedule: true},
+		WriteRequest: structs.WriteRequest{
+			Region:    "global",
+			Namespace: job.Namespace,
+		},
+	}
+
+	// Fetch the response
+	err = msgpackrpc.CallWithCodec(codec, "Job.Evaluate", reEval, &resp)
+	require.Nil(err)
+	require.NotEqual(0, resp.Index)
+
+	// Lookup the evaluation
+	ws := memdb.NewWatchSet()
+	eval, err := state.EvalByID(ws, resp.EvalID)
+	require.Nil(err)
+	require.NotNil(eval)
+	require.Equal(eval.CreateIndex, resp.EvalCreateIndex)
+	require.Equal(eval.Priority, job.Priority)
+	require.Equal(eval.Type, job.Type)
+	require.Equal(eval.TriggeredBy, structs.EvalTriggerJobRegister)
+	require.Equal(eval.JobID, job.ID)
+	require.Equal(eval.JobModifyIndex, resp.JobModifyIndex)
+	require.Equal(eval.Status, structs.EvalStatusPending)
+
+	// Lookup the alloc, verify DesiredTransition ForceReschedule
+	alloc, err = state.AllocByID(ws, alloc.ID)
+	require.NotNil(alloc)
+	require.Nil(err)
+	require.True(*alloc.DesiredTransition.ForceReschedule)
 }
 
 func TestJobEndpoint_Evaluate_ACL(t *testing.T) {
@@ -3754,13 +3856,20 @@ func TestJobEndpoint_ImplicitConstraints_Signals(t *testing.T) {
 	// Create the register request with a job asking for a template that sends a
 	// signal
 	job := mock.Job()
-	signal := "SIGUSR1"
+	signal1 := "SIGUSR1"
+	signal2 := "SIGHUP"
 	job.TaskGroups[0].Tasks[0].Templates = []*structs.Template{
 		{
 			SourcePath:   "foo",
 			DestPath:     "bar",
 			ChangeMode:   structs.TemplateChangeModeSignal,
-			ChangeSignal: signal,
+			ChangeSignal: signal1,
+		},
+		{
+			SourcePath:   "foo",
+			DestPath:     "baz",
+			ChangeMode:   structs.TemplateChangeModeSignal,
+			ChangeSignal: signal2,
 		},
 	}
 	req := &structs.JobRegisterRequest{
@@ -3797,7 +3906,10 @@ func TestJobEndpoint_ImplicitConstraints_Signals(t *testing.T) {
 		t.Fatalf("Expected an implicit constraint")
 	}
 
-	sigConstraint := getSignalConstraint([]string{signal})
+	sigConstraint := getSignalConstraint([]string{signal1, signal2})
+	if !strings.HasPrefix(sigConstraint.RTarget, "SIGHUP") {
+		t.Fatalf("signals not sorted: %v", sigConstraint.RTarget)
+	}
 
 	if !constraints[0].Equal(sigConstraint) {
 		t.Fatalf("Expected implicit vault constraint")
@@ -3874,6 +3986,7 @@ func TestJobEndpoint_ValidateJob_KillSignal(t *testing.T) {
 
 func TestJobEndpoint_ValidateJobUpdate(t *testing.T) {
 	t.Parallel()
+	require := require.New(t)
 	old := mock.Job()
 	new := mock.Job()
 
@@ -3903,6 +4016,16 @@ func TestJobEndpoint_ValidateJobUpdate(t *testing.T) {
 	} else {
 		t.Log(err)
 	}
+
+	new = mock.Job()
+	new.Dispatched = true
+	require.Error(validateJobUpdate(old, new),
+		"expected err when setting new job to dispatched")
+	require.Error(validateJobUpdate(nil, new),
+		"expected err when setting new job to dispatched")
+	require.Error(validateJobUpdate(new, old),
+		"expected err when setting dispatched to false")
+	require.NoError(validateJobUpdate(nil, old))
 }
 
 func TestJobEndpoint_ValidateJobUpdate_ACL(t *testing.T) {
@@ -4257,6 +4380,15 @@ func TestJobEndpoint_Dispatch(t *testing.T) {
 				}
 				if out.ParentID != tc.parameterizedJob.ID {
 					t.Fatalf("bad parent ID")
+				}
+				if !out.Dispatched {
+					t.Fatal("expected dispatched job")
+				}
+				if out.IsParameterized() {
+					t.Fatal("dispatched job should not be parameterized")
+				}
+				if out.ParameterizedJob == nil {
+					t.Fatal("parameter job config should exist")
 				}
 
 				if tc.noEval {

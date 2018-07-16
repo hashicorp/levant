@@ -39,6 +39,13 @@ var (
 		RTarget: ">= 0.6.1",
 		Operand: structs.ConstraintVersion,
 	}
+
+	// allowRescheduleTransition is the transition that allows failed
+	// allocations to be force rescheduled. We create a one off
+	// variable to avoid creating a new object for every request.
+	allowForceRescheduleTransition = &structs.DesiredTransition{
+		ForceReschedule: helper.BoolToPtr(true),
+	}
 )
 
 // Job endpoint is used for job interactions
@@ -117,10 +124,8 @@ func (j *Job) Register(args *structs.JobRegisterRequest, reply *structs.JobRegis
 	}
 
 	// Validate job transitions if its an update
-	if existingJob != nil {
-		if err := validateJobUpdate(existingJob, args.Job); err != nil {
-			return err
-		}
+	if err := validateJobUpdate(existingJob, args.Job); err != nil {
+		return err
 	}
 
 	// Ensure that the job has permissions for the requested Vault tokens
@@ -296,6 +301,7 @@ func setImplicitConstraints(j *structs.Job) {
 // getSignalConstraint builds a suitable constraint based on the required
 // signals
 func getSignalConstraint(signals []string) *structs.Constraint {
+	sort.Strings(signals)
 	return &structs.Constraint{
 		Operand: structs.ConstraintSetContains,
 		LTarget: "${attr.os.signals}",
@@ -537,6 +543,28 @@ func (j *Job) Evaluate(args *structs.JobEvaluateRequest, reply *structs.JobRegis
 		return fmt.Errorf("can't evaluate parameterized job")
 	}
 
+	forceRescheduleAllocs := make(map[string]*structs.DesiredTransition)
+
+	if args.EvalOptions.ForceReschedule {
+		// Find any failed allocs that could be force rescheduled
+		allocs, err := snap.AllocsByJob(ws, args.RequestNamespace(), args.JobID, false)
+		if err != nil {
+			return err
+		}
+
+		for _, alloc := range allocs {
+			taskGroup := job.LookupTaskGroup(alloc.TaskGroup)
+			// Forcing rescheduling is only allowed if task group has rescheduling enabled
+			if taskGroup == nil || !taskGroup.ReschedulePolicy.Enabled() {
+				continue
+			}
+
+			if alloc.NextAllocation == "" && alloc.ClientStatus == structs.AllocClientStatusFailed && !alloc.DesiredTransition.ShouldForceReschedule() {
+				forceRescheduleAllocs[alloc.ID] = allowForceRescheduleTransition
+			}
+		}
+	}
+
 	// Create a new evaluation
 	eval := &structs.Evaluation{
 		ID:             uuid.Generate(),
@@ -548,13 +576,14 @@ func (j *Job) Evaluate(args *structs.JobEvaluateRequest, reply *structs.JobRegis
 		JobModifyIndex: job.ModifyIndex,
 		Status:         structs.EvalStatusPending,
 	}
-	update := &structs.EvalUpdateRequest{
-		Evals:        []*structs.Evaluation{eval},
-		WriteRequest: structs.WriteRequest{Region: args.Region},
-	}
 
-	// Commit this evaluation via Raft
-	_, evalIndex, err := j.srv.raftApply(structs.EvalUpdateRequestType, update)
+	// Create a AllocUpdateDesiredTransitionRequest request with the eval and any forced rescheduled allocs
+	updateTransitionReq := &structs.AllocUpdateDesiredTransitionRequest{
+		Allocs: forceRescheduleAllocs,
+		Evals:  []*structs.Evaluation{eval},
+	}
+	_, evalIndex, err := j.srv.raftApply(structs.AllocUpdateDesiredTransitionRequestType, updateTransitionReq)
+
 	if err != nil {
 		j.srv.logger.Printf("[ERR] nomad.job: Eval create failed: %v", err)
 		return err
@@ -1216,7 +1245,10 @@ func (j *Job) Plan(args *structs.JobPlanRequest, reply *structs.JobPlanResponse)
 
 	// If it is a periodic job calculate the next launch
 	if args.Job.IsPeriodic() && args.Job.Periodic.Enabled {
-		reply.NextPeriodicLaunch = args.Job.Periodic.Next(time.Now().In(args.Job.Periodic.GetLocation()))
+		reply.NextPeriodicLaunch, err = args.Job.Periodic.Next(time.Now().In(args.Job.Periodic.GetLocation()))
+		if err != nil {
+			return fmt.Errorf("Failed to parse cron expression: %v", err)
+		}
 	}
 
 	reply.FailedTGAllocs = updatedEval.FailedTGAllocs
@@ -1293,6 +1325,14 @@ func validateJob(job *structs.Job) (invalid, warnings error) {
 
 // validateJobUpdate ensures updates to a job are valid.
 func validateJobUpdate(old, new *structs.Job) error {
+	// Validate Dispatch not set on new Jobs
+	if old == nil {
+		if new.Dispatched {
+			return fmt.Errorf("job can't be submitted with 'Dispatched' set")
+		}
+		return nil
+	}
+
 	// Type transitions are disallowed
 	if old.Type != new.Type {
 		return fmt.Errorf("cannot update job from type %q to %q", old.Type, new.Type)
@@ -1312,6 +1352,10 @@ func validateJobUpdate(old, new *structs.Job) error {
 	}
 	if new.IsParameterized() && !old.IsParameterized() {
 		return fmt.Errorf("cannot update parameterized job to being non-parameterized")
+	}
+
+	if old.Dispatched != new.Dispatched {
+		return fmt.Errorf("field 'Dispatched' is read-only")
 	}
 
 	return nil
@@ -1364,11 +1408,11 @@ func (j *Job) Dispatch(args *structs.JobDispatchRequest, reply *structs.JobDispa
 
 	// Derive the child job and commit it via Raft
 	dispatchJob := parameterizedJob.Copy()
-	dispatchJob.ParameterizedJob = nil
 	dispatchJob.ID = structs.DispatchedID(parameterizedJob.ID, time.Now())
 	dispatchJob.ParentID = parameterizedJob.ID
 	dispatchJob.Name = dispatchJob.ID
 	dispatchJob.SetSubmitTime()
+	dispatchJob.Dispatched = true
 
 	// Merge in the meta data
 	for k, v := range args.Meta {
