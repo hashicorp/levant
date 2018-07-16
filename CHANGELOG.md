@@ -4,6 +4,9 @@ IMPROVEMENTS:
  * JSON can now be used as a variable file format [GH-210](https://github.com/jrasell/levant/pull/210)
  * The template funcs now include numerous parse functions to provide greater flexibility [GH-212](https://github.com/jrasell/levant/pull/212)
  * Ability to configure allow-stale Nomad setting when performing calls to help in environments with high network latency [GH-185](https://github.com/jrasell/levant/pull/185)
+ 
+BUG FIXES:
+ * Update vendored package of Nomad to fix failures when interacting with jobs configured with update progress_deadline params [GH-216](https://github.com/jrasell/levant/pull/216)
 
 ## 0.2.0 (4 July 2018)
 
