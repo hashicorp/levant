@@ -25,6 +25,8 @@ export default Controller.extend(Sortable, Searchable, {
   sortDescending: true,
 
   searchProps: computed(() => ['id', 'name']),
+  fuzzySearchProps: computed(() => ['name']),
+  fuzzySearchEnabled: true,
 
   /**
     Filtered jobs are those that match the selected namespace and aren't children
@@ -40,6 +42,7 @@ export default Controller.extend(Sortable, Searchable, {
       const activeNamespace = this.get('system.activeNamespace.id') || 'default';
 
       return this.get('model')
+        .compact()
         .filter(job => !hasNamespaces || job.get('namespace.id') === activeNamespace)
         .filter(job => !job.get('parent.content'));
     }

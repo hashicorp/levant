@@ -5,6 +5,8 @@ import (
 	"io/ioutil"
 	"os"
 	"strings"
+
+	"github.com/posener/complete"
 )
 
 const (
@@ -26,6 +28,11 @@ Alias: nomad init
 
   Creates an example job file that can be used as a starting
   point to customize further.
+
+Init Options:
+
+  -short
+    If the short flag is set, a minimal jobspec without comments is emitted.
 `
 	return strings.TrimSpace(helpText)
 }
@@ -34,10 +41,34 @@ func (c *JobInitCommand) Synopsis() string {
 	return "Create an example job file"
 }
 
+func (c *JobInitCommand) AutocompleteFlags() complete.Flags {
+	return mergeAutocompleteFlags(c.Meta.AutocompleteFlags(FlagSetClient),
+		complete.Flags{
+			"-short": complete.PredictNothing,
+		})
+}
+
+func (c *JobInitCommand) AutocompleteArgs() complete.Predictor {
+	return complete.PredictNothing
+}
+
+func (c *JobInitCommand) Name() string { return "job init" }
+
 func (c *JobInitCommand) Run(args []string) int {
+	var short bool
+
+	flags := c.Meta.FlagSet(c.Name(), FlagSetClient)
+	flags.Usage = func() { c.Ui.Output(c.Help()) }
+	flags.BoolVar(&short, "short", false, "")
+
+	if err := flags.Parse(args); err != nil {
+		return 1
+	}
+
 	// Check for misuse
-	if len(args) != 0 {
-		c.Ui.Error(c.Help())
+	if len(flags.Args()) != 0 {
+		c.Ui.Error("This command takes no arguments")
+		c.Ui.Error(commandErrorText(c))
 		return 1
 	}
 
@@ -52,8 +83,16 @@ func (c *JobInitCommand) Run(args []string) int {
 		return 1
 	}
 
+	var jobSpec []byte
+
+	if short {
+		jobSpec = []byte(shortJob)
+	} else {
+		jobSpec = []byte(defaultJob)
+	}
+
 	// Write out the example
-	err = ioutil.WriteFile(DefaultInitName, []byte(defaultJob), 0660)
+	err = ioutil.WriteFile(DefaultInitName, jobSpec, 0660)
 	if err != nil {
 		c.Ui.Error(fmt.Sprintf("Failed to write '%s': %v", DefaultInitName, err))
 		return 1
@@ -63,6 +102,46 @@ func (c *JobInitCommand) Run(args []string) int {
 	c.Ui.Output(fmt.Sprintf("Example job file written to %s", DefaultInitName))
 	return 0
 }
+
+var shortJob = strings.TrimSpace(`
+job "example" {
+  datacenters = ["dc1"]
+
+  group "cache" {
+    task "redis" {
+      driver = "docker"
+
+      config {
+        image = "redis:3.2"
+        port_map {
+          db = 6379
+        }
+      }
+
+      resources {
+        cpu    = 500
+        memory = 256
+        network {
+          mbits = 10
+          port "db" {}
+        }
+      }
+
+      service {
+        name = "redis-cache"
+        tags = ["global", "cache"]
+        port = "db"
+        check {
+          name     = "alive"
+          type     = "tcp"
+          interval = "10s"
+          timeout  = "2s"
+        }
+      }
+    }
+  }
+}
+`)
 
 var defaultJob = strings.TrimSpace(`
 # There can only be a single job definition per file. This job is named
@@ -129,24 +208,32 @@ job "example" {
     # perform in parallel. In this case, this specifies to update a single task
     # at a time.
     max_parallel = 1
-    
+
     # The "min_healthy_time" parameter specifies the minimum time the allocation
     # must be in the healthy state before it is marked as healthy and unblocks
     # further allocations from being updated.
     min_healthy_time = "10s"
-    
+
     # The "healthy_deadline" parameter specifies the deadline in which the
     # allocation must be marked as healthy after which the allocation is
     # automatically transitioned to unhealthy. Transitioning to unhealthy will
     # fail the deployment and potentially roll back the job if "auto_revert" is
     # set to true.
     healthy_deadline = "3m"
-    
+
+    # The "progress_deadline" parameter specifies the deadline in which an
+    # allocation must be marked as healthy. The deadline begins when the first
+    # allocation for the deployment is created and is reset whenever an allocation
+    # as part of the deployment transitions to a healthy state. If no allocation
+    # transitions to the healthy state before the progress deadline, the
+    # deployment is marked as failed.
+    progress_deadline = "10m"
+
     # The "auto_revert" parameter specifies if the job should auto-revert to the
     # last stable job on deployment failure. A job is marked as stable if all the
     # allocations as part of its deployment were marked healthy.
     auto_revert = false
-    
+
     # The "canary" parameter specifies that changes to the job that would result
     # in destructive updates should create the specified number of canaries
     # without stopping any previous allocations. Once the operator determines the
@@ -162,7 +249,7 @@ job "example" {
   # The migrate stanza specifies the group's strategy for migrating off of
   # draining nodes. If omitted, a default migration strategy is applied.
   #
-  # For more information on the "migrate" stanza, please see 
+  # For more information on the "migrate" stanza, please see
   # the online documentation at:
   #
   #     https://www.nomadproject.io/docs/job-specification/migrate.html
@@ -243,7 +330,7 @@ job "example" {
       # will migrate the data. This is useful for tasks that store data
       # that should persist across allocation updates.
       # sticky = true
-      # 
+      #
       # Setting migrate to true results in the allocation directory of a
       # sticky allocation directory to be migrated.
       # migrate = true

@@ -197,11 +197,14 @@ func NewClient(cfg *config.Config, consulCatalog consul.CatalogAPI, consulServic
 	// Create the tls wrapper
 	var tlsWrap tlsutil.RegionWrapper
 	if cfg.TLSConfig.EnableRPC {
-		tw, err := cfg.TLSConfiguration().OutgoingTLSWrapper()
+		tw, err := tlsutil.NewTLSConfiguration(cfg.TLSConfig, true, true)
 		if err != nil {
 			return nil, err
 		}
-		tlsWrap = tw
+		tlsWrap, err = tw.OutgoingTLSWrapper()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Create the client
@@ -259,7 +262,13 @@ func NewClient(cfg *config.Config, consulCatalog consul.CatalogAPI, consulServic
 		return nil, fmt.Errorf("node setup failed: %v", err)
 	}
 
-	fingerprintManager := NewFingerprintManager(c.GetConfig, c.config.Node,
+	// Store the config copy before restoring state but after it has been
+	// initialized.
+	c.configLock.Lock()
+	c.configCopy = c.config.Copy()
+	c.configLock.Unlock()
+
+	fingerprintManager := NewFingerprintManager(c.GetConfig, c.configCopy.Node,
 		c.shutdownCh, c.updateNodeFromFingerprint, c.updateNodeFromDriver,
 		c.logger)
 
@@ -271,16 +280,10 @@ func NewClient(cfg *config.Config, consulCatalog consul.CatalogAPI, consulServic
 	// Setup the reserved resources
 	c.reservePorts()
 
-	// Store the config copy before restoring state but after it has been
-	// initialized.
-	c.configLock.Lock()
-	c.configCopy = c.config.Copy()
-	c.configLock.Unlock()
-
 	// Set the preconfigured list of static servers
 	c.configLock.RLock()
 	if len(c.configCopy.Servers) > 0 {
-		if err := c.setServersImpl(c.configCopy.Servers, true); err != nil {
+		if _, err := c.setServersImpl(c.configCopy.Servers, true); err != nil {
 			logger.Printf("[WARN] client: None of the configured servers are valid: %v", err)
 		}
 	}
@@ -399,11 +402,16 @@ func (c *Client) init() error {
 func (c *Client) reloadTLSConnections(newConfig *nconfig.TLSConfig) error {
 	var tlsWrap tlsutil.RegionWrapper
 	if newConfig != nil && newConfig.EnableRPC {
-		tw, err := tlsutil.NewTLSConfiguration(newConfig).OutgoingTLSWrapper()
+		tw, err := tlsutil.NewTLSConfiguration(newConfig, true, true)
 		if err != nil {
 			return err
 		}
-		tlsWrap = tw
+
+		twWrap, err := tw.OutgoingTLSWrapper()
+		if err != nil {
+			return err
+		}
+		tlsWrap = twWrap
 	}
 
 	// Store the new tls wrapper.
@@ -437,7 +445,7 @@ func (c *Client) Leave() error {
 func (c *Client) GetConfig() *config.Config {
 	c.configLock.Lock()
 	defer c.configLock.Unlock()
-	return c.config
+	return c.configCopy
 }
 
 // Datacenter returns the datacenter for the given client
@@ -615,7 +623,7 @@ func (c *Client) GetServers() []string {
 
 // SetServers sets a new list of nomad servers to connect to. As long as one
 // server is resolvable no error is returned.
-func (c *Client) SetServers(in []string) error {
+func (c *Client) SetServers(in []string) (int, error) {
 	return c.setServersImpl(in, false)
 }
 
@@ -625,7 +633,7 @@ func (c *Client) SetServers(in []string) error {
 //
 // Force should be used when setting the servers from the initial configuration
 // since the server may be starting up in parallel and initial pings may fail.
-func (c *Client) setServersImpl(in []string, force bool) error {
+func (c *Client) setServersImpl(in []string, force bool) (int, error) {
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	var merr multierror.Error
@@ -665,13 +673,13 @@ func (c *Client) setServersImpl(in []string, force bool) error {
 	// Only return errors if no servers are valid
 	if len(endpoints) == 0 {
 		if len(merr.Errors) > 0 {
-			return merr.ErrorOrNil()
+			return 0, merr.ErrorOrNil()
 		}
-		return noServersErr
+		return 0, noServersErr
 	}
 
 	c.servers.SetServers(endpoints)
-	return nil
+	return len(endpoints), nil
 }
 
 // restoreState is used to restore our state from the data dir
@@ -726,7 +734,7 @@ func (c *Client) restoreState() error {
 		watcher := noopPrevAlloc{}
 
 		c.configLock.RLock()
-		ar := NewAllocRunner(c.logger, c.configCopy, c.stateDB, c.updateAllocStatus, alloc, c.vaultClient, c.consulService, watcher)
+		ar := NewAllocRunner(c.logger, c.configCopy.Copy(), c.stateDB, c.updateAllocStatus, alloc, c.vaultClient, c.consulService, watcher)
 		c.configLock.RUnlock()
 
 		c.allocLock.Lock()
@@ -963,6 +971,9 @@ func (c *Client) reservePorts() {
 	for _, net := range reservedIndex {
 		node.Reserved.Networks = append(node.Reserved.Networks, net)
 	}
+
+	// Make the changes available to the config copy.
+	c.configCopy = c.config.Copy()
 }
 
 // updateNodeFromFingerprint updates the node with the result of
@@ -1009,10 +1020,10 @@ func (c *Client) updateNodeFromFingerprint(response *cstructs.FingerprintRespons
 	}
 
 	if nodeHasChanged {
-		c.updateNode()
+		c.updateNodeLocked()
 	}
 
-	return c.config.Node
+	return c.configCopy.Node
 }
 
 // updateNodeFromDriver receives either a fingerprint of the driver or its
@@ -1104,10 +1115,10 @@ func (c *Client) updateNodeFromDriver(name string, fingerprint, health *structs.
 
 	if hasChanged {
 		c.config.Node.Drivers[name].UpdateTime = time.Now()
-		c.updateNode()
+		c.updateNodeLocked()
 	}
 
-	return c.config.Node
+	return c.configCopy.Node
 }
 
 // resourcesAreEqual is a temporary function to compare whether resources are
@@ -1752,9 +1763,14 @@ OUTER:
 	}
 }
 
-// updateNode triggers a client to update its node copy if it isn't doing
-// so already
-func (c *Client) updateNode() {
+// updateNode updates the Node copy and triggers the client to send the updated
+// Node to the server. This should be done while the caller holds the
+// configLock lock.
+func (c *Client) updateNodeLocked() {
+	// Update the config copy.
+	node := c.config.Node.Copy()
+	c.configCopy.Node = node
+
 	select {
 	case c.triggerNodeUpdate <- struct{}{}:
 		// Node update goroutine was released to execute
@@ -1774,15 +1790,7 @@ func (c *Client) watchNodeUpdates() {
 		select {
 		case <-timer.C:
 			c.logger.Printf("[DEBUG] client: state changed, updating node and re-registering.")
-
-			// Update the config copy.
-			c.configLock.Lock()
-			node := c.config.Node.Copy()
-			c.configCopy.Node = node
-			c.configLock.Unlock()
-
 			c.retryRegisterNode()
-
 			hasChanged = false
 		case <-c.triggerNodeUpdate:
 			if hasChanged {
@@ -1899,7 +1907,10 @@ func (c *Client) addAlloc(alloc *structs.Allocation, migrateToken string) error 
 	c.configLock.RLock()
 	prevAlloc := newAllocWatcher(alloc, prevAR, c, c.configCopy, c.logger, migrateToken)
 
-	ar := NewAllocRunner(c.logger, c.configCopy, c.stateDB, c.updateAllocStatus, alloc, c.vaultClient, c.consulService, prevAlloc)
+	// Copy the config since the node can be swapped out as it is being updated.
+	// The long term fix is to pass in the config and node separately and then
+	// we don't have to do a copy.
+	ar := NewAllocRunner(c.logger, c.configCopy.Copy(), c.stateDB, c.updateAllocStatus, alloc, c.vaultClient, c.consulService, prevAlloc)
 	c.configLock.RUnlock()
 
 	// Store the alloc runner.

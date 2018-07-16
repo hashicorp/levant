@@ -56,18 +56,18 @@ List view:
 
 ```
 $ nomad node status
-ID        DC   Name   Drain  Status
-a72dfba2  dc1  node1  false  ready
-1f3f03ea  dc1  node2  false  ready
+ID        DC   Name   Class   Drain  Eligibility  Status
+a72dfba2  dc1  node1  <none>  false  eligible     ready
+1f3f03ea  dc1  node2  <none>  false  eligible     ready
 ```
 
 List view, with running allocations:
 
 ```
 $ nomad node status -allocs
-ID        DC   Name   Class   Drain  Status  Running Allocs
-4d2ba53b  dc1  node1  <none>  false  ready   1
-34dfba32  dc1  node2  <none>  false  ready   3
+ID        DC   Name   Class   Drain  Eligibility  Status  Running Allocs
+4d2ba53b  dc1  node1  <none>  false  eligible     ready   1
+34dfba32  dc1  node2  <none>  false  eligible     ready   3
 ```
 
 Single-node view in short mode:
@@ -111,7 +111,7 @@ rkt       true      true
 Node Events
 Time                  Subsystem       Message
 2018-03-29T17:24:42Z  Driver: docker  Driver docker is not detected
-2018-03-29T17:23:42Z  Cluster         Node Registered
+2018-03-29T17:23:42Z  Cluster         Node registered
 
 Allocated Resources
 CPU           Memory           Disk            IOPS
@@ -154,7 +154,7 @@ rkt       true      true
 Node Events
 Time                  Subsystem       Message
 2018-03-29T17:24:42Z  Driver: docker  Driver docker is not detected
-2018-03-29T17:23:42Z  Cluster         Node Registered
+2018-03-29T17:23:42Z  Cluster         Node registered
 
 Allocated Resources
 CPU            Memory           Disk            IOPS
@@ -219,7 +219,7 @@ rkt       true      true
 Node Events
 Time                  Subsystem       Message
 2018-03-29T17:24:42Z  Driver: docker  Driver docker is not detected
-2018-03-29T17:23:42Z  Cluster         Node Registered
+2018-03-29T17:23:42Z  Cluster         Node registered
 
 Allocated Resources
 CPU            Memory           Disk            IOPS
@@ -300,7 +300,7 @@ rkt       true      true     <none>                         2018-03-29T17:23:42Z
 Node Events
 Time                  Subsystem       Message                        Details
 2018-03-29T17:24:42Z  Driver: docker  Driver docker is not detected  driver: docker,
-2018-03-29T17:23:42Z  Cluster         Node Registered                <none>
+2018-03-29T17:23:42Z  Cluster         Node registered                <none>
 
 Allocated Resources
 CPU            Memory           Disk            IOPS

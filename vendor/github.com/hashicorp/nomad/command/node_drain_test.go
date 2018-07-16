@@ -222,21 +222,82 @@ func TestNodeDrainCommand_Monitor(t *testing.T) {
 	out := outBuf.String()
 	t.Logf("Output:\n%s", out)
 
-	require.Contains(out, "drain complete")
-	for _, a := range allocs {
-		if *a.Job.Type == "system" {
-			if strings.Contains(out, a.ID) {
-				t.Fatalf("output should not contain system alloc %q", a.ID)
+	// Unfortunately travis is too slow to reliably see the expected output. The
+	// monitor goroutines may start only after some or all the allocs have been
+	// migrated.
+	if !testutil.IsTravis() {
+		require.Contains(out, "marked all allocations for migration")
+		for _, a := range allocs {
+			if *a.Job.Type == "system" {
+				if strings.Contains(out, a.ID) {
+					t.Fatalf("output should not contain system alloc %q", a.ID)
+				}
+				continue
 			}
-			continue
+			require.Contains(out, fmt.Sprintf("Alloc %q marked for migration", a.ID))
+			require.Contains(out, fmt.Sprintf("Alloc %q draining", a.ID))
 		}
-		require.Contains(out, fmt.Sprintf("Alloc %q marked for migration", a.ID))
-		require.Contains(out, fmt.Sprintf("Alloc %q draining", a.ID))
+
+		expected := fmt.Sprintf("All allocations on node %q have stopped.\n", nodeID)
+		if !strings.HasSuffix(out, expected) {
+			t.Fatalf("expected output to end with:\n%s", expected)
+		}
 	}
-	expected := fmt.Sprintf("All allocations on node %q have stopped.\n", nodeID)
-	if !strings.HasSuffix(out, expected) {
-		t.Fatalf("expected output to end with:\n%s", expected)
+
+	// Test -monitor flag
+	outBuf.Reset()
+	args = []string{"-address=" + url, "-self", "-monitor", "-ignore-system"}
+	t.Logf("Running: %v", args)
+	if code := cmd.Run(args); code != 0 {
+		t.Fatalf("expected exit 0, got: %d\n%s", code, outBuf.String())
 	}
+
+	out = outBuf.String()
+	t.Logf("Output:\n%s", out)
+	require.Contains(out, "No drain strategy set")
+}
+
+func TestNodeDrainCommand_Monitor_NoDrainStrategy(t *testing.T) {
+	t.Parallel()
+	require := require.New(t)
+	server, client, url := testServer(t, true, func(c *agent.Config) {
+		c.NodeName = "drain_monitor_node2"
+	})
+	defer server.Shutdown()
+
+	// Wait for a node to appear
+	testutil.WaitForResult(func() (bool, error) {
+		nodes, _, err := client.Nodes().List(nil)
+		if err != nil {
+			return false, err
+		}
+		if len(nodes) == 0 {
+			return false, fmt.Errorf("missing node")
+		}
+		return true, nil
+	}, func(err error) {
+		t.Fatalf("err: %s", err)
+	})
+
+	// Test -monitor flag
+	outBuf := bytes.NewBuffer(nil)
+	ui := &cli.BasicUi{
+		Reader:      bytes.NewReader(nil),
+		Writer:      outBuf,
+		ErrorWriter: outBuf,
+	}
+	cmd := &NodeDrainCommand{Meta: Meta{Ui: ui}}
+	args := []string{"-address=" + url, "-self", "-monitor", "-ignore-system"}
+	t.Logf("Running: %v", args)
+	if code := cmd.Run(args); code != 0 {
+		t.Fatalf("expected exit 0, got: %d\n%s", code, outBuf.String())
+	}
+
+	out := outBuf.String()
+	t.Logf("Output:\n%s", out)
+
+	require.Contains(out, "Monitoring node")
+	require.Contains(out, "No drain strategy set")
 }
 
 func TestNodeDrainCommand_Fails(t *testing.T) {
@@ -251,7 +312,7 @@ func TestNodeDrainCommand_Fails(t *testing.T) {
 	if code := cmd.Run([]string{"some", "bad", "args"}); code != 1 {
 		t.Fatalf("expected exit code 1, got: %d", code)
 	}
-	if out := ui.ErrorWriter.String(); !strings.Contains(out, cmd.Help()) {
+	if out := ui.ErrorWriter.String(); !strings.Contains(out, commandErrorText(cmd)) {
 		t.Fatalf("expected help output, got: %s", out)
 	}
 	ui.ErrorWriter.Reset()
@@ -278,7 +339,7 @@ func TestNodeDrainCommand_Fails(t *testing.T) {
 	if code := cmd.Run([]string{"-enable", "-disable", "12345678-abcd-efab-cdef-123456789abc"}); code != 1 {
 		t.Fatalf("expected exit 1, got: %d", code)
 	}
-	if out := ui.ErrorWriter.String(); !strings.Contains(out, cmd.Help()) {
+	if out := ui.ErrorWriter.String(); !strings.Contains(out, commandErrorText(cmd)) {
 		t.Fatalf("expected help output, got: %s", out)
 	}
 	ui.ErrorWriter.Reset()
@@ -287,7 +348,7 @@ func TestNodeDrainCommand_Fails(t *testing.T) {
 	if code := cmd.Run([]string{"12345678-abcd-efab-cdef-123456789abc"}); code != 1 {
 		t.Fatalf("expected exit 1, got: %d", code)
 	}
-	if out := ui.ErrorWriter.String(); !strings.Contains(out, cmd.Help()) {
+	if out := ui.ErrorWriter.String(); !strings.Contains(out, commandErrorText(cmd)) {
 		t.Fatalf("expected help output, got: %s", out)
 	}
 	ui.ErrorWriter.Reset()

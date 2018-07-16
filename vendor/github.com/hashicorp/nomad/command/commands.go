@@ -46,6 +46,11 @@ func (c *DeprecatedCommand) warn() {
 	c.Ui.Warn("")
 }
 
+// NamedCommand is a interface to denote a commmand's name.
+type NamedCommand interface {
+	Name() string
+}
+
 // Commands returns the mapping of CLI commands for Nomad. The meta
 // parameter lets you set meta options for all commands.
 func Commands(metaPtr *Meta, agentUi cli.Ui) map[string]cli.CommandFactory {
@@ -262,6 +267,11 @@ func Commands(metaPtr *Meta, agentUi cli.Ui) map[string]cli.CommandFactory {
 		},
 		"job dispatch": func() (cli.Command, error) {
 			return &JobDispatchCommand{
+				Meta: meta,
+			}, nil
+		},
+		"job eval": func() (cli.Command, error) {
+			return &JobEvalCommand{
 				Meta: meta,
 			}, nil
 		},
