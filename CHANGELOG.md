@@ -1,6 +1,6 @@
 ## 0.3.0 (Unreleased)
 
-## 0.2.1 (Unreleased)
+## 0.2.1 (20 July 2018)
 
 IMPROVEMENTS:
  * JSON can now be used as a variable file format [GH-210](https://github.com/jrasell/levant/pull/210)
