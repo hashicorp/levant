@@ -254,8 +254,10 @@ func (l *levantDeployment) evaluationInspector(evalID *string) error {
 				}
 			}
 
-			return fmt.Errorf("evaluation %v finished with status %s but failed to place allocations",
-				*evalID, evalInfo.Status)
+			// Do not return an error here; there could well be information from
+			// Nomad detailing filtered nodes but the deployment will still be
+			// successful. GH-220.
+			return nil
 
 		default:
 			time.Sleep(1 * time.Second)
