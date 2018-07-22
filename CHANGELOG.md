@@ -1,7 +1,7 @@
 ## 0.3.0 (Unreleased)
 
 BUG FIXES:
- * Fix an issue where if an evaluation had filtered nodes Levant would exit immediately rather than tracking the deployment which could still succeed [GH-211](https://github.com/jrasell/levant/pull/221)
+ * Fix an issue where if an evaluation had filtered nodes Levant would exit immediately rather than tracking the deployment which could still succeed [GH-221](https://github.com/jrasell/levant/pull/221)
 
 ## 0.2.1 (20 July 2018)
 
