@@ -2,6 +2,7 @@
 
 BUG FIXES:
  * Fix an issue where if an evaluation had filtered nodes Levant would exit immediately rather than tracking the deployment which could still succeed [GH-221](https://github.com/jrasell/levant/pull/221)
+ * Fixed failure inspector to report on tasks that are restarting [GH-82](https://github.com/jrasell/levant/pull/82)
 
 ## 0.2.1 (20 July 2018)
 
