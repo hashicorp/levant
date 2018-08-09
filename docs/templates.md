@@ -307,3 +307,19 @@ Render:
 ```
 2018-06-25T16:45:08+09:00
 ```
+
+#### env
+
+Returns the value of the given environment variable.
+
+Example:
+```
+[[ env "HOME" ]]
+[[ or (env "NON_EXISTENT") "foo" ]]
+```
+
+Render:
+```
+/bin/bash
+foo
+```
