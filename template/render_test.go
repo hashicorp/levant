@@ -1,6 +1,7 @@
 package template
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -12,6 +13,8 @@ const (
 	testJobNameOverwrite  = "levantExampleOverwrite"
 	testJobNameOverwrite2 = "levantExampleOverwrite2"
 	testDCName            = "dc13"
+	testEnvName           = "GROUP_NAME_ENV"
+	testEnvValue          = "cache"
 )
 
 func TestTemplater_RenderTemplate(t *testing.T) {
@@ -91,6 +94,7 @@ func TestTemplater_RenderTemplate(t *testing.T) {
 	// Test var-args and variables file render.
 	delete(fVars, "job_name")
 	fVars["datacentre"] = testDCName
+	os.Setenv(testEnvName, testEnvValue)
 	job, err = RenderJob("test-fixtures/multi_templated.nomad", []string{"test-fixtures/test.yaml"}, "", &fVars)
 	if err != nil {
 		t.Fatal(err)
@@ -100,6 +104,9 @@ func TestTemplater_RenderTemplate(t *testing.T) {
 	}
 	if job.Datacenters[0] != testDCName {
 		t.Fatalf("expected %s but got %v", testDCName, job.Datacenters[0])
+	}
+	if *job.TaskGroups[0].Name != testEnvValue {
+		t.Fatalf("expected %s but got %v", testEnvValue, *job.TaskGroups[0].Name)
 	}
 
 	// Test var-args only render.

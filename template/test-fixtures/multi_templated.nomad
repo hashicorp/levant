@@ -8,7 +8,7 @@ job "[[.job_name]]" {
     auto_revert      = true
   }
 
-  group "cache" {
+  group "[[env "GROUP_NAME_ENV"]]" {
     count = 1
     restart {
       attempts = 10

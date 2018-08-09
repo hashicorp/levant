@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strconv"
 	"text/template"
 	"time"
@@ -28,6 +29,7 @@ func funcMap(consulClient *consul.Client) template.FuncMap {
 		"timeNow":            timeNowFunc,
 		"timeNowUTC":         timeNowUTCFunc,
 		"timeNowTimezone":    timeNowTimezoneFunc(),
+		"env":                envFunc(),
 	}
 }
 
@@ -208,5 +210,14 @@ func timeNowTimezoneFunc() func(string) (string, error) {
 		}
 
 		return time.Now().In(loc).Format("2006-01-02T15:04:05Z07:00"), nil
+	}
+}
+
+func envFunc() func(string) (string, error) {
+	return func(s string) (string, error) {
+		if s == "" {
+			return "", nil
+		}
+		return os.Getenv(s), nil
 	}
 }
