@@ -388,7 +388,7 @@ func (l *levantDeployment) checkCanaryDeploymentHealth(depID string) (healthy bo
 
 	dep, _, err := l.nomad.Deployments().Info(depID, &nomad.QueryOptions{AllowStale: l.config.AllowStale})
 	if err != nil {
-		log.Error().Err(err).Msgf("levant/deploy: unable to query deployment %s for health: %v", depID)
+		log.Error().Err(err).Msgf("levant/deploy: unable to query deployment %s for health", depID)
 		return
 	}
 
@@ -469,7 +469,7 @@ func (l *levantDeployment) dynamicGroupCountUpdater() error {
 		log.Info().Msg("levant/deploy: job is not running, using template file group counts")
 		return nil
 	} else if err != nil {
-		log.Error().Err(err).Msgf("levant/deploy: unable to perform job evaluation: %v")
+		log.Error().Err(err).Msg("levant/deploy: unable to perform job evaluation")
 		return err
 	}
 

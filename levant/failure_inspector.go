@@ -17,7 +17,7 @@ func (l *levantDeployment) checkFailedDeployment(depID *string) {
 
 	allocs, _, err := l.nomad.Deployments().Allocations(*depID, nil)
 	if err != nil {
-		log.Error().Msgf("levant/failure_inspector: unable to query deployment allocations for deployment %s",
+		log.Error().Msgf("levant/failure_inspector: unable to query deployment allocations for deployment %v",
 			depID)
 	}
 
