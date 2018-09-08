@@ -36,6 +36,11 @@ func Commands(metaPtr *command.Meta) map[string]cli.CommandFactory {
 				Meta: meta,
 			}, nil
 		},
+    "monitor": func() (cli.Command, error) {
+			return &command.MonitorCommand{
+        Meta: meta,
+      }, nil
+    },
 		"render": func() (cli.Command, error) {
 			return &command.RenderCommand{
 				Meta: meta,
