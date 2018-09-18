@@ -8,18 +8,11 @@ const (
 	JobIDContextField = "job_id"
 )
 
-// Config is the main struct used to configure and run a Levant deployment on
+// DeployConfig is the main struct used to configure and run a Levant deployment on
 // a given target job.
-type Config struct {
-	// Addr is the Nomad API address to use for all calls and must include both
-	// protocol and port.
-	Addr string
-
-	// AllowStale sets consistency level for nomad query - https://www.nomadproject.io/api/index.html#consistency-modes
-	AllowStale bool
-
+type DeployConfig struct {
 	// Canary enables canary autopromote and is the value in seconds to wait
-	// until attempting to perfrom autopromote.
+	// until attempting to perform autopromote.
 	Canary int
 
 	// ForceBatch is a boolean flag that can be used to force a run of a periodic
@@ -29,19 +22,36 @@ type Config struct {
 	// ForceCount is a boolean flag that can be used to ignore running job counts
 	// and force the count based on the rendered job file.
 	ForceCount bool
+}
 
+// ClientConfig is the config struct which houses all the information needed to connect
+// to the external services and endpoints.
+type ClientConfig struct {
+	// Addr is the Nomad API address to use for all calls and must include both
+	// protocol and port.
+	Addr string
+
+	// ConsulAddr is the Consul API address to use for all calls.
+	ConsulAddr string
+
+	// AllowStale sets consistency level for nomad query
+	// https://www.nomadproject.io/api/index.html#consistency-modes
+	AllowStale bool
+}
+
+// PlanConfig contains any configuration options that are specific to running a
+// Nomad plan.
+type PlanConfig struct {
 	// IgnoreNoChanges is used to allow operators to force Levant to exit cleanly
 	// even if there are no changes found during the plan.
 	IgnoreNoChanges bool
+}
 
+// TemplateConfig contains all the job templating configuration options including
+// the rendered job.
+type TemplateConfig struct {
 	// Job represents the Nomad Job definition that will be deployed.
 	Job *nomad.Job
-
-	// LogLevel is the level at which Levant will log.
-	LogLevel string
-
-	// LogFormat is the format Levant will use for logging.
-	LogFormat string
 
 	// TemplateFile is the job specification template which will be rendered
 	// before being deployed to the cluster.

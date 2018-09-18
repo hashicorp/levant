@@ -21,7 +21,7 @@ func (l *levantDeployment) jobStatusChecker(evalID *string) bool {
 
 	// Run the initial job status check to ensure the job reaches a state of
 	// running.
-	jStatus := l.simpleJobStatusChecker(*l.config.Job.ID)
+	jStatus := l.simpleJobStatusChecker(*l.config.Template.Job.ID)
 
 	// Periodic and parameterized batch jobs do not produce evaluations and so
 	// can only go through the simplest of checks.
@@ -46,7 +46,7 @@ func (l *levantDeployment) simpleJobStatusChecker(jobID string) bool {
 
 	for {
 
-		job, meta, err := l.nomad.Jobs().Info(*l.config.Job.Name, q)
+		job, meta, err := l.nomad.Jobs().Info(*l.config.Template.Job.Name, q)
 		if err != nil {
 			log.Error().Err(err).Msg("levant/job_status_checker: unable to query job information from Nomad")
 			return false

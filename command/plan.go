@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	nomad "github.com/hashicorp/nomad/api"
 	"github.com/jrasell/levant/helper"
 	"github.com/jrasell/levant/levant"
 	"github.com/jrasell/levant/levant/structs"
@@ -12,18 +11,18 @@ import (
 	"github.com/jrasell/levant/template"
 )
 
-// DeployCommand is the command implementation that allows users to deploy a
+// PlanCommand is the command implementation that allows users to plan a
 // Nomad job based on passed templates and variables.
-type DeployCommand struct {
+type PlanCommand struct {
 	Meta
 }
 
-// Help provides the help information for the deploy command.
-func (c *DeployCommand) Help() string {
+// Help provides the help information for the plan command.
+func (c *PlanCommand) Help() string {
 	helpText := `
-Usage: levant deploy [options] [TEMPLATE]
+Usage: levant plan [options] [TEMPLATE]
 
-  Deploy a Nomad job based on input templates and variable files. The deploy
+  Perform a Nomad plan based on input templates and variable files. The plan
   command supports passing variables individually on the command line. Multiple
   commands can be passed in the format of -var 'key=value'. Variables passed
   via the command line take precedence over the same variable declared within
@@ -42,26 +41,18 @@ General Options:
 
   -allow-stale
     Allow stale consistency mode for requests into nomad.
-
-  -canary-auto-promote=<seconds>
-    The time in seconds, after which Levant will auto-promote a canary job
-    if all canaries within the deployment are healthy.
 		
   -consul-address=<addr>
     The Consul host and port to use when making Consul KeyValue lookups for
     template rendering.
-
-  -force-batch
-    Forces a new instance of the periodic job. A new instance will be created
-    even if it violates the job's prohibit_overlap settings.
 
   -force-count
     Use the taskgroup count from the Nomad jobfile instead of the count that
     is currently set in a running job.
 
   -ignore-no-changes
-    By default if no changes are detected when running a deployment Levant will
-    exit with a status 1 to indicate a deployment didn't happen. This behaviour
+    By default if no changes are detected when running a plan Levant will
+    exit with a status 1 to indicate there are no changes. This behaviour
     can be changed using this flag so that Levant will exit cleanly ensuring CD
     pipelines don't fail when no changes are detected.
 
@@ -74,40 +65,35 @@ General Options:
     default is HUMAN.
 
   -var-file=<file>
-    Used in conjunction with the -job-file will deploy a templated job to your
+    Used in conjunction with the -job-file will plan a templated job against your
     Nomad cluster. You can repeat this flag multiple times to supply multiple var-files.
     [default: levant.(json|yaml|yml|tf)]
 `
 	return strings.TrimSpace(helpText)
 }
 
-// Synopsis is provides a brief summary of the deploy command.
-func (c *DeployCommand) Synopsis() string {
-	return "Render and deploy a Nomad job from a template"
+// Synopsis is provides a brief summary of the plan command.
+func (c *PlanCommand) Synopsis() string {
+	return "Render and perform a Nomad job plan from a template"
 }
 
-// Run triggers a run of the Levant template and deploy functions.
-func (c *DeployCommand) Run(args []string) int {
+// Run triggers a run of the Levant template and plan functions.
+func (c *PlanCommand) Run(args []string) int {
 
 	var err error
 	var level, format string
-
-	config := &levant.DeployConfig{
+	config := &levant.PlanConfig{
 		Client:   &structs.ClientConfig{},
-		Deploy:   &structs.DeployConfig{},
 		Plan:     &structs.PlanConfig{},
 		Template: &structs.TemplateConfig{},
 	}
 
-	flags := c.Meta.FlagSet("deploy", FlagSetVars)
+	flags := c.Meta.FlagSet("plan", FlagSetVars)
 	flags.Usage = func() { c.UI.Output(c.Help()) }
 
 	flags.StringVar(&config.Client.Addr, "address", "", "")
 	flags.BoolVar(&config.Client.AllowStale, "allow-stale", false, "")
-	flags.IntVar(&config.Deploy.Canary, "canary-auto-promote", 0, "")
 	flags.StringVar(&config.Client.ConsulAddr, "consul-address", "", "")
-	flags.BoolVar(&config.Deploy.ForceBatch, "force-batch", false, "")
-	flags.BoolVar(&config.Deploy.ForceCount, "force-count", false, "")
 	flags.BoolVar(&config.Plan.IgnoreNoChanges, "ignore-no-changes", false, "")
 	flags.StringVar(&level, "log-level", "INFO", "")
 	flags.StringVar(&format, "log-format", "HUMAN", "")
@@ -139,69 +125,16 @@ func (c *DeployCommand) Run(args []string) int {
 
 	config.Template.Job, err = template.RenderJob(config.Template.TemplateFile,
 		config.Template.VariableFiles, config.Client.ConsulAddr, &c.Meta.flagVars)
+
 	if err != nil {
 		c.UI.Error(fmt.Sprintf("[ERROR] levant/command: %v", err))
 		return 1
 	}
 
-	if config.Deploy.Canary > 0 {
-		if err = c.checkCanaryAutoPromote(config.Template.Job, config.Deploy.Canary); err != nil {
-			c.UI.Error(fmt.Sprintf("[ERROR] levant/command: %v", err))
-			return 1
-		}
-	}
-
-	if config.Deploy.ForceBatch {
-		if err = c.checkForceBatch(config.Template.Job, config.Deploy.ForceBatch); err != nil {
-			c.UI.Error(fmt.Sprintf("[ERROR] levant/command: %v", err))
-			return 1
-		}
-	}
-
-	p := levant.PlanConfig{
-		Client:   config.Client,
-		Plan:     config.Plan,
-		Template: config.Template,
-	}
-
-	planSuccess := levant.TriggerPlan(&p)
-	if !planSuccess {
-		return 1
-	}
-
-	success := levant.TriggerDeployment(config, nil)
+	success := levant.TriggerPlan(config)
 	if !success {
 		return 1
 	}
 
 	return 0
-}
-
-func (c *DeployCommand) checkCanaryAutoPromote(job *nomad.Job, canaryAutoPromote int) error {
-	if canaryAutoPromote == 0 {
-		return nil
-	}
-
-	if job.Update != nil && job.Update.Canary != nil && *job.Update.Canary > 0 {
-		return nil
-	}
-
-	for _, group := range job.TaskGroups {
-		if group.Update != nil && group.Update.Canary != nil && *group.Update.Canary > 0 {
-			return nil
-		}
-	}
-
-	return fmt.Errorf("canary-auto-update of %v passed but job is not canary enabled", canaryAutoPromote)
-}
-
-// checkForceBatch ensures that if the force-batch flag is passed, the job is
-// periodic.
-func (c *DeployCommand) checkForceBatch(job *nomad.Job, forceBatch bool) error {
-
-	if forceBatch && job.IsPeriodic() {
-		return nil
-	}
-
-	return fmt.Errorf("force-batch passed but job is not periodic")
 }

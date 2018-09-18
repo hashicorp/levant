@@ -5,6 +5,8 @@ import (
 
 	nomad "github.com/hashicorp/nomad/api"
 	nomadStructs "github.com/hashicorp/nomad/nomad/structs"
+	"github.com/jrasell/levant/client"
+	"github.com/jrasell/levant/levant/structs"
 	"github.com/rs/zerolog/log"
 )
 
@@ -14,15 +16,66 @@ var (
 	diffTypeNone   = string(nomadStructs.DiffTypeNone)
 )
 
+type levantPlan struct {
+	nomad  *nomad.Client
+	config *PlanConfig
+}
+
+// PlanConfig is the set of config structs required to run a Levant plan.
+type PlanConfig struct {
+	Client   *structs.ClientConfig
+	Plan     *structs.PlanConfig
+	Template *structs.TemplateConfig
+}
+
+func newPlan(config *PlanConfig) (*levantPlan, error) {
+
+	var err error
+
+	plan := &levantPlan{}
+	plan.config = config
+
+	plan.nomad, err = client.NewNomadClient(config.Client.Addr)
+	if err != nil {
+		return nil, err
+	}
+	return plan, nil
+}
+
+// TriggerPlan initiates a Levant plan run.
+func TriggerPlan(config *PlanConfig) bool {
+
+	lp, err := newPlan(config)
+	if err != nil {
+		log.Error().Err(err).Msg("levant/plan: unable to setup Levant plan")
+		return false
+	}
+
+	changes, err := lp.plan()
+	if err != nil {
+		log.Error().Err(err).Msg("levant/plan: error when running plan")
+		return false
+	}
+
+	if !changes && lp.config.Plan.IgnoreNoChanges {
+		log.Info().Msg("levant/plan: no changes found in job but ignore-changes flag set to true")
+	} else if !changes && !lp.config.Plan.IgnoreNoChanges {
+		log.Info().Msg("levant/plan: no changes found in job")
+		return false
+	}
+
+	return true
+}
+
 // plan is the entry point into running the Levant plan function which logs all
 // changes anticipated by Nomad of the upcoming job registration. If there are
 // no planned changes here, return false to indicate we should stop the process.
-func (l *levantDeployment) plan() (bool, error) {
+func (lp *levantPlan) plan() (bool, error) {
 
 	log.Debug().Msg("levant/plan: triggering Nomad plan")
 
 	// Run a plan using the rendered job.
-	resp, _, err := l.nomad.Jobs().Plan(l.config.Job, true, nil)
+	resp, _, err := lp.nomad.Jobs().Plan(lp.config.Template.Job, true, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("levant/plan: unable to run a job plan")
 		return false, err
