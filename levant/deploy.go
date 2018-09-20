@@ -13,15 +13,23 @@ import (
 )
 
 // levantDeployment is the all deployment related objects for this Levant
-// deployment invoction.
+// deployment invocation.
 type levantDeployment struct {
 	nomad  *nomad.Client
-	config *structs.Config
+	config *DeployConfig
+}
+
+// DeployConfig is the set of config structs required to run a Levant deploy.
+type DeployConfig struct {
+	Deploy   *structs.DeployConfig
+	Client   *structs.ClientConfig
+	Plan     *structs.PlanConfig
+	Template *structs.TemplateConfig
 }
 
 // newLevantDeployment sets up the Levant deployment object and Nomad client
 // to interact with the Nomad API.
-func newLevantDeployment(config *structs.Config, nomadClient *nomad.Client) (*levantDeployment, error) {
+func newLevantDeployment(config *DeployConfig, nomadClient *nomad.Client) (*levantDeployment, error) {
 
 	var err error
 
@@ -29,7 +37,7 @@ func newLevantDeployment(config *structs.Config, nomadClient *nomad.Client) (*le
 	dep.config = config
 
 	if nomadClient == nil {
-		dep.nomad, err = client.NewNomadClient(config.Addr)
+		dep.nomad, err = client.NewNomadClient(config.Client.Addr)
 		if err != nil {
 			return nil, err
 		}
@@ -38,14 +46,14 @@ func newLevantDeployment(config *structs.Config, nomadClient *nomad.Client) (*le
 	}
 
 	// Add the JobID as a log context field.
-	log.Logger = log.With().Str(structs.JobIDContextField, *config.Job.ID).Logger()
+	log.Logger = log.With().Str(structs.JobIDContextField, *config.Template.Job.ID).Logger()
 
 	return dep, nil
 }
 
 // TriggerDeployment provides the main entry point into a Levant deployment and
 // is used to setup the clients before triggering the deployment process.
-func TriggerDeployment(config *structs.Config, nomadClient *nomad.Client) bool {
+func TriggerDeployment(config *DeployConfig, nomadClient *nomad.Client) bool {
 
 	// Create our new deployment object.
 	levantDep, err := newLevantDeployment(config, nomadClient)
@@ -58,23 +66,6 @@ func TriggerDeployment(config *structs.Config, nomadClient *nomad.Client) bool {
 	preDepVal := levantDep.preDeployValidate()
 	if !preDepVal {
 		log.Error().Msg("levant/deploy: pre-deployment validation process failed")
-		return false
-	}
-
-	// Run the plan functionality and return if an error occurred during the run.
-	// This would have already been logged, so its just used to control the flow
-	// and pass the correct signal up the stack.
-	c, err := levantDep.plan()
-	if err != nil {
-		return false
-	}
-
-	// If no changes were detected, see whether the user wants to exit cleanly
-	// or wants to exit 1 if no changes were detected. GH-186.
-	if !c {
-		if levantDep.config.IgnoreNoChanges {
-			return true
-		}
 		return false
 	}
 
@@ -92,19 +83,19 @@ func TriggerDeployment(config *structs.Config, nomadClient *nomad.Client) bool {
 func (l *levantDeployment) preDeployValidate() (success bool) {
 
 	// Validate the job to check it is syntactically correct.
-	if _, _, err := l.nomad.Jobs().Validate(l.config.Job, nil); err != nil {
+	if _, _, err := l.nomad.Jobs().Validate(l.config.Template.Job, nil); err != nil {
 		log.Error().Err(err).Msg("levant/deploy: job validation failed")
 		return
 	}
 
 	// If job.Type isn't set we can't continue
-	if l.config.Job.Type == nil {
+	if l.config.Template.Job.Type == nil {
 		log.Error().Msgf("levant/deploy: Nomad job `type` is not set; should be set to `%s`, `%s` or `%s`",
 			nomadStructs.JobTypeBatch, nomadStructs.JobTypeSystem, nomadStructs.JobTypeService)
 		return
 	}
 
-	if !l.config.ForceCount {
+	if !l.config.Deploy.ForceCount {
 		if err := l.dynamicGroupCountUpdater(); err != nil {
 			return
 		}
@@ -119,14 +110,14 @@ func (l *levantDeployment) deploy() (success bool) {
 
 	log.Info().Msgf("levant/deploy: triggering a deployment")
 
-	eval, _, err := l.nomad.Jobs().Register(l.config.Job, nil)
+	eval, _, err := l.nomad.Jobs().Register(l.config.Template.Job, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("levant/deploy: unable to register job with Nomad")
 		return
 	}
 
-	if l.config.ForceBatch {
-		if eval.EvalID, err = l.triggerPeriodic(l.config.Job.ID); err != nil {
+	if l.config.Deploy.ForceBatch {
+		if eval.EvalID, err = l.triggerPeriodic(l.config.Template.Job.ID); err != nil {
 			log.Error().Err(err).Msg("levant/deploy: unable to trigger periodic instance of job")
 			return
 		}
@@ -135,8 +126,8 @@ func (l *levantDeployment) deploy() (success bool) {
 	// Periodic and parameterized jobs do not return an evaluation and therefore
 	// can't perform the evaluationInspector unless we are forcing an instance of
 	// periodic which will yield an EvalID.
-	if !l.config.Job.IsPeriodic() && !l.config.Job.IsParameterized() ||
-		l.config.Job.IsPeriodic() && l.config.ForceBatch {
+	if !l.config.Template.Job.IsPeriodic() && !l.config.Template.Job.IsParameterized() ||
+		l.config.Template.Job.IsPeriodic() && l.config.Deploy.ForceBatch {
 
 		// Trigger the evaluationInspector to identify any potential errors in the
 		// Nomad evaluation run. As far as I can tell from testing; a single alloc
@@ -148,12 +139,12 @@ func (l *levantDeployment) deploy() (success bool) {
 		}
 	}
 
-	switch *l.config.Job.Type {
+	switch *l.config.Template.Job.Type {
 	case nomadStructs.JobTypeService:
 
 		// If the service job doesn't have an update stanza, the job will not use
 		// Nomad deployments.
-		if l.config.Job.Update == nil {
+		if l.config.Template.Job.Update == nil {
 			log.Info().Msg("levant/deploy: job is not configured with update stanza, consider adding to use deployments")
 			return l.jobStatusChecker(&eval.EvalID)
 		}
@@ -184,9 +175,9 @@ func (l *levantDeployment) deploy() (success bool) {
 		// The reason for this is currently the config.Job is populate from the
 		// rendered job and so a user could potentially not set canary meaning
 		// the field shows a null.
-		if l.config.Job.Update.Canary == nil {
+		if l.config.Template.Job.Update.Canary == nil {
 			l.checkAutoRevert(dep)
-		} else if *l.config.Job.Update.Canary == 0 {
+		} else if *l.config.Template.Job.Update.Canary == 0 {
 			l.checkAutoRevert(dep)
 		}
 
@@ -198,7 +189,7 @@ func (l *levantDeployment) deploy() (success bool) {
 
 	default:
 		log.Debug().Msgf("levant/deploy: Levant does not support advanced deployments of job type %s",
-			*l.config.Job.Type)
+			*l.config.Template.Job.Type)
 		success = true
 	}
 	return
@@ -276,12 +267,12 @@ func (l *levantDeployment) deploymentWatcher(depID string) (success bool) {
 
 	// Setup the canaryChan and launch the autoPromote go routine if autoPromote
 	// has been enabled.
-	if l.config.Canary > 0 {
+	if l.config.Deploy.Canary > 0 {
 		canaryChan = make(chan interface{})
-		go l.canaryAutoPromote(depID, l.config.Canary, canaryChan, deploymentChan)
+		go l.canaryAutoPromote(depID, l.config.Deploy.Canary, canaryChan, deploymentChan)
 	}
 
-	q := &nomad.QueryOptions{WaitIndex: 1, AllowStale: l.config.AllowStale, WaitTime: wt}
+	q := &nomad.QueryOptions{WaitIndex: 1, AllowStale: l.config.Client.AllowStale, WaitTime: wt}
 
 	for {
 
@@ -386,7 +377,7 @@ func (l *levantDeployment) checkCanaryDeploymentHealth(depID string) (healthy bo
 
 	var unhealthy int
 
-	dep, _, err := l.nomad.Deployments().Info(depID, &nomad.QueryOptions{AllowStale: l.config.AllowStale})
+	dep, _, err := l.nomad.Deployments().Info(depID, &nomad.QueryOptions{AllowStale: l.config.Client.AllowStale})
 	if err != nil {
 		log.Error().Err(err).Msgf("levant/deploy: unable to query deployment %s for health", depID)
 		return
@@ -460,7 +451,7 @@ func (l *levantDeployment) dynamicGroupCountUpdater() error {
 
 	// Gather information about the current state, if any, of the job on the
 	// Nomad cluster.
-	rJob, _, err := l.nomad.Jobs().Info(*l.config.Job.Name, &nomad.QueryOptions{})
+	rJob, _, err := l.nomad.Jobs().Info(*l.config.Template.Job.Name, &nomad.QueryOptions{})
 
 	// This is a hack due to GH-1849; we check the error string for 404 which
 	// indicates the job is not running, not that there was an error in the API
@@ -484,7 +475,7 @@ func (l *levantDeployment) dynamicGroupCountUpdater() error {
 	// Iterate the templated job and the Nomad returned job and update group count
 	// based on matches.
 	for _, rGroup := range rJob.TaskGroups {
-		for _, group := range l.config.Job.TaskGroups {
+		for _, group := range l.config.Template.Job.TaskGroups {
 			if *rGroup.Name == *group.Name {
 				log.Info().Msgf("levant/deploy: using dynamic count %v for group %s",
 					*rGroup.Count, *group.Name)

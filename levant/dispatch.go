@@ -3,7 +3,6 @@ package levant
 import (
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/jrasell/levant/client"
-	"github.com/jrasell/levant/levant/structs"
 	"github.com/rs/zerolog/log"
 )
 
@@ -20,7 +19,6 @@ func TriggerDispatch(job string, metaMap map[string]string, payload []byte, addr
 	// TODO: Potential refactor so that dispatch does not need to use the
 	// levantDeployment object. Requires client refactor.
 	dep := &levantDeployment{}
-	dep.config = &structs.Config{}
 	dep.nomad = client
 
 	success := dep.dispatch(job, metaMap, payload)
@@ -55,9 +53,9 @@ func (l *levantDeployment) dispatch(job string, metaMap map[string]string, paylo
 
 	// In order to correctly run the jobStatusChecker we need to correctly
 	// assign the dispatched job ID/Name based on the invoked job.
-	l.config.Job = &nomad.Job{}
-	l.config.Job.ID = &eval.DispatchedJobID
-	l.config.Job.Name = &eval.DispatchedJobID
+	l.config.Template.Job = &nomad.Job{}
+	l.config.Template.Job.ID = &eval.DispatchedJobID
+	l.config.Template.Job.Name = &eval.DispatchedJobID
 
 	// Perform the evaluation inspection to ensure to check for any possible
 	// errors in triggering the dispatch job.
