@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"text/template"
 	"time"
 
@@ -20,6 +21,7 @@ func funcMap(consulClient *consul.Client) template.FuncMap {
 		"consulKey":          consulKeyFunc(consulClient),
 		"consulKeyExists":    consulKeyExistsFunc(consulClient),
 		"consulKeyOrDefault": consulKeyOrDefaultFunc(consulClient),
+		"env":                envFunc(),
 		"loop":               loop,
 		"parseBool":          parseBool,
 		"parseFloat":         parseFloat,
@@ -29,7 +31,8 @@ func funcMap(consulClient *consul.Client) template.FuncMap {
 		"timeNow":            timeNowFunc,
 		"timeNowUTC":         timeNowUTCFunc,
 		"timeNowTimezone":    timeNowTimezoneFunc(),
-		"env":                envFunc(),
+		"toLower":            toLower,
+		"toUpper":            toUpper,
 	}
 }
 
@@ -211,6 +214,14 @@ func timeNowTimezoneFunc() func(string) (string, error) {
 
 		return time.Now().In(loc).Format("2006-01-02T15:04:05Z07:00"), nil
 	}
+}
+
+func toLower(s string) (string, error) {
+	return strings.ToLower(s), nil
+}
+
+func toUpper(s string) (string, error) {
+	return strings.ToUpper(s), nil
 }
 
 func envFunc() func(string) (string, error) {
