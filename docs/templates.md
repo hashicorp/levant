@@ -143,6 +143,23 @@ Render:
 localhost:3306
 ```
 
+#### env
+
+Returns the value of the given environment variable.
+
+Example:
+```
+[[ env "HOME" ]]
+[[ or (env "NON_EXISTENT") "foo" ]]
+```
+
+Render:
+```
+/bin/bash
+foo
+```
+
+
 #### loop
 
 Accepts varying parameters and differs its behavior based on those parameters as detailed below.
@@ -308,18 +325,30 @@ Render:
 2018-06-25T16:45:08+09:00
 ```
 
-#### env
+#### toLower
 
-Returns the value of the given environment variable.
+Takes the argument as a string and converts it to lowercase.
 
 Example:
 ```
-[[ env "HOME" ]]
-[[ or (env "NON_EXISTENT") "foo" ]]
+[[ key "service/config/queue-name" | toLower ]]
 ```
 
 Render:
 ```
-/bin/bash
-foo
+queue-name
+```
+
+#### toUpper
+
+Takes the argument as a string and converts it to uppercase.
+
+Example:
+```
+[[ key "service/config/queue-name" | toUpper ]]
+```
+
+Render:
+```
+QUEUE-NAME
 ```
