@@ -3,6 +3,7 @@
 IMPROVEMENTS:
  * New `env` template function allows the lookup and substitution of variables by environemnt variables [GH-225](https://github.com/jrasell/levant/pull/225)
  * Add plan command to allow running a plan whilst using templating [GH-234](https://github.com/jrasell/levant/pull/234)
+ * Add `toUpper` and `toLower` template funcs [GH-237](https://github.com/jrasell/levant/pull/237)
 
 ## 0.2.2 (6 August 2018)
 
