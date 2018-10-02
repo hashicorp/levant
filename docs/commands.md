@@ -8,6 +8,8 @@ Levant supports a number of command line arguments which provide control over th
 
 * **-address** (string: "http://localhost:4646") The HTTP API endpoint for Nomad where all calls will be made.
 
+* **-allow-stale** (bool: false) Allow stale consistency mode for requests into nomad.
+
 * **-canary-auto-promote** (int: 0) The time period in seconds that Levant should wait for before attempting to promote a canary deployment.
 
 * **-consul-address** (string: "localhost:8500") The Consul host and port to use when making Consul KeyValue lookups for template rendering.
@@ -50,6 +52,34 @@ Full example:
 
 ```
 levant dispatch -log-level=debug -address=nomad.devoops -meta key=value dispatch_job payload_item
+```
+
+### Plan: `plan`
+
+`plan` allows you to perform a Nomad plan of a rendered template job. This is useful for seeing the expected changes before larger deploys. 
+
+* **-address** (string: "http://localhost:4646") The HTTP API endpoint for Nomad where all calls will be made.
+
+* **-allow-stale** (bool: false) Allow stale consistency mode for requests into nomad.
+
+* **-consul-address** (string: "localhost:8500") The Consul host and port to use when making Consul KeyValue lookups for template rendering.
+
+* **-force-count** (bool: false) Use the taskgroup count from the Nomad job file instead of the count that is obtained from the running job count.
+
+* **-ignore-no-changes** (bool: false) By default if no changes are detected when running a deployment Levant will exit with a status 1 to indicate a deployment didn't happen. This behaviour can be changed using this flag so that Levant will exit cleanly ensuring CD pipelines don't fail when no changes are detected
+
+* **-log-level** (string: "INFO") The level at which Levant will log to. Valid values are DEBUG, INFO, WARNING, ERROR and FATAL.
+
+* **-log-format** (string: "HUMAN") Specify the format of Levant's logs. Valid values are HUMAN or JSON
+
+* **-var-file** (string: "") The variables file to render the template with. This flag can be specified multiple times to supply multiple variables files.
+
+The `plan` command also supports passing variables individually on the command line. Multiple commands can be passed in the format of `-var 'key=value'`. Variables passed via the command line take precedence over the same variable declared within a passed variable file.
+
+Full example:
+
+```
+levant plan -log-level=debug -address=nomad.devoops -var-file=var.yaml -var 'var=test' example.nomad
 ```
 
 ### Command: `render`
