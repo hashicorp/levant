@@ -1,4 +1,4 @@
-## 0.2.3 (Unreleased)
+## 0.2.3 (2 October 2018)
 
 IMPROVEMENTS:
  * New `env` template function allows the lookup and substitution of variables by environemnt variables [GH-225](https://github.com/jrasell/levant/pull/225)
