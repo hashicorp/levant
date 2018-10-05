@@ -32,8 +32,8 @@ func TriggerScalingEvent(config *structs.ScalingConfig) bool {
 	// Setup a deployment object, as a scaling event is a deployment and should
 	// go through the same process and code upgrades.
 	deploymentConfig := &levant.DeployConfig{}
-	deploymentConfig.Template.Job = job
-	deploymentConfig.Deploy.ForceCount = true
+	deploymentConfig.Template = &structs.TemplateConfig{Job: job}
+	deploymentConfig.Deploy = &structs.DeployConfig{ForceCount: true}
 
 	log.Info().Msg("levant/scale: job will now be deployed with updated counts")
 
