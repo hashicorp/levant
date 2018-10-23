@@ -139,6 +139,10 @@ func (l *levantDeployment) deploy() (success bool) {
 		}
 	}
 
+	if l.isJobZeroCount() {
+		return true
+	}
+
 	switch *l.config.Template.Job.Type {
 	case nomadStructs.JobTypeService:
 
@@ -484,4 +488,13 @@ func (l *levantDeployment) dynamicGroupCountUpdater() error {
 		}
 	}
 	return nil
+}
+
+func (l *levantDeployment) isJobZeroCount() bool {
+	for _, tg := range l.config.Template.Job.TaskGroups {
+		if *tg.Count > 0 {
+			return false
+		}
+	}
+	return true
 }
