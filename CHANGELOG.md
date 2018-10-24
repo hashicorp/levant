@@ -1,4 +1,4 @@
-## 0.2.4 (Unreleased)
+## 0.2.4 (24 October 2018)
 
 BUG FIXES:
  * Fix panic in scale commands due to an incorrectly initialized configuration struct [GH-244](https://github.com/jrasell/levant/pull/244)
