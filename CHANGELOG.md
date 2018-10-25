@@ -1,3 +1,8 @@
+## 0.2.5 (25 October 2018)
+
+BUG FIXES:
+ * Fix panic in deployment where count is not specified due to unsafe count checking on task groups [GH-249](https://github.com/jrasell/levant/pull/249)
+
 ## 0.2.4 (24 October 2018)
 
 BUG FIXES:

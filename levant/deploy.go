@@ -492,7 +492,9 @@ func (l *levantDeployment) dynamicGroupCountUpdater() error {
 
 func (l *levantDeployment) isJobZeroCount() bool {
 	for _, tg := range l.config.Template.Job.TaskGroups {
-		if *tg.Count > 0 {
+		if tg.Count == nil {
+			return false
+		} else if *tg.Count > 0 {
 			return false
 		}
 	}
