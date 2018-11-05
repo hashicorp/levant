@@ -10,14 +10,20 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// Config is the set of config structs required to run a Levant scale.
+type Config struct {
+	Client *structs.ClientConfig
+	Scale  *structs.ScaleConfig
+}
+
 // TriggerScalingEvent provides the exported entry point into performing a job
 // scale based on user inputs.
-func TriggerScalingEvent(config *structs.ScalingConfig) bool {
+func TriggerScalingEvent(config *Config) bool {
 
 	// Add the JobID as a log context field.
-	log.Logger = log.With().Str(structs.JobIDContextField, config.JobID).Logger()
+	log.Logger = log.With().Str(structs.JobIDContextField, config.Scale.JobID).Logger()
 
-	nomadClient, err := client.NewNomadClient(config.Addr)
+	nomadClient, err := client.NewNomadClient(config.Client.Addr)
 	if err != nil {
 		log.Error().Msg("levant/scale: unable to setup Levant scaling event")
 		return false
@@ -33,6 +39,7 @@ func TriggerScalingEvent(config *structs.ScalingConfig) bool {
 	// go through the same process and code upgrades.
 	deploymentConfig := &levant.DeployConfig{}
 	deploymentConfig.Template = &structs.TemplateConfig{Job: job}
+	deploymentConfig.Client = config.Client
 	deploymentConfig.Deploy = &structs.DeployConfig{ForceCount: true}
 
 	log.Info().Msg("levant/scale: job will now be deployed with updated counts")
@@ -51,9 +58,9 @@ func TriggerScalingEvent(config *structs.ScalingConfig) bool {
 // updateJob gathers information on the current state of the running job and
 // along with the user defined input updates the in-memory job specification
 // to reflect the desired scaled state.
-func updateJob(client *nomad.Client, config *structs.ScalingConfig) *nomad.Job {
+func updateJob(client *nomad.Client, config *Config) *nomad.Job {
 
-	job, _, err := client.Jobs().Info(config.JobID, nil)
+	job, _, err := client.Jobs().Info(config.Scale.JobID, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("levant/scale: unable to obtain job information from Nomad")
 		return nil
@@ -70,10 +77,10 @@ func updateJob(client *nomad.Client, config *structs.ScalingConfig) *nomad.Job {
 
 		// If the user has specified a taskgroup to scale, ensure we only change
 		// the specific of this.
-		if config.TaskGroup != "" {
-			if *group.Name == config.TaskGroup {
+		if config.Scale.TaskGroup != "" {
+			if *group.Name == config.Scale.TaskGroup {
 				log.Debug().Msgf("levant/scale: scaling action to be requested on taskgroup %s only",
-					config.TaskGroup)
+					config.Scale.TaskGroup)
 				updateTaskGroup(config, group)
 			}
 
@@ -90,24 +97,24 @@ func updateJob(client *nomad.Client, config *structs.ScalingConfig) *nomad.Job {
 
 // updateTaskGroup is tasked with performing the count update based on the user
 // configuration when a group is identified as being marked for scaling.
-func updateTaskGroup(config *structs.ScalingConfig, group *nomad.TaskGroup) {
+func updateTaskGroup(config *Config, group *nomad.TaskGroup) {
 
 	var c int
 
 	// If a percentage scale value has been passed, we must convert this to an
 	// int which represents the count to scale by as Nomad job submissions must
 	// be done with group counts as desired ints.
-	switch config.DirectionType {
+	switch config.Scale.DirectionType {
 	case structs.ScalingDirectionTypeCount:
-		c = config.Count
+		c = config.Scale.Count
 	case structs.ScalingDirectionTypePercent:
-		c = calculateCountBasedOnPercent(*group.Count, config.Percent)
+		c = calculateCountBasedOnPercent(*group.Count, config.Scale.Percent)
 	}
 
 	// Depending on whether we are scaling-out or scaling-in we need to perform
 	// the correct maths. There is a little duplication here, but that is to
 	// provide better logging.
-	switch config.Direction {
+	switch config.Scale.Direction {
 	case structs.ScalingDirectionOut:
 		nc := *group.Count + c
 		log.Info().Msgf("levant/scale: task group %s will scale-out from %v to %v",

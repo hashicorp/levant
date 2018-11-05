@@ -26,6 +26,9 @@ General Options:
   -address=<http_address>
     The Nomad HTTP API address including port which Levant will use to make
     calls.
+
+  -allow-stale
+    Allow stale consistency mode for requests into nomad.
   
   -log-level=<level>
     Specify the verbosity level of Levant's logs. Valid values include DEBUG,
@@ -48,7 +51,7 @@ Scale Out Options:
 
   -task-group=<name>
     The name of the task group you wish to target for scaling. Is this is not
-    speicified all task groups within the job will be scaled.
+    specified all task groups within the job will be scaled.
 `
 	return strings.TrimSpace(helpText)
 }
@@ -64,18 +67,23 @@ func (c *ScaleOutCommand) Run(args []string) int {
 	var err error
 	var logL, logF string
 
-	config := &structs.ScalingConfig{}
-	config.Direction = structs.ScalingDirectionOut
+	config := &scale.Config{
+		Client: &structs.ClientConfig{},
+		Scale: &structs.ScaleConfig{
+			Direction: structs.ScalingDirectionOut,
+		},
+	}
 
 	flags := c.Meta.FlagSet("scale-out", FlagSetVars)
 	flags.Usage = func() { c.UI.Output(c.Help()) }
 
-	flags.StringVar(&config.Addr, "address", "", "")
+	flags.StringVar(&config.Client.Addr, "address", "", "")
+	flags.BoolVar(&config.Client.AllowStale, "allow-stale", false, "")
 	flags.StringVar(&logL, "log-level", "INFO", "")
 	flags.StringVar(&logF, "log-format", "HUMAN", "")
-	flags.IntVar(&config.Count, "count", 0, "")
-	flags.IntVar(&config.Percent, "percent", 0, "")
-	flags.StringVar(&config.TaskGroup, "task-group", "", "")
+	flags.IntVar(&config.Scale.Count, "count", 0, "")
+	flags.IntVar(&config.Scale.Percent, "percent", 0, "")
+	flags.StringVar(&config.Scale.TaskGroup, "task-group", "", "")
 
 	if err = flags.Parse(args); err != nil {
 		return 1
@@ -88,19 +96,19 @@ func (c *ScaleOutCommand) Run(args []string) int {
 		return 1
 	}
 
-	config.JobID = args[0]
+	config.Scale.JobID = args[0]
 
-	if config.Count == 0 && config.Percent == 0 || config.Count > 0 && config.Percent > 0 {
+	if config.Scale.Count == 0 && config.Scale.Percent == 0 || config.Scale.Count > 0 && config.Scale.Percent > 0 {
 		c.UI.Error("You must set either -count or -percent flag to scale-out")
 		return 1
 	}
 
-	if config.Count > 0 {
-		config.DirectionType = structs.ScalingDirectionTypeCount
+	if config.Scale.Count > 0 {
+		config.Scale.DirectionType = structs.ScalingDirectionTypeCount
 	}
 
-	if config.Percent > 0 {
-		config.DirectionType = structs.ScalingDirectionTypePercent
+	if config.Scale.Percent > 0 {
+		config.Scale.DirectionType = structs.ScalingDirectionTypePercent
 	}
 
 	if err = logging.SetupLogger(logL, logF); err != nil {
