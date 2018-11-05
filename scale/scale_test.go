@@ -15,7 +15,7 @@ func TestScale_updateTaskGroup(t *testing.T) {
 	sPercent := structs.ScalingDirectionTypePercent
 
 	cases := []struct {
-		Config   *structs.ScalingConfig
+		Config   *Config
 		Group    *nomad.TaskGroup
 		EndCount int
 	}{
@@ -83,17 +83,20 @@ func TestScale_calculateCountBasedOnPercent(t *testing.T) {
 	}
 }
 
-func buildScalingConfig(direction, dType string, number int) *structs.ScalingConfig {
+func buildScalingConfig(direction, dType string, number int) *Config {
 
-	c := &structs.ScalingConfig{}
-	c.Direction = direction
-	c.DirectionType = dType
+	c := &Config{
+		Scale: &structs.ScaleConfig{
+			Direction:     direction,
+			DirectionType: dType,
+		},
+	}
 
 	switch dType {
 	case structs.ScalingDirectionTypeCount:
-		c.Count = number
+		c.Scale.Count = number
 	case structs.ScalingDirectionTypePercent:
-		c.Percent = number
+		c.Scale.Percent = number
 	}
 
 	return c
@@ -104,9 +107,10 @@ func buildTaskGroup(count int) *nomad.TaskGroup {
 	n := "LevantTest"
 	c := count
 
-	t := &nomad.TaskGroup{}
-	t.Name = &n
-	t.Count = &c
+	t := &nomad.TaskGroup{
+		Name:  &n,
+		Count: &c,
+	}
 
 	return t
 }
