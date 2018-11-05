@@ -1,3 +1,8 @@
+## 0.3.0 (Unreleased)
+
+BUG FIXES:
+ * Fix a panic when running scale* deployment watcher due to incorrectly initialized client config [GH-253](https://github.com/jrasell/levant/pull/253) 
+
 ## 0.2.5 (25 October 2018)
 
 BUG FIXES:
