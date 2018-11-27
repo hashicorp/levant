@@ -21,7 +21,7 @@ type DeployCommand struct {
 // Help provides the help information for the deploy command.
 func (c *DeployCommand) Help() string {
 	helpText := `
-Usage: levant deploy [options] [TEMPLATE] [ESTEBAN]
+Usage: levant deploy [options] [TEMPLATE]
 
   Deploy a Nomad job based on input templates and variable files. The deploy
   command supports passing variables individually on the command line. Multiple
@@ -79,7 +79,7 @@ General Options:
   -var-file=<file>
     Used in conjunction with the -job-file will deploy a templated job to your
     Nomad cluster. You can repeat this flag multiple times to supply multiple var-files.
-		[default: levant.(json|yaml|yml|tf)]
+    [default: levant.(json|yaml|yml|tf)]
 `
 	return strings.TrimSpace(helpText)
 }
