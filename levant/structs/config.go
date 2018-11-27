@@ -34,6 +34,9 @@ type DeployConfig struct {
 	// ForceCount is a boolean flag that can be used to ignore running job counts
 	// and force the count based on the rendered job file.
 	ForceCount bool
+
+	// VaultToken is a string with the vault token
+	VaultToken string
 }
 
 // ClientConfig is the config struct which houses all the information needed to connect
