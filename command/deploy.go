@@ -21,7 +21,7 @@ type DeployCommand struct {
 // Help provides the help information for the deploy command.
 func (c *DeployCommand) Help() string {
 	helpText := `
-Usage: levant deploy [options] [TEMPLATE]
+Usage: levant deploy [options] [TEMPLATE] [ESTEBAN]
 
   Deploy a Nomad job based on input templates and variable files. The deploy
   command supports passing variables individually on the command line. Multiple
@@ -65,6 +65,10 @@ General Options:
     can be changed using this flag so that Levant will exit cleanly ensuring CD
     pipelines don't fail when no changes are detected.
 
+				
+	-vault-token=<vault-token>
+		The vault token used to deploy the application to nomad with vault support
+		
   -log-level=<level>
     Specify the verbosity level of Levant's logs. Valid values include DEBUG,
     INFO, and WARN, in decreasing order of verbosity. The default is INFO.
@@ -76,7 +80,7 @@ General Options:
   -var-file=<file>
     Used in conjunction with the -job-file will deploy a templated job to your
     Nomad cluster. You can repeat this flag multiple times to supply multiple var-files.
-    [default: levant.(json|yaml|yml|tf)]
+		[default: levant.(json|yaml|yml|tf)]
 `
 	return strings.TrimSpace(helpText)
 }
@@ -111,6 +115,7 @@ func (c *DeployCommand) Run(args []string) int {
 	flags.BoolVar(&config.Plan.IgnoreNoChanges, "ignore-no-changes", false, "")
 	flags.StringVar(&level, "log-level", "INFO", "")
 	flags.StringVar(&format, "log-format", "HUMAN", "")
+	flags.StringVar(&config.Deploy.VaultToken, "vault-token", "")
 	flags.Var((*helper.FlagStringSlice)(&config.Template.VariableFiles), "var-file", "")
 
 	if err = flags.Parse(args); err != nil {
