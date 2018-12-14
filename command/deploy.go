@@ -46,7 +46,7 @@ General Options:
   -canary-auto-promote=<seconds>
     The time in seconds, after which Levant will auto-promote a canary job
     if all canaries within the deployment are healthy.
-		
+
   -consul-address=<addr>
     The Consul host and port to use when making Consul KeyValue lookups for
     template rendering.
@@ -64,6 +64,14 @@ General Options:
     exit with a status 1 to indicate a deployment didn't happen. This behaviour
     can be changed using this flag so that Levant will exit cleanly ensuring CD
     pipelines don't fail when no changes are detected.
+
+  -vault
+    This flag makes levant load the vault token from the current ENV.
+    It can not be used at the same time than -vault-token=<vault-token> flag
+
+  -vault-token=<vault-token>
+    The vault token used to deploy the application to nomad with vault support
+    This flag can not be used at the same time than -vault flag
 
   -log-level=<level>
     Specify the verbosity level of Levant's logs. Valid values include DEBUG,
@@ -111,6 +119,9 @@ func (c *DeployCommand) Run(args []string) int {
 	flags.BoolVar(&config.Plan.IgnoreNoChanges, "ignore-no-changes", false, "")
 	flags.StringVar(&level, "log-level", "INFO", "")
 	flags.StringVar(&format, "log-format", "HUMAN", "")
+	flags.StringVar(&config.Deploy.VaultToken, "vault-token", "", "")
+	flags.BoolVar(&config.Deploy.EnvVault, "vault", false, "")
+
 	flags.Var((*helper.FlagStringSlice)(&config.Template.VariableFiles), "var-file", "")
 
 	if err = flags.Parse(args); err != nil {
@@ -118,6 +129,12 @@ func (c *DeployCommand) Run(args []string) int {
 	}
 
 	args = flags.Args()
+
+	if config.Deploy.EnvVault == true && config.Deploy.VaultToken != "" {
+		c.UI.Error(c.Help())
+		c.UI.Error("\nERROR: Can not used -vault and -vault-token flag at the same time")
+		return 1
+	}
 
 	if err = logging.SetupLogger(level, format); err != nil {
 		c.UI.Error(err.Error())
