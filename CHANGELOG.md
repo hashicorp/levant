@@ -1,5 +1,8 @@
 ## 0.3.0 (Unreleased)
 
+IMPROVEMENTS:
+ * Add the ability to supply a Vault token to a job during deployment via either a `vault` or `vault-token` flag [GH-https://github.com/jrasell/levant/pull/258]
+
 BUG FIXES:
  * Fix a panic when running scale* deployment watcher due to incorrectly initialized client config [GH-253](https://github.com/jrasell/levant/pull/253) 
 
