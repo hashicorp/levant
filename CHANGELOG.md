@@ -1,7 +1,7 @@
 ## 0.3.0 (Unreleased)
 
 IMPROVEMENTS:
- * Add the ability to supply a Vault token to a job during deployment via either a `vault` or `vault-token` flag [GH-https://github.com/jrasell/levant/pull/258]
+ * Add the ability to supply a Vault token to a job during deployment via either a `vault` or `vault-token` flag [GH-258](https://github.com/jrasell/levant/pull/258)
  * New `fileContents` template function which allows the entire contents of a file to be read into the template [GH-261](https://github.com/jrasell/levant/pull/261)
 
 BUG FIXES:
