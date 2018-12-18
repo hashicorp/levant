@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"strconv"
 	"strings"
@@ -22,6 +23,7 @@ func funcMap(consulClient *consul.Client) template.FuncMap {
 		"consulKeyExists":    consulKeyExistsFunc(consulClient),
 		"consulKeyOrDefault": consulKeyOrDefaultFunc(consulClient),
 		"env":                envFunc(),
+		"fileContents":       fileContents(),
 		"loop":               loop,
 		"parseBool":          parseBool,
 		"parseFloat":         parseFloat,
@@ -230,5 +232,18 @@ func envFunc() func(string) (string, error) {
 			return "", nil
 		}
 		return os.Getenv(s), nil
+	}
+}
+
+func fileContents() func(string) (string, error) {
+	return func(s string) (string, error) {
+		if s == "" {
+			return "", nil
+		}
+		contents, err := ioutil.ReadFile(s)
+		if err != nil {
+			return "", err
+		}
+		return string(contents), nil
 	}
 }
