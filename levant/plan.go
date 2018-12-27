@@ -43,28 +43,28 @@ func newPlan(config *PlanConfig) (*levantPlan, error) {
 }
 
 // TriggerPlan initiates a Levant plan run.
-func TriggerPlan(config *PlanConfig) bool {
+func TriggerPlan(config *PlanConfig) (bool, bool) {
 
 	lp, err := newPlan(config)
 	if err != nil {
 		log.Error().Err(err).Msg("levant/plan: unable to setup Levant plan")
-		return false
+		return false, false
 	}
 
 	changes, err := lp.plan()
 	if err != nil {
 		log.Error().Err(err).Msg("levant/plan: error when running plan")
-		return false
+		return false, changes
 	}
 
 	if !changes && lp.config.Plan.IgnoreNoChanges {
 		log.Info().Msg("levant/plan: no changes found in job but ignore-changes flag set to true")
 	} else if !changes && !lp.config.Plan.IgnoreNoChanges {
 		log.Info().Msg("levant/plan: no changes found in job")
-		return false
+		return false, changes
 	}
 
-	return true
+	return true, changes
 }
 
 // plan is the entry point into running the Levant plan function which logs all
@@ -89,14 +89,14 @@ func (lp *levantPlan) plan() (bool, error) {
 		log.Info().Msg("levant/plan: job is a new addition to the cluster")
 		return true, nil
 
-	// If there are no changes, then log an error so the user can see this and
-	// exit the deployment.
+		// If there are no changes, then log an error so the user can see this and
+		// exit the deployment.
 	case diffTypeNone:
 		log.Error().Msg("levant/plan: no changes detected for job")
 		return false, nil
 
-	// If there are changes, run the planDiff function which is responsible for
-	// iterating through the plan and logging all the planned changes.
+		// If there are changes, run the planDiff function which is responsible for
+		// iterating through the plan and logging all the planned changes.
 	case diffTypeEdited:
 		planDiff(resp.Diff)
 	}
