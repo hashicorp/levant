@@ -5,7 +5,8 @@ IMPROVEMENTS:
  * New `fileContents` template function which allows the entire contents of a file to be read into the template [GH-261](https://github.com/jrasell/levant/pull/261)
 
 BUG FIXES:
- * Fix a panic when running scale* deployment watcher due to incorrectly initialized client config [GH-253](https://github.com/jrasell/levant/pull/253) 
+ * Fix a panic when running scale* deployment watcher due to incorrectly initialized client config [GH-253](https://github.com/jrasell/levant/pull/253)
+ * Fix incorrect behavior when flag `ignore-no-changes` was set [GH-264](https://github.com/jrasell/levant/pull/264)
 
 ## 0.2.5 (25 October 2018)
 
