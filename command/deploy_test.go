@@ -8,7 +8,7 @@ import (
 
 func TestDeploy_checkCanaryAutoPromote(t *testing.T) {
 
-	fVars := make(map[string]string)
+	fVars := make(map[string]interface{})
 	depCommand := &DeployCommand{}
 	canaryPromote := 30
 
@@ -44,7 +44,7 @@ func TestDeploy_checkCanaryAutoPromote(t *testing.T) {
 
 func TestDeploy_checkForceBatch(t *testing.T) {
 
-	fVars := make(map[string]string)
+	fVars := make(map[string]interface{})
 	depCommand := &DeployCommand{}
 	forceBatch := true
 
