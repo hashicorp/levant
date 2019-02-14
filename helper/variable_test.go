@@ -7,8 +7,8 @@ import (
 
 func TestHelper_VariableMerge(t *testing.T) {
 
-	flagVars := make(map[string]string)
-	flagVars["job_name"] = "levantExample"
+	flagVars := make(map[string]interface{})
+	flagVars["job_name"] = "levantExample.nested.variable"
 	flagVars["datacentre"] = "dc13"
 
 	fileVars := make(map[string]interface{})
@@ -16,7 +16,7 @@ func TestHelper_VariableMerge(t *testing.T) {
 	fileVars["CPU_MHz"] = 500
 
 	expected := make(map[string]interface{})
-	expected["job_name"] = "levantExample"
+	expected["job_name"] = "levantExample.nested.variable"
 	expected["datacentre"] = "dc13"
 	expected["CPU_MHz"] = 500
 
