@@ -7,7 +7,7 @@ import (
 
 // Flag is a flag.Value implementation for parsing user variables
 // from the command-line in the format of '-var key=value'.
-type Flag map[string]string
+type Flag map[string]interface{}
 
 func (v *Flag) String() string {
 	return ""
@@ -22,7 +22,7 @@ func (v *Flag) Set(raw string) error {
 	}
 
 	if *v == nil {
-		*v = make(map[string]string)
+		*v = make(map[string]interface{})
 	}
 
 	key, value := raw[0:idx], raw[idx+1:]

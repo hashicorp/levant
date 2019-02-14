@@ -19,7 +19,7 @@ import (
 
 // RenderJob takes in a template and variables performing a render of the
 // template followed by Nomad jobspec parse.
-func RenderJob(templateFile string, variableFiles []string, addr string, flagVars *map[string]string) (job *nomad.Job, err error) {
+func RenderJob(templateFile string, variableFiles []string, addr string, flagVars *map[string]interface{}) (job *nomad.Job, err error) {
 	var tpl *bytes.Buffer
 	tpl, err = RenderTemplate(templateFile, variableFiles, addr, flagVars)
 	if err != nil {
