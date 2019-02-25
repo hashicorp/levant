@@ -10,6 +10,7 @@ import (
 	nomadStructs "github.com/hashicorp/nomad/nomad/structs"
 	"github.com/jrasell/levant/client"
 	"github.com/jrasell/levant/levant/structs"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 )
 
@@ -438,21 +439,29 @@ func (l *levantDeployment) getDeploymentID(evalID string) (depID string, err err
 
 	var evalInfo *nomad.Evaluation
 
-	for {
-		if evalInfo, _, err = l.nomad.Evaluations().Info(evalID, nil); err != nil {
-			return
-		}
+	timeout := time.NewTicker(time.Second * 60)
+	defer timeout.Stop()
 
-		if evalInfo.DeploymentID == "" {
+	for {
+		select {
+		case <-timeout.C:
+			err = errors.New("timeout reached on attempting to find deployment ID")
+			return
+
+		default:
+			if evalInfo, _, err = l.nomad.Evaluations().Info(evalID, nil); err != nil {
+				return
+			}
+
+			if evalInfo.DeploymentID != "" {
+				return evalInfo.DeploymentID, nil
+			}
+
 			log.Debug().Msgf("levant/deploy: Nomad returned an empty deployment for evaluation %v; retrying", evalID)
 			time.Sleep(2 * time.Second)
 			continue
-		} else {
-			break
 		}
 	}
-
-	return evalInfo.DeploymentID, nil
 }
 
 // dynamicGroupCountUpdater takes the templated and rendered job and updates the
