@@ -344,6 +344,14 @@
   revision = "63d60e9d0dbc60cf9164e6510889b0db6683d98c"
 
 [[projects]]
+  digest = "1:1d7e1867c49a6dd9856598ef7c3123604ea3daabf5b83f303ff457bcbc410b1d"
+  name = "github.com/pkg/errors"
+  packages = ["."]
+  pruneopts = ""
+  revision = "ba968bfe8b2f7e042a574c888954fccecfa385b4"
+  version = "v0.8.1"
+
+[[projects]]
   branch = "master"
   digest = "1:34fd4f03cc427c62539128e8e15d59a8fb59e802a5342f0a30cada53dc433c5c"
   name = "github.com/posener/complete"
@@ -467,6 +475,7 @@
     "github.com/hashicorp/terraform/config",
     "github.com/mattn/go-isatty",
     "github.com/mitchellh/cli",
+    "github.com/pkg/errors",
     "github.com/rs/zerolog",
     "github.com/rs/zerolog/log",
     "github.com/sean-/conswriter",
