@@ -1,4 +1,4 @@
-sudo: false
+sudo: true
 dist: trusty
 language: go
 go:
@@ -6,7 +6,7 @@ go:
 before_script:
   - wget https://github.com/goreleaser/goreleaser/releases/download/v0.101.0/goreleaser_Linux_x86_64.tar.gz -O /tmp/goreleaser.tar.gz
   - tar -xvf /tmp/goreleaser.tar.gz
-  - mv goreleaser /usr/local/bin/
+  - sudo mv goreleaser /usr/local/bin/
 script:
 - make tools
 - make
