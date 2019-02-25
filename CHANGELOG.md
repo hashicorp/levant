@@ -1,4 +1,4 @@
-## 0.3.0 (Unreleased)
+## 0.2.6 (25 February 2019)
 
 IMPROVEMENTS:
  * Add the ability to supply a Vault token to a job during deployment via either a `vault` or `vault-token` flag [GH-258](https://github.com/jrasell/levant/pull/258)

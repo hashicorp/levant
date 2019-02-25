@@ -3,7 +3,7 @@ FROM alpine:latest
 LABEL maintainer James Rasell<(jamesrasell@gmail.com)> (@jrasell)
 LABEL vendor "jrasell"
 
-ENV LEVANT_VERSION 0.2.5
+ENV LEVANT_VERSION 0.2.6
 
 WORKDIR /usr/bin/
 
