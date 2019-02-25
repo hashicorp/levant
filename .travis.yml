@@ -6,7 +6,7 @@ go:
 before_script:
   - wget https://github.com/goreleaser/goreleaser/releases/download/v0.101.0/goreleaser_Linux_x86_64.tar.gz -O /tmp/goreleaser.tar.gz
   - tar -xvf /tmp/goreleaser.tar.gz
-  - mv /tmp/goreleaser /usr/local/bin/
+  - mv goreleaser /usr/local/bin/
 script:
 - make tools
 - make
