@@ -160,6 +160,30 @@ foo
 ```
 
 
+#### fileContents
+
+Reads the entire contents of the specified file and adds it to the template.
+
+Example file contents:
+```
+---
+yaml:
+  - is: everywhere
+```
+
+Example job template:
+```
+[[ fileContents "/etc/myapp/config" ]]
+```
+
+Render:
+```
+---
+yaml:
+  - is: everywhere
+```
+
+
 #### loop
 
 Accepts varying parameters and differs its behavior based on those parameters as detailed below.

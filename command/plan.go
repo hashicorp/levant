@@ -131,9 +131,11 @@ func (c *PlanCommand) Run(args []string) int {
 		return 1
 	}
 
-	success := levant.TriggerPlan(config)
+	success, changes := levant.TriggerPlan(config)
 	if !success {
 		return 1
+	} else if !changes && config.Plan.IgnoreNoChanges {
+		return 0
 	}
 
 	return 0

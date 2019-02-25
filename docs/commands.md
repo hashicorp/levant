@@ -26,6 +26,10 @@ Levant supports a number of command line arguments which provide control over th
 
 * **-var-file** (string: "") The variables file to render the template with. This flag can be specified multiple times to supply multiple variables files.
 
+* **-vault** (bool: false) This flag makes Levant load the Vault token from the current ENV. It can not be used at the same time as the `vault-token` flag.
+
+* **-vault-token** (string: "") The vault token used to deploy the application to nomad with Vault support. It can not be used at the same time as the `vault` flag.
+
 The `deploy` command also supports passing variables individually on the command line. Multiple commands can be passed in the format of `-var 'key=value'`. Variables passed via the command line take precedence over the same variable declared within a passed variable file.
 
 Full example:

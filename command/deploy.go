@@ -181,9 +181,11 @@ func (c *DeployCommand) Run(args []string) int {
 		Template: config.Template,
 	}
 
-	planSuccess := levant.TriggerPlan(&p)
+	planSuccess, changes := levant.TriggerPlan(&p)
 	if !planSuccess {
 		return 1
+	} else if !changes && p.Plan.IgnoreNoChanges {
+		return 0
 	}
 
 	success := levant.TriggerDeployment(config, nil)
