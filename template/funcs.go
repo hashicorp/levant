@@ -23,6 +23,7 @@ func funcMap(consulClient *consul.Client) template.FuncMap {
 		"consulKeyExists":    consulKeyExistsFunc(consulClient),
 		"consulKeyOrDefault": consulKeyOrDefaultFunc(consulClient),
 		"env":                envFunc(),
+		"exists":             exists,
 		"fileContents":       fileContents(),
 		"loop":               loop,
 		"parseBool":          parseBool,
@@ -36,6 +37,16 @@ func funcMap(consulClient *consul.Client) template.FuncMap {
 		"toLower":            toLower,
 		"toUpper":            toUpper,
 	}
+}
+
+func exists(i interface{}, name string) (ok bool, err error) {
+	switch kv := i.(type) {
+	case map[string]interface{}:
+		_, ok = kv[name]
+	default:
+		err = errors.New("exists cannot be used on non-maps")
+	}
+	return
 }
 
 func consulKeyFunc(consulClient *consul.Client) func(string) (string, error) {
