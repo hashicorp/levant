@@ -1,1 +1,10 @@
-job_name: levantExample
+---
+  service:
+    name: service
+    count: 2
+  slack:
+    channel: alerts-app-dev
+  datacenter: dc1
+  region: global
+  network_namespace: app-dev
+  job_name: levantExample

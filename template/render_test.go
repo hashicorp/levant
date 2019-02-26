@@ -15,6 +15,7 @@ const (
 	testDCName            = "dc13"
 	testEnvName           = "GROUP_NAME_ENV"
 	testEnvValue          = "cache"
+	testCount             = "99"
 )
 
 func TestTemplater_RenderTemplate(t *testing.T) {
@@ -118,4 +119,26 @@ func TestTemplater_RenderTemplate(t *testing.T) {
 	if !strings.Contains(err.Error(), "binary_url") {
 		t.Fatal("expected err to mention missing var (binary_url)")
 	}
+
+	// Test var-args and variables file render.
+	delete(fVars, "job_name")
+	fVars["datacentre"] = testDCName
+	fVars["job_name"] = testJobName
+	fVars[".service.count"] = testCount
+
+	os.Setenv(testEnvName, testEnvValue)
+	job, err = RenderJob("test-fixtures/nested_templated.nomad", []string{"test-fixtures/test.yaml"}, "", &fVars)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if *job.Name != testJobName {
+		t.Fatalf("expected %s but got %v", testJobName, *job.Name)
+	}
+	if job.Datacenters[0] != testDCName {
+		t.Fatalf("expected %s but got %v", testDCName, job.Datacenters[0])
+	}
+	if *job.TaskGroups[0].Name != testEnvValue {
+		t.Fatalf("expected %s but got %v", testEnvValue, *job.TaskGroups[0].Name)
+	}
+
 }
