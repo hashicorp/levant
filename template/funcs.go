@@ -23,7 +23,6 @@ func funcMap(consulClient *consul.Client) template.FuncMap {
 		"consulKeyExists":    consulKeyExistsFunc(consulClient),
 		"consulKeyOrDefault": consulKeyOrDefaultFunc(consulClient),
 		"env":                envFunc(),
-		"exists":             exists,
 		"fileContents":       fileContents(),
 		"loop":               loop,
 		"parseBool":          parseBool,
@@ -36,10 +35,11 @@ func funcMap(consulClient *consul.Client) template.FuncMap {
 		"timeNowTimezone":    timeNowTimezoneFunc(),
 		"toLower":            toLower,
 		"toUpper":            toUpper,
+		"varExists":          varExists,
 	}
 }
 
-func exists(i interface{}, name string) (ok bool, err error) {
+func varExists(i interface{}, name string) (ok bool, err error) {
 	switch kv := i.(type) {
 	case map[string]interface{}:
 		_, ok = kv[name]

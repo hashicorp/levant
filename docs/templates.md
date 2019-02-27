@@ -376,3 +376,37 @@ Render:
 ```
 QUEUE-NAME
 ```
+
+#### varExists
+
+Tests for the existence of a variable in the variables file and returns true
+if it exists, otherwise false. The first argument should be a map containing
+the variable in question, the second is a string containing the name of the
+variable to test for.
+
+Example:
+```
+[[ if varExists . "constraint" ]]
+constraint {
+  attribute = "${[[ .constraint.attribute ]]}"
+  value = "[[ .constraint.value ]]"
+}
+[[ end ]]
+
+Given a vars yaml file containing:
+```
+---
+constraint:
+  attribute: meta.foo
+  value: bar
+```
+
+Render:
+```
+constraint {
+  attribute = "${meta.foo}"
+  value = "bar"
+}
+```
+
+If `constraint` is missing the constraint stanza will not be rendered.
