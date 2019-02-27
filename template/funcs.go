@@ -44,7 +44,7 @@ func varExists(i interface{}, name string) (ok bool, err error) {
 	case map[string]interface{}:
 		_, ok = kv[name]
 	default:
-		err = errors.New("exists cannot be used on non-maps")
+		err = errors.New("varExists cannot be used on non-maps")
 	}
 	return
 }
