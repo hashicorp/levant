@@ -20,7 +20,7 @@ Levant supports a number of command line arguments which provide control over th
 
 * **-ignore-no-changes** (bool: false) By default if no changes are detected when running a deployment Levant will exit with a status 1 to indicate a deployment didn't happen. This behaviour can be changed using this flag so that Levant will exit cleanly ensuring CD pipelines don't fail when no changes are detected
 
-* **-log-level** (string: "INFO") The level at which Levant will log to. Valid values are DEBUG, INFO, WARNING, ERROR and FATAL.
+* **-log-level** (string: "INFO") The level at which Levant will log to. Valid values are DEBUG, INFO, WARN, ERROR and FATAL.
 
 * **-log-format** (string: "HUMAN") Specify the format of Levant's logs. Valid values are HUMAN or JSON
 
@@ -44,7 +44,7 @@ levant deploy -log-level=debug -address=nomad.devoops -var-file=var.yaml -var 'v
 
 * **-address** (string: "http://localhost:4646") The HTTP API endpoint for Nomad where all calls will be made.
 
-* **-log-level** (string: "INFO") The level at which Levant will log to. Valid values are DEBUG, INFO, WARNING, ERROR and FATAL.
+* **-log-level** (string: "INFO") The level at which Levant will log to. Valid values are DEBUG, INFO, WARN, ERROR and FATAL.
 
 * **-log-format** (string: "HUMAN") Specify the format of Levant's logs. Valid values are HUMAN or JSON
 
@@ -72,7 +72,7 @@ levant dispatch -log-level=debug -address=nomad.devoops -meta key=value dispatch
 
 * **-ignore-no-changes** (bool: false) By default if no changes are detected when running a deployment Levant will exit with a status 1 to indicate a deployment didn't happen. This behaviour can be changed using this flag so that Levant will exit cleanly ensuring CD pipelines don't fail when no changes are detected
 
-* **-log-level** (string: "INFO") The level at which Levant will log to. Valid values are DEBUG, INFO, WARNING, ERROR and FATAL.
+* **-log-level** (string: "INFO") The level at which Levant will log to. Valid values are DEBUG, INFO, WARN, ERROR and FATAL.
 
 * **-log-format** (string: "HUMAN") Specify the format of Levant's logs. Valid values are HUMAN or JSON
 
@@ -112,7 +112,7 @@ The `scale-in` command allows the operator to scale a Nomad job and optional tas
 
 * **-count** (int: 0) The count by which the job and task groups should be scaled in by. Only one of count or percent can be passed.
 
-* **-log-level** (string: "INFO") The level at which Levant will log to. Valid values are DEBUG, INFO, WARNING, ERROR and FATAL.
+* **-log-level** (string: "INFO") The level at which Levant will log to. Valid values are DEBUG, INFO, WARN, ERROR and FATAL.
 
 * **-log-format** (string: "HUMAN") Specify the format of Levant's logs. Valid values are HUMAN or JSON
 
