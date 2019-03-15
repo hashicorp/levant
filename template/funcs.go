@@ -35,7 +35,18 @@ func funcMap(consulClient *consul.Client) template.FuncMap {
 		"timeNowTimezone":    timeNowTimezoneFunc(),
 		"toLower":            toLower,
 		"toUpper":            toUpper,
+		"varExists":          varExists,
 	}
+}
+
+func varExists(i interface{}, name string) (ok bool, err error) {
+	switch kv := i.(type) {
+	case map[string]interface{}:
+		_, ok = kv[name]
+	default:
+		err = errors.New("varExists cannot be used on non-maps")
+	}
+	return
 }
 
 func consulKeyFunc(consulClient *consul.Client) func(string) (string, error) {
