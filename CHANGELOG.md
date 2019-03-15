@@ -1,3 +1,5 @@
+## 0.2.7 (Unreleased)
+
 ## 0.2.6 (25 February 2019)
 
 IMPROVEMENTS:
