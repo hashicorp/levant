@@ -28,7 +28,7 @@ const (
 func (t *tmpl) newTemplate() *template.Template {
 	tmpl := template.New("jobTemplate")
 	tmpl.Delims(leftDelim, rightDelim)
-	tmpl.Option("missingkey=error")
+	tmpl.Option("missingkey=zero")
 	tmpl.Funcs(funcMap(t.consulClient))
 	return tmpl
 }
