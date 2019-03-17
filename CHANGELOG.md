@@ -1,5 +1,8 @@
 ## 0.2.7 (Unreleased)
 
+IMPROVEMENTS:
+ * Use `missingkey=zero` rather than error which allows better use of standard go templating, particulary conditionals [GH-275](https://github.com/jrasell/levant/pull/275)
+
 ## 0.2.6 (25 February 2019)
 
 IMPROVEMENTS:
