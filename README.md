@@ -23,7 +23,7 @@ Levant is an open source templating and deployment tool for [HashiCorp Nomad](ht
 
 ## Download & Install
 
-* The Levant binary can be downloaded from the [GitHub releases page](https://github.com/jrasell/levant/releases) using `curl -L https://github.com/jrasell/levant/releases/download/0.2.6/linux-amd64-levant -o levant`
+* The Levant binary can be downloaded from the [GitHub releases page](https://github.com/jrasell/levant/releases) using `curl -L https://github.com/jrasell/levant/releases/download/0.2.7/linux-amd64-levant -o levant`
 
 * A docker image can be found on [Docker Hub](https://hub.docker.com/r/jrasell/levant/), the latest version can be downloaded using `docker pull jrasell/levant`.
 
