@@ -2,6 +2,7 @@
 
 IMPROVEMENTS:
  * Use `missingkey=zero` rather than error which allows better use of standard go templating, particulary conditionals [GH-275](https://github.com/jrasell/levant/pull/275)
+ * Added maths functions add, subtract, multiply, divide and modulo to the template rendering process [GH-277](https://github.com/jrasell/levant/pull/277)
 
 ## 0.2.6 (25 February 2019)
 
