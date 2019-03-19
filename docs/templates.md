@@ -376,3 +376,73 @@ Render:
 ```
 QUEUE-NAME
 ```
+
+#### add
+
+Returns the sum of the two passed values.
+
+Examples:
+```
+[[ add 5 2 ]]
+```
+
+Render:
+```
+7
+```
+
+#### subtract
+
+Returns the difference of the second value from the first.
+
+Example:
+```
+[[ subtract 2 5 ]]
+```
+
+Render:
+```
+3
+```
+
+#### multiply
+
+Returns the product of the two values.
+
+Example:
+```
+[[ multiply 4 4 ]]
+```
+
+Render:
+```
+16
+```
+
+#### divide
+
+Returns the division of the second value from the first.
+
+Example:
+```
+[[ divide 2 6 ]]
+```
+
+Render:
+```
+3
+```
+
+#### modulo
+
+Returns the modulo of the second value from the first.
+
+Example:
+```
+[[ modulo 2 5 ]]
+```
+
+Render:
+```
+1
+```
