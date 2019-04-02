@@ -1,3 +1,5 @@
+# test alloc error with a command failure
+
 job "[[.job_name]]" {
   datacenters = ["dc1"]
   type = "service"
@@ -8,7 +10,7 @@ job "[[.job_name]]" {
     progress_deadline = "20s"
   }
 
-  group "cache" {
+  group "test" {
     count = 1
     restart {
       attempts = 1
@@ -19,10 +21,11 @@ job "[[.job_name]]" {
     ephemeral_disk {
       size = 300
     }
-    task "redis" {
+    task "alpine" {
       driver = "docker"
       config {
-        image = "redis:badimagetag"
+        image = "alpine"
+        command = "badcommandname"
       }
       resources {
         cpu    = 100
