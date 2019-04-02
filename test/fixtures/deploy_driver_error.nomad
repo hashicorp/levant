@@ -1,4 +1,4 @@
-# tests a healthy deployment
+# tests driver error with an invalid docker image tag
 
 job "[[.job_name]]" {
   datacenters = ["dc1"]
@@ -6,17 +6,17 @@ job "[[.job_name]]" {
   update {
     max_parallel     = 1
     min_healthy_time = "10s"
-    healthy_deadline = "1m"
-    auto_revert      = true
+    healthy_deadline = "15s"
+    progress_deadline = "20s"
   }
 
   group "test" {
     count = 1
     restart {
-      attempts = 10
-      interval = "5m"
-      delay = "25s"
-      mode = "delay"
+      attempts = 1
+      interval = "10s"
+      delay = "5s"
+      mode = "fail"
     }
     ephemeral_disk {
       size = 300
@@ -24,11 +24,7 @@ job "[[.job_name]]" {
     task "alpine" {
       driver = "docker"
       config {
-        image = "alpine"
-        command = "tail"
-        args = [
-          "-f", "/dev/null"
-        ]
+        image = "alpine:badimagetag"
       }
       resources {
         cpu    = 100

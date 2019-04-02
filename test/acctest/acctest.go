@@ -123,6 +123,28 @@ func CheckDeploymentStatus(status string) TestStateFunc {
 	}
 }
 
+// CheckTaskGroupCount is a TestStateFunc to check a TaskGroup count
+func CheckTaskGroupCount(groupName string, count int) TestStateFunc {
+	return func(s *TestState) error {
+		job, _, err := s.Nomad.Jobs().Info(s.JobName, nil)
+		if err != nil {
+			return err
+		}
+
+		for _, group := range job.TaskGroups {
+			if groupName == *group.Name {
+				if *group.Count == count {
+					return nil
+				}
+
+				return fmt.Errorf("task group %s count is %d, expected %d", groupName, *group.Count, count)
+			}
+		}
+
+		return fmt.Errorf("unable to find task group %s", groupName)
+	}
+}
+
 // newNomadClient creates a Nomad API client configrable by NOMAD_
 // env variables or returns an error if Nomad is in an unhealthy state
 func newNomadClient() (*nomad.Client, error) {

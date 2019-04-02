@@ -1,13 +1,14 @@
-# tests a healthy deployment
+# tests a canary deployment
 
 job "[[.job_name]]" {
   datacenters = ["dc1"]
   type = "service"
   update {
     max_parallel     = 1
-    min_healthy_time = "10s"
+    min_healthy_time = "2s"
     healthy_deadline = "1m"
     auto_revert      = true
+    canary           = 1
   }
 
   group "test" {
@@ -29,6 +30,9 @@ job "[[.job_name]]" {
         args = [
           "-f", "/dev/null"
         ]
+      }
+      env {
+        version = "[[ .env_version ]]"
       }
       resources {
         cpu    = 100

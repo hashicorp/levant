@@ -1,4 +1,4 @@
-# tests a healthy deployment
+# tests a healthy deployment with a count
 
 job "[[.job_name]]" {
   datacenters = ["dc1"]
@@ -11,7 +11,7 @@ job "[[.job_name]]" {
   }
 
   group "test" {
-    count = 1
+    count = [[.count]]
     restart {
       attempts = 10
       interval = "5m"

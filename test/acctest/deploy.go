@@ -12,24 +12,30 @@ import (
 type DeployTestStepRunner struct {
 	FixtureName string
 
-	Canary      int
-	ForceBatch  bool
-	ForceCounts bool
+	Vars map[string]string
+
+	Canary     int
+	ForceBatch bool
+	ForceCount bool
 }
 
 // Run renders the job fixture and triggers a deployment
 func (c DeployTestStepRunner) Run(s *TestState) error {
-	vars := map[string]string{
-		"job_name": s.JobName,
+	if c.Vars == nil {
+		c.Vars = map[string]string{}
 	}
-	job, err := template.RenderJob("fixtures/"+c.FixtureName, []string{}, "", &vars)
+	c.Vars["job_name"] = s.JobName
+
+	job, err := template.RenderJob("fixtures/"+c.FixtureName, []string{}, "", &c.Vars)
 	if err != nil {
 		return fmt.Errorf("error rendering template: %s", err)
 	}
 
 	cfg := &levant.DeployConfig{
 		Deploy: &structs.DeployConfig{
-			Canary: c.Canary,
+			Canary:     c.Canary,
+			ForceBatch: c.ForceBatch,
+			ForceCount: c.ForceCount,
 		},
 		Client: &structs.ClientConfig{},
 		Template: &structs.TemplateConfig{
