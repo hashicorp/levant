@@ -399,6 +399,8 @@ func TestLeader_PeriodicDispatcher_Restore_Adds(t *testing.T) {
 
 	// Check that the new leader is tracking the periodic job only
 	testutil.WaitForResult(func() (bool, error) {
+		leader.periodicDispatcher.l.Lock()
+		defer leader.periodicDispatcher.l.Unlock()
 		if _, tracked := leader.periodicDispatcher.tracked[tuplePeriodic]; !tracked {
 			return false, fmt.Errorf("periodic job not tracked")
 		}
@@ -580,7 +582,9 @@ func TestLeader_ReapFailedEval(t *testing.T) {
 		if out.Status != structs.EvalStatusFailed {
 			return false, fmt.Errorf("got status %v; want %v", out.Status, structs.EvalStatusFailed)
 		}
-
+		if out.NextEval == "" {
+			return false, fmt.Errorf("got empty NextEval")
+		}
 		// See if there is a followup
 		evals, err := state.EvalsByJob(ws, eval.Namespace, eval.JobID)
 		if err != nil {
@@ -599,6 +603,11 @@ func TestLeader_ReapFailedEval(t *testing.T) {
 			if e.Status != structs.EvalStatusPending {
 				return false, fmt.Errorf("follow up eval has status %v; want %v",
 					e.Status, structs.EvalStatusPending)
+			}
+
+			if e.ID != out.NextEval {
+				return false, fmt.Errorf("follow up eval id is %v; orig eval NextEval %v",
+					e.ID, out.NextEval)
 			}
 
 			if e.Wait < s1.config.EvalFailedFollowupBaselineDelay ||
@@ -627,8 +636,10 @@ func TestLeader_ReapDuplicateEval(t *testing.T) {
 
 	// Create a duplicate blocked eval
 	eval := mock.Eval()
+	eval.CreateIndex = 100
 	eval2 := mock.Eval()
 	eval2.JobID = eval.JobID
+	eval2.CreateIndex = 102
 	s1.blockedEvals.Block(eval)
 	s1.blockedEvals.Block(eval2)
 
@@ -636,7 +647,7 @@ func TestLeader_ReapDuplicateEval(t *testing.T) {
 	state := s1.fsm.State()
 	testutil.WaitForResult(func() (bool, error) {
 		ws := memdb.NewWatchSet()
-		out, err := state.EvalByID(ws, eval2.ID)
+		out, err := state.EvalByID(ws, eval.ID)
 		if err != nil {
 			return false, err
 		}

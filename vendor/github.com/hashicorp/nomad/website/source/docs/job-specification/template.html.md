@@ -69,14 +69,14 @@ README][ct]. Since Nomad v0.6.0, templates can be read as environment variables.
   resulting template should be rendered, relative to the task directory.
 
 - `env` `(bool: false)` - Specifies the template should be read back in as
-  environment variables for the task. (See below)
+  environment variables for the task. ([See below](#environment-variables))
 
 - `left_delimiter` `(string: "{{")` - Specifies the left delimiter to use in the
   template. The default is "{{" for some templates, it may be easier to use a
   different delimiter that does not conflict with the output file itself.
 
 - `perms` `(string: "644")` - Specifies the rendered template's permissions.
-  File permissions are given as octal of the Unix file permissions rwxrwxrwx.
+  File permissions are given as octal of the Unix file permissions `rwxrwxrwx`.
 
 - `right_delimiter` `(string: "}}")` - Specifies the right delimiter to use in the
   template. The default is "}}" for some templates, it may be easier to use a
@@ -99,11 +99,11 @@ README][ct]. Since Nomad v0.6.0, templates can be read as environment variables.
     lease is less than or equal to the configured grace, the template will request
     a new credential. This prevents Vault from revoking the secret at its
     expiration and the task having a stale secret.
-    
+
     If the grace is set to a value that is higher than your default TTL or max
     TTL, the template will always read a new secret. **If secrets are being
     renewed constantly, decrease the `vault_grace`.**
-    
+
     If the task defines several templates, the `vault_grace` will be set to the
     lowest value across all the templates.
 
@@ -178,9 +178,9 @@ template {
 ### Environment Variables
 
 Since v0.6.0 templates may be used to create environment variables for tasks.
-Env templates work exactly like other templates except once they're written,
-they're read back in as `KEY=value` pairs. Those key value pairs are included
-in the task's environment.
+Env templates work exactly like other templates except once the templates are
+written, they are parsed as `KEY=value` pairs. Those key value pairs are
+included in the task's environment.
 
 For example the following template stanza:
 
@@ -211,7 +211,12 @@ This allows [12factor app](https://12factor.net/config) style environment
 variable based configuration while keeping all of the familiar features and
 semantics of Nomad templates.
 
-If a value may include newlines you should JSON encode it:
+Secrets or certificates may contain a wide variety of characters such as
+newlines, quotes, and backslashes which may be difficult to quote or escape
+properly.
+
+Whenever a templated variable may include special characters, use the `toJSON`
+function to ensure special characters are properly parsed by Nomad:
 
 ```
 CERT_PEM={{ file "path/to/cert.pem" | toJSON }}
@@ -220,10 +225,24 @@ CERT_PEM={{ file "path/to/cert.pem" | toJSON }}
 The parser will read the JSON string, so the `$CERT_PEM` environment variable
 will be identical to the contents of the file.
 
+Likewise when evaluating a password that may contain quotes or `#`, use the
+`toJSON` function to ensure Nomad passes the password to task unchanged:
+
+```
+# Passwords may contain any character including special characters like:
+#   \"'#
+# Use toJSON to ensure Nomad passes them to the environment unchanged.
+{{ with secret "secrets/data/application/backend" }}
+DB_PASSWD={{ .Data.data.DB_PASSWD | toJSON }}
+{{ end }}
+```
+
 For more details see [go-envparser's
 README](https://github.com/hashicorp/go-envparse#readme).
 
 ## Vault Integration
+
+### PKI Certificate
 
 This example acquires a PKI certificate from Vault in PEM format and stores it into your application's secret directory.
 
@@ -240,10 +259,47 @@ EOH
 }
 ```
 
+Most users should set `generate_lease=true` on the `pki/issue/foo` role in Vault's
+PKI backend. If this value is not set, the template stanza will frequently render a new
+certificate, approximately every minute, which is probably not what you want.
+
+### Vault KV API v1
+
+Under Vault KV API v1, paths start with `secret/`, and the response returns the
+raw key/value data. This secret was set using
+`vault kv put secret/aws/s3 aws_access_key_id=somekeyid`.
+
+```hcl
+  template {
+    data = <<EOF
+      AWS_ACCESS_KEY_ID = "{{with secret "secret/aws/s3"}}{{.Data.aws_access_key_id}}{{end}}"
+    EOF
+  }
+```
+
+### Vault KV API v2
+
+Under Vault KV API v2, paths start with `secret/data/`, and the response returns
+metadata in addition to key/value data. This secret was set using
+`vault kv put secret/aws/s3 aws_access_key_id=somekeyid`.
+
+```hcl
+  template {
+    data = <<EOF
+      AWS_ACCESS_KEY_ID = "{{with secret "secret/data/aws/s3"}}{{.Data.data.aws_access_key_id}}{{end}}"
+    EOF
+  }
+```
+
+Notice the addition of `data` in both the path and the field accessor string.
+Additionally, when using the Vault v2 API, the Vault policies applied to your
+Nomad jobs will need to grant permissions to `read` under `secret/data/...`
+rather than `secret/...`.
+
 ## Client Configuration
 
 The `template` block has the following [client configuration
-options](/docs/agent/configuration/client.html#options):
+options](/docs/configuration/client.html#options):
 
 * `template.allow_host_source` - Allows templates to specify their source
   template as an absolute path referencing host directories. Defaults to `true`.

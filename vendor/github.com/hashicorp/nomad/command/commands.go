@@ -5,7 +5,9 @@ import (
 	"os"
 
 	"github.com/hashicorp/nomad/command/agent"
+	"github.com/hashicorp/nomad/drivers/docker/docklog"
 	"github.com/hashicorp/nomad/version"
+	colorable "github.com/mattn/go-colorable"
 	"github.com/mitchellh/cli"
 )
 
@@ -62,8 +64,8 @@ func Commands(metaPtr *Meta, agentUi cli.Ui) map[string]cli.CommandFactory {
 	if meta.Ui == nil {
 		meta.Ui = &cli.BasicUi{
 			Reader:      os.Stdin,
-			Writer:      os.Stdout,
-			ErrorWriter: os.Stderr,
+			Writer:      colorable.NewColorableStdout(),
+			ErrorWriter: colorable.NewColorableStderr(),
 		}
 	}
 
@@ -210,6 +212,11 @@ func Commands(metaPtr *Meta, agentUi cli.Ui) map[string]cli.CommandFactory {
 				Meta: meta,
 			}, nil
 		},
+		docklog.PluginName: func() (cli.Command, error) {
+			return &DockerLoggerPluginCommand{
+				Meta: meta,
+			}, nil
+		},
 		"eval": func() (cli.Command, error) {
 			return &EvalCommand{
 				Meta: meta,
@@ -322,6 +329,11 @@ func Commands(metaPtr *Meta, agentUi cli.Ui) map[string]cli.CommandFactory {
 		},
 		"job validate": func() (cli.Command, error) {
 			return &JobValidateCommand{
+				Meta: meta,
+			}, nil
+		},
+		"logmon": func() (cli.Command, error) {
+			return &LogMonPluginCommand{
 				Meta: meta,
 			}, nil
 		},

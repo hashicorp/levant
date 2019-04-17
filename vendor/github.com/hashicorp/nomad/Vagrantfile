@@ -3,11 +3,27 @@
 #
 
 LINUX_BASE_BOX = "bento/ubuntu-16.04"
-FREEBSD_BASE_BOX = "jen20/FreeBSD-11.1-RELEASE"
+FREEBSD_BASE_BOX = "freebsd/FreeBSD-11.2-STABLE"
 
 Vagrant.configure(2) do |config|
 	# Compilation and development boxes
 	config.vm.define "linux", autostart: true, primary: true do |vmCfg|
+		vmCfg.vm.box = LINUX_BASE_BOX
+		vmCfg.vm.hostname = "linux"
+		vmCfg = configureProviders vmCfg,
+			cpus: suggestedCPUCores()
+
+		vmCfg = configureLinuxProvisioners(vmCfg)
+
+		vmCfg.vm.synced_folder '.',
+			'/opt/gopath/src/github.com/hashicorp/nomad'
+
+		vmCfg.vm.provision "shell",
+			privileged: false,
+			path: './scripts/vagrant-linux-unpriv-bootstrap.sh'
+	end
+
+	config.vm.define "linux-ui", autostart: false, primary: false do |vmCfg|
 		vmCfg.vm.box = LINUX_BASE_BOX
 		vmCfg.vm.hostname = "linux"
 		vmCfg = configureProviders vmCfg,
@@ -33,9 +49,10 @@ Vagrant.configure(2) do |config|
 	config.vm.define "freebsd", autostart: false, primary: false do |vmCfg|
 		vmCfg.vm.box = FREEBSD_BASE_BOX
 		vmCfg.vm.hostname = "freebsd"
+		vmCfg.ssh.shell = "sh"
 		vmCfg = configureProviders vmCfg,
 			cpus: suggestedCPUCores()
-
+		vmCfg.vm.network "private_network", type: "dhcp"
 		vmCfg.vm.synced_folder '.',
 			'/opt/gopath/src/github.com/hashicorp/nomad',
 			type: "nfs",
@@ -110,6 +127,14 @@ def configureLinuxProvisioners(vmCfg)
 
 	vmCfg.vm.provision "shell",
 		privileged: true,
+		path: './scripts/vagrant-linux-priv-dev.sh'
+
+	vmCfg.vm.provision "shell",
+		privileged: true,
+		path: './scripts/vagrant-linux-priv-docker.sh'
+
+	vmCfg.vm.provision "shell",
+		privileged: true,
 		path: './scripts/vagrant-linux-priv-consul.sh'
 
 	vmCfg.vm.provision "shell",
@@ -122,7 +147,11 @@ def configureLinuxProvisioners(vmCfg)
 
 	vmCfg.vm.provision "shell",
 		privileged: false,
-		path: './scripts/vagrant-linux-priv-ui.sh'
+		path: './scripts/vagrant-linux-unpriv-ui.sh'
+
+	vmCfg.vm.provision "shell",
+		privileged: true,
+		path: './scripts/vagrant-linux-priv-protoc.sh'
 
 	return vmCfg
 end

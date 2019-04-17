@@ -114,6 +114,10 @@ The `rkt` driver supports the following configuration in the job spec:
     }
     ```
 
+* `group` - (Optional) Specifies the group that will run the task. Sets the
+  `--group` flag and overrides the group specified by the image. The
+  [`user`][user] may be specified at the task level.
+
 ## Networking
 
 The `rkt` can specify `--net` and `--port` for the rkt client. Hence, there are two ways to use host ports by
@@ -159,17 +163,27 @@ For more information, please refer to [rkt Networking](https://coreos.com/rkt/do
 
 ## Client Requirements
 
-The `rkt` driver requires rkt to be installed and in your system's `$PATH`.
-The `trust_prefix` must be accessible by the node running Nomad. This can be an
+The `rkt` driver requires the following:
+* The Nomad client agent to be running as the root user.
+* rkt to be installed and in your system's `$PATH`.
+* The `trust_prefix` must be accessible by the node running Nomad. This can be an
 internal source, private to your cluster, but it must be reachable by the client
 over HTTP.
 
+## Plugin Options
+
+* `volumes_enabled` - Defaults to `true`. Allows tasks to bind host paths
+  (`volumes`) inside their container. Binding relative paths is always allowed
+  and will be resolved relative to the allocation's directory. 
+
 ## Client Configuration
 
-The `rkt` driver has the following [client configuration
-options](/docs/agent/configuration/client.html#options):
+~> Note: client configuration options will soon be deprecated. Please use [plugin options][plugin-options] instead. See the [plugin stanza][plugin-stanza] documentation for more information.
 
-* `rkt.volumes.enabled`: Defaults to `true`. Allows tasks to bind host paths
+The `rkt` driver has the following [client configuration
+options](/docs/configuration/client.html#options):
+
+* `rkt.volumes.enabled` - Defaults to `true`. Allows tasks to bind host paths
   (`volumes`) inside their container. Binding relative paths is always allowed
   and will be resolved relative to the allocation's directory.
 
@@ -201,3 +215,8 @@ job "docs" {
 
 This driver supports CPU and memory isolation by delegating to `rkt`. Network
 isolation is not supported as of now.
+
+
+[user]: /docs/job-specification/task.html#user
+[plugin-options]: #plugin-options
+[plugin-stanza]: /docs/configuration/plugin.html
