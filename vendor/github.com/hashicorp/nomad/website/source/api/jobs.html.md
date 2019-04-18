@@ -189,9 +189,9 @@ The table below shows this endpoint's support for
                 "Attempts": 10,
                 "Delay": 30000000000,
                 "DelayFunction": "exponential",
-                "Interval": 0,
+                "Interval": 36000000000000,
                 "MaxDelay": 3600000000000,
-                "Unlimited": true
+                "Unlimited": false
             },
             "EphemeralDisk": {
                 "SizeMB": 300
@@ -213,7 +213,7 @@ The table below shows this endpoint's support for
 ```text
 $ curl \
     --request POST \
-    --data @my-job.nomad \
+    --data @my-job.json \
     https://localhost:4646/v1/jobs
 ```
 
@@ -279,6 +279,7 @@ $ curl \
 {
     "AllAtOnce": false,
     "Constraints": null,
+    "Affinities":null,
     "CreateIndex": 0,
     "Datacenters": null,
     "ID": "my-job",
@@ -369,6 +370,14 @@ $ curl \
           "Operand": "set_contains"
         }
       ],
+      "Affinities": [
+         {
+          "LTarget": "${meta.datacenter}",
+          "RTarget": "dc1",
+          "Operand": "=",
+          "Weight": 50,
+         }
+       ],
       "RestartPolicy": {
         "Attempts": 10,
         "Interval": 300000000000,
@@ -429,11 +438,11 @@ $ curl \
             }
           ],
           "Constraints": null,
+          "Affinities":null,
           "Resources": {
             "CPU": 500,
             "MemoryMB": 256,
             "DiskMB": 0,
-            "IOPS": 0,
             "Networks": [
               {
                 "Device": "",
@@ -568,6 +577,7 @@ $ curl \
       "dc1"
     ],
     "Constraints": null,
+    "Affinities":null,
     "TaskGroups": [
       {
         "Name": "cache",
@@ -582,12 +592,20 @@ $ curl \
           "Canary": 0
         },
         "Constraints": null,
+        "Affinities":null,
         "RestartPolicy": {
           "Attempts": 10,
           "Interval": 300000000000,
           "Delay": 25000000000,
           "Mode": "delay"
         },
+        "Spreads": [
+           {
+           "Attribute": "${node.datacenter}",
+           "SpreadTarget": null,
+           "Weight": 100
+           }
+        ],
         "Tasks": [
           {
             "Name": "redis",
@@ -630,11 +648,12 @@ $ curl \
             "Vault": null,
             "Templates": null,
             "Constraints": null,
+            "Affinities":null,
+            "Spreads":null,
             "Resources": {
               "CPU": 500,
               "MemoryMB": 256,
               "DiskMB": 0,
-              "IOPS": 0,
               "Networks": [
                 {
                   "Device": "",
@@ -684,6 +703,7 @@ $ curl \
     "Payload": null,
     "Meta": null,
     "VaultToken": "",
+    "Spreads": null,
     "Status": "pending",
     "StatusDescription": "",
     "Stable": false,
