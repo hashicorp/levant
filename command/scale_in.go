@@ -99,7 +99,7 @@ func (c *ScaleInCommand) Run(args []string) int {
 	config.Scale.JobID = args[0]
 
 	if config.Scale.Count == 0 && config.Scale.Percent == 0 || config.Scale.Count > 0 && config.Scale.Percent > 0 {
-		c.UI.Error("You must set either -count or -percent flag to scale-out")
+		c.UI.Error("You must set either -count or -percent flag to scale-in")
 		return 1
 	}
 
