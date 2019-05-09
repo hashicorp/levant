@@ -177,7 +177,7 @@ func (l *levantDeployment) deploy() (success bool) {
 
 		dep, _, err := l.nomad.Deployments().Info(depID, nil)
 		if err != nil {
-			log.Error().Err(err).Msgf("levant/deploy: unable to query deployment %s for auto-revert check", dep.ID)
+			log.Error().Err(err).Msgf("levant/deploy: unable to query deployment %s for auto-revert check", depID)
 			return
 		}
 
