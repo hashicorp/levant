@@ -31,6 +31,7 @@ func funcMap(consulClient *consul.Client) template.FuncMap {
 		"parseInt":           parseInt,
 		"parseJSON":          parseJSON,
 		"parseUint":          parseUint,
+		"replace":            replace,
 		"timeNow":            timeNowFunc,
 		"timeNowUTC":         timeNowUTCFunc,
 		"timeNowTimezone":    timeNowTimezoneFunc(),
@@ -200,6 +201,10 @@ func parseUint(s string) (uint64, error) {
 		return 0, err
 	}
 	return result, nil
+}
+
+func replace(input, from, to string) string {
+	return strings.Replace(input, from, to, -1)
 }
 
 func timeNowFunc() string {
