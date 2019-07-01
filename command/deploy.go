@@ -59,6 +59,10 @@ General Options:
     Use the taskgroup count from the Nomad jobfile instead of the count that
     is currently set in a running job.
 
+  -blue-green
+	Set the max-parallel and the canary count of each task group to the current
+	count for a blue-green type release
+
   -ignore-no-changes
     By default if no changes are detected when running a deployment Levant will
     exit with a status 1 to indicate a deployment didn't happen. This behaviour
@@ -116,6 +120,7 @@ func (c *DeployCommand) Run(args []string) int {
 	flags.StringVar(&config.Client.ConsulAddr, "consul-address", "", "")
 	flags.BoolVar(&config.Deploy.ForceBatch, "force-batch", false, "")
 	flags.BoolVar(&config.Deploy.ForceCount, "force-count", false, "")
+	flags.BoolVar(&config.Deploy.BlueGreen, "blue-green", false, "")
 	flags.BoolVar(&config.Plan.IgnoreNoChanges, "ignore-no-changes", false, "")
 	flags.StringVar(&level, "log-level", "INFO", "")
 	flags.StringVar(&format, "log-format", "HUMAN", "")
@@ -175,6 +180,18 @@ func (c *DeployCommand) Run(args []string) int {
 		}
 	}
 
+	if config.Deploy.BlueGreen {
+		if err = c.checkBlueGreen(config.Template.Job); err != nil {
+			c.UI.Error(fmt.Sprintf("[ERROR] levant/command: %v", err))
+			return 1
+		}
+		for _, taskGroup := range config.Template.Job.TaskGroups {
+			blueGreenCount := taskGroup.Count
+			taskGroup.Update.MaxParallel = blueGreenCount
+			taskGroup.Update.Canary = blueGreenCount
+		}
+	}
+
 	p := levant.PlanConfig{
 		Client:   config.Client,
 		Plan:     config.Plan,
@@ -223,4 +240,16 @@ func (c *DeployCommand) checkForceBatch(job *nomad.Job, forceBatch bool) error {
 	}
 
 	return fmt.Errorf("force-batch passed but job is not periodic")
+}
+
+func (c *DeployCommand) checkBlueGreen(job *nomad.Job) error {
+
+	if job.IsPeriodic() {
+		return fmt.Errorf("blue-green passed but job is periodic")
+	}
+	if *job.Type == "system" {
+		return fmt.Errorf(`blue-green passed but job type is "system"`)
+	}
+
+	return nil
 }

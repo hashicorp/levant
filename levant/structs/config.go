@@ -35,6 +35,10 @@ type DeployConfig struct {
 	// and force the count based on the rendered job file.
 	ForceCount bool
 
+	// BlueGreen is a boolean flag that can be used to run a blue-green release,
+	// overwriting the max-parallel and the canary count variables
+	BlueGreen bool
+
 	// VaultToken is a string with the vault token.
 	VaultToken string
 
