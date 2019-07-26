@@ -1,20 +1,24 @@
 default: check test build
 
+.PHONY: tools
 tools: ## Install the tools used to test and build
 	@echo "==> Installing build tools"
 	go get github.com/ahmetb/govvv
 	go get github.com/alecthomas/gometalinter
 	gometalinter --install
 
+.PHONY: build
 build: ## Build Levant for development purposes
 	@echo "==> Running $@..."
 	govvv build -o levant-local . -version local
 
+.PHONY: test
 test: ## Run the Levant test suite with coverage
 	@echo "==> Running $@..."
 	@go test -cover -v -tags -race \
 		"$(BUILDTAGS)" $(shell go list ./... | grep -v vendor)
 
+.PHONY: release
 release: ## Trigger the release build script
 	@echo "==> Running $@..."
 	@goreleaser --rm-dist
