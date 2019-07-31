@@ -1,5 +1,7 @@
 ## 0.2.8 (Unreleased)
 
+ * Add `-force` flag to deploy CLI command which allows for forcing a deployment even if Levant detects 0 changes on plan [GH-296](https://github.com/jrasell/levant/pull/296)
+
 ## 0.2.7 (19 March 2019)
 
 IMPROVEMENTS:

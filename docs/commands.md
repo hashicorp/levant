@@ -14,6 +14,8 @@ Levant supports a number of command line arguments which provide control over th
 
 * **-consul-address** (string: "localhost:8500") The Consul host and port to use when making Consul KeyValue lookups for template rendering.
 
+* **-force** (bool: false) Execute deployment even though there were no changes.
+
 * **-force-batch** (bool: false) Forces a new instance of the periodic job. A new instance will be created even if it violates the job's prohibit_overlap settings.
 
 * **-force-count** (bool: false) Use the taskgroup count from the Nomad job file instead of the count that is obtained from the running job count.
