@@ -18,4 +18,6 @@ RUN buildDeps=' \
         && apk del $buildDeps \
         && echo "Build complete."
 
-CMD ["levant", "--help"]
+ENTRYPOINT ["levant"]
+
+CMD ["--help"]
