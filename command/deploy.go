@@ -51,6 +51,9 @@ General Options:
     The Consul host and port to use when making Consul KeyValue lookups for
     template rendering.
 
+  -force
+    Execute deployment even though there were no changes.
+
   -force-batch
     Forces a new instance of the periodic job. A new instance will be created
     even if it violates the job's prohibit_overlap settings.
@@ -118,6 +121,7 @@ func (c *DeployCommand) Run(args []string) int {
 	flags.BoolVar(&config.Client.AllowStale, "allow-stale", false, "")
 	flags.IntVar(&config.Deploy.Canary, "canary-auto-promote", 0, "")
 	flags.StringVar(&config.Client.ConsulAddr, "consul-address", "", "")
+	flags.BoolVar(&config.Deploy.Force, "force", false, "")
 	flags.BoolVar(&config.Deploy.ForceBatch, "force-batch", false, "")
 	flags.BoolVar(&config.Deploy.ForceCount, "force-count", false, "")
 	flags.BoolVar(&config.Deploy.BlueGreen, "blue-green", false, "")
@@ -192,17 +196,19 @@ func (c *DeployCommand) Run(args []string) int {
 		}
 	}
 
-	p := levant.PlanConfig{
-		Client:   config.Client,
-		Plan:     config.Plan,
-		Template: config.Template,
-	}
+	if !config.Deploy.Force {
+		p := levant.PlanConfig{
+			Client:   config.Client,
+			Plan:     config.Plan,
+			Template: config.Template,
+		}
 
-	planSuccess, changes := levant.TriggerPlan(&p)
-	if !planSuccess {
-		return 1
-	} else if !changes && p.Plan.IgnoreNoChanges {
-		return 0
+		planSuccess, changes := levant.TriggerPlan(&p)
+		if !planSuccess {
+			return 1
+		} else if !changes && p.Plan.IgnoreNoChanges {
+			return 0
+		}
 	}
 
 	success := levant.TriggerDeployment(config, nil)

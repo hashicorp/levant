@@ -27,6 +27,10 @@ type DeployConfig struct {
 	// until attempting to perform autopromote.
 	Canary int
 
+	// Force is a boolean flag that can be used to force a deployment
+	// even though levant didn't detect any changes.
+	Force bool
+
 	// ForceBatch is a boolean flag that can be used to force a run of a periodic
 	// job upon registration.
 	ForceBatch bool
