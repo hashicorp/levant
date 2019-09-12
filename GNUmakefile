@@ -16,7 +16,12 @@ build: ## Build Levant for development purposes
 test: ## Run the Levant test suite with coverage
 	@echo "==> Running $@..."
 	@go test -cover -v -tags -race \
-		"$(BUILDTAGS)" $(shell go list ./... | grep -v vendor)
+		"$(BUILDTAGS)" $(shell go list ./... |grep -v vendor |grep -v test)
+
+.PHONY: acceptance-test
+acceptance-test: ## Run the Levant acceptance tests
+	@echo "==> Running $@..."
+	go test -timeout 120s github.com/jrasell/levant/test -v
 
 .PHONY: release
 release: ## Trigger the release build script
