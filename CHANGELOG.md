@@ -1,6 +1,11 @@
 ## 0.2.8 (Unreleased)
 
+IMPROVEMENTS:
  * Add `-force` flag to deploy CLI command which allows for forcing a deployment even if Levant detects 0 changes on plan [GH-296](https://github.com/jrasell/levant/pull/296)
+
+BUG FIXES:
+ * Fix segfault when logging deployID details [GH-286](https://github.com/jrasell/levant/pull/286)
+ * Fix error message within scale-in which incorrectly referenced scale-out [GH-285](https://github.com/jrasell/levant/pull/285/files)
 
 ## 0.2.7 (19 March 2019)
 
