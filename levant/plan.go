@@ -89,10 +89,10 @@ func (lp *levantPlan) plan() (bool, error) {
 		log.Info().Msg("levant/plan: job is a new addition to the cluster")
 		return true, nil
 
-		// If there are no changes, then log an error so the user can see this and
+		// If there are no changes, log the message so the user can see this and
 		// exit the deployment.
 	case diffTypeNone:
-		log.Error().Msg("levant/plan: no changes detected for job")
+		log.Info().Msg("levant/plan: no changes detected for job")
 		return false, nil
 
 		// If there are changes, run the planDiff function which is responsible for
