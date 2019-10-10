@@ -102,6 +102,7 @@ func (c *DeployCommand) Run(args []string) int {
 
 	var err error
 	var level, format string
+	var strictMode bool
 
 	config := &levant.DeployConfig{
 		Client:   &structs.ClientConfig{},
@@ -125,6 +126,7 @@ func (c *DeployCommand) Run(args []string) int {
 	flags.StringVar(&format, "log-format", "HUMAN", "")
 	flags.StringVar(&config.Deploy.VaultToken, "vault-token", "", "")
 	flags.BoolVar(&config.Deploy.EnvVault, "vault", false, "")
+	flags.BoolVar(&strictMode, "strict", false, "")
 
 	flags.Var((*helper.FlagStringSlice)(&config.Template.VariableFiles), "var-file", "")
 
@@ -159,7 +161,7 @@ func (c *DeployCommand) Run(args []string) int {
 	}
 
 	config.Template.Job, err = template.RenderJob(config.Template.TemplateFile,
-		config.Template.VariableFiles, config.Client.ConsulAddr, &c.Meta.flagVars)
+		config.Template.VariableFiles, config.Client.ConsulAddr, strictMode, &c.Meta.flagVars)
 	if err != nil {
 		c.UI.Error(fmt.Sprintf("[ERROR] levant/command: %v", err))
 		return 1

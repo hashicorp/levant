@@ -13,6 +13,7 @@ type tmpl struct {
 	flagVariables   *map[string]string
 	jobTemplateFile string
 	variableFiles   []string
+	errMissingKey   bool
 }
 
 const (
@@ -28,7 +29,13 @@ const (
 func (t *tmpl) newTemplate() *template.Template {
 	tmpl := template.New("jobTemplate")
 	tmpl.Delims(leftDelim, rightDelim)
-	tmpl.Option("missingkey=zero")
+
+	if t.errMissingKey {
+		tmpl.Option("missingkey=error")
+	} else {
+		tmpl.Option("missingkey=zero")
+	}
+
 	tmpl.Funcs(funcMap(t.consulClient))
 	return tmpl
 }

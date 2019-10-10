@@ -19,9 +19,9 @@ import (
 
 // RenderJob takes in a template and variables performing a render of the
 // template followed by Nomad jobspec parse.
-func RenderJob(templateFile string, variableFiles []string, addr string, flagVars *map[string]string) (job *nomad.Job, err error) {
+func RenderJob(templateFile string, variableFiles []string, addr string, strictMode bool, flagVars *map[string]string) (job *nomad.Job, err error) {
 	var tpl *bytes.Buffer
-	tpl, err = RenderTemplate(templateFile, variableFiles, addr, flagVars)
+	tpl, err = RenderTemplate(templateFile, variableFiles, addr, strictMode, flagVars)
 	if err != nil {
 		return
 	}
@@ -32,12 +32,13 @@ func RenderJob(templateFile string, variableFiles []string, addr string, flagVar
 
 // RenderTemplate is the main entry point to render the template based on the
 // passed variables file.
-func RenderTemplate(templateFile string, variableFiles []string, addr string, flagVars *map[string]string) (tpl *bytes.Buffer, err error) {
+func RenderTemplate(templateFile string, variableFiles []string, addr string, strictMode bool, flagVars *map[string]string) (tpl *bytes.Buffer, err error) {
 
 	t := &tmpl{}
 	t.flagVariables = flagVars
 	t.jobTemplateFile = templateFile
 	t.variableFiles = variableFiles
+	t.errMissingKey = strictMode
 
 	c, err := client.NewConsulClient(addr)
 	if err != nil {

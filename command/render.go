@@ -60,6 +60,7 @@ func (c *RenderCommand) Run(args []string) int {
 
 	var addr, outPath, templateFile string
 	var variables []string
+	var strictMode bool
 	var err error
 	var tpl *bytes.Buffer
 
@@ -69,6 +70,7 @@ func (c *RenderCommand) Run(args []string) int {
 	flags.StringVar(&addr, "consul-address", "", "")
 	flags.Var((*helper.FlagStringSlice)(&variables), "var-file", "")
 	flags.StringVar(&outPath, "out", "", "")
+	flags.BoolVar(&strictMode, "strict", false, "")
 
 	if err = flags.Parse(args); err != nil {
 		return 1
@@ -89,7 +91,7 @@ func (c *RenderCommand) Run(args []string) int {
 		return 1
 	}
 
-	tpl, err = template.RenderTemplate(templateFile, variables, addr, &c.Meta.flagVars)
+	tpl, err = template.RenderTemplate(templateFile, variables, addr, strictMode, &c.Meta.flagVars)
 	if err != nil {
 		c.UI.Error(fmt.Sprintf("[ERROR] levant/command: %v", err))
 		return 1

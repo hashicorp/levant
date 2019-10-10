@@ -56,7 +56,6 @@ func Test(t *testing.T, c TestCase) {
 	if err != nil {
 		t.Fatalf("failed to create nomad client: %s", err)
 	}
-
 	state := &TestState{
 		JobName: fmt.Sprintf("levant-%s", t.Name()),
 		Nomad:   nomad,
