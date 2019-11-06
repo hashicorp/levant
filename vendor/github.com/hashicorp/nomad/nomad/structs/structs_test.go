@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/consul/api"
-	multierror "github.com/hashicorp/go-multierror"
+	"github.com/hashicorp/go-multierror"
 	"github.com/hashicorp/nomad/helper/uuid"
 	"github.com/kr/pretty"
 	"github.com/stretchr/testify/assert"
@@ -110,6 +110,16 @@ func TestJob_Validate(t *testing.T) {
 	if !strings.Contains(mErr.Errors[2].Error(), "Task group web validation failed") {
 		t.Fatalf("err: %s", err)
 	}
+
+	// test for empty datacenters
+	j = &Job{
+		Datacenters: []string{""},
+	}
+	err = j.Validate()
+	mErr = err.(*multierror.Error)
+	if !strings.Contains(mErr.Error(), "datacenter must be non-empty string") {
+		t.Fatalf("err: %s", err)
+	}
 }
 
 func TestJob_Warnings(t *testing.T) {
@@ -129,6 +139,25 @@ func TestJob_Warnings(t *testing.T) {
 						Count: 2,
 						Update: &UpdateStrategy{
 							MaxParallel: 10,
+						},
+					},
+				},
+			},
+		},
+		{
+			Name:     "AutoPromote mixed TaskGroups",
+			Expected: []string{"auto_promote must be true for all groups"},
+			Job: &Job{
+				Type: JobTypeService,
+				TaskGroups: []*TaskGroup{
+					{
+						Update: &UpdateStrategy{
+							AutoPromote: true,
+						},
+					},
+					{
+						Update: &UpdateStrategy{
+							AutoPromote: false,
 						},
 					},
 				},
@@ -617,6 +646,52 @@ func TestJob_RequiredSignals(t *testing.T) {
 	}
 }
 
+// test new Equal comparisons for components of Jobs
+func TestJob_PartEqual(t *testing.T) {
+	ns := &Networks{}
+	require.True(t, ns.Equals(&Networks{}))
+
+	ns = &Networks{
+		&NetworkResource{Device: "eth0"},
+	}
+	require.True(t, ns.Equals(&Networks{
+		&NetworkResource{Device: "eth0"},
+	}))
+
+	ns = &Networks{
+		&NetworkResource{Device: "eth0"},
+		&NetworkResource{Device: "eth1"},
+		&NetworkResource{Device: "eth2"},
+	}
+	require.True(t, ns.Equals(&Networks{
+		&NetworkResource{Device: "eth2"},
+		&NetworkResource{Device: "eth0"},
+		&NetworkResource{Device: "eth1"},
+	}))
+
+	cs := &Constraints{
+		&Constraint{"left0", "right0", "=", ""},
+		&Constraint{"left1", "right1", "=", ""},
+		&Constraint{"left2", "right2", "=", ""},
+	}
+	require.True(t, cs.Equals(&Constraints{
+		&Constraint{"left0", "right0", "=", ""},
+		&Constraint{"left2", "right2", "=", ""},
+		&Constraint{"left1", "right1", "=", ""},
+	}))
+
+	as := &Affinities{
+		&Affinity{"left0", "right0", "=", 0, ""},
+		&Affinity{"left1", "right1", "=", 0, ""},
+		&Affinity{"left2", "right2", "=", 0, ""},
+	}
+	require.True(t, as.Equals(&Affinities{
+		&Affinity{"left0", "right0", "=", 0, ""},
+		&Affinity{"left2", "right2", "=", 0, ""},
+		&Affinity{"left1", "right1", "=", 0, ""},
+	}))
+}
+
 func TestTaskGroup_Validate(t *testing.T) {
 	j := testJob()
 	tg := &TaskGroup{
@@ -771,12 +846,129 @@ func TestTaskGroup_Validate(t *testing.T) {
 	if !strings.Contains(err.Error(), "System jobs should not have a reschedule policy") {
 		t.Fatalf("err: %s", err)
 	}
+
+	tg = &TaskGroup{
+		Networks: []*NetworkResource{
+			{
+				DynamicPorts: []Port{{"http", 0, 80}},
+			},
+		},
+		Tasks: []*Task{
+			{
+				Resources: &Resources{
+					Networks: []*NetworkResource{
+						{
+							DynamicPorts: []Port{{"http", 0, 80}},
+						},
+					},
+				},
+			},
+		},
+	}
+	err = tg.Validate(j)
+	require.Contains(t, err.Error(), "Port label http already in use")
+	require.Contains(t, err.Error(), "Port mapped to 80 already in use")
+
+	tg = &TaskGroup{
+		Volumes: map[string]*VolumeRequest{
+			"foo": {
+				Type:   "nothost",
+				Source: "foo",
+			},
+		},
+		Tasks: []*Task{
+			{
+				Name:      "task-a",
+				Resources: &Resources{},
+			},
+		},
+	}
+	err = tg.Validate(&Job{})
+	require.Contains(t, err.Error(), `Volume foo has unrecognised type nothost`)
+
+	tg = &TaskGroup{
+		Volumes: map[string]*VolumeRequest{
+			"foo": {
+				Type: "host",
+			},
+		},
+		Tasks: []*Task{
+			{
+				Name:      "task-a",
+				Resources: &Resources{},
+			},
+		},
+	}
+	err = tg.Validate(&Job{})
+	require.Contains(t, err.Error(), `Volume foo has an empty source`)
+
+	tg = &TaskGroup{
+		Volumes: map[string]*VolumeRequest{
+			"foo": {
+				Type: "host",
+			},
+		},
+		Tasks: []*Task{
+			{
+				Name:      "task-a",
+				Resources: &Resources{},
+				VolumeMounts: []*VolumeMount{
+					{
+						Volume: "",
+					},
+				},
+			},
+			{
+				Name:      "task-b",
+				Resources: &Resources{},
+				VolumeMounts: []*VolumeMount{
+					{
+						Volume: "foob",
+					},
+				},
+			},
+		},
+	}
+	err = tg.Validate(&Job{})
+	expected = `Task task-a has a volume mount (0) referencing an empty volume`
+	require.Contains(t, err.Error(), expected)
+
+	expected = `Task task-b has a volume mount (0) referencing undefined volume foob`
+	require.Contains(t, err.Error(), expected)
+
+	taskA := &Task{Name: "task-a"}
+	tg = &TaskGroup{
+		Name: "group-a",
+		Services: []*Service{
+			{
+				Name: "service-a",
+				Checks: []*ServiceCheck{
+					{
+						Name:      "check-a",
+						Type:      "tcp",
+						TaskName:  "task-b",
+						PortLabel: "http",
+						Interval:  time.Duration(1 * time.Second),
+						Timeout:   time.Duration(1 * time.Second),
+					},
+				},
+			},
+		},
+		Tasks: []*Task{taskA},
+	}
+	err = tg.Validate(&Job{})
+	expected = `Check check-a invalid: refers to non-existent task task-b`
+	require.Contains(t, err.Error(), expected)
+
+	expected = `Check check-a invalid: only script and gRPC checks should have tasks`
+	require.Contains(t, err.Error(), expected)
+
 }
 
 func TestTask_Validate(t *testing.T) {
 	task := &Task{}
 	ephemeralDisk := DefaultEphemeralDisk()
-	err := task.Validate(ephemeralDisk, JobTypeBatch)
+	err := task.Validate(ephemeralDisk, JobTypeBatch, nil)
 	mErr := err.(*multierror.Error)
 	if !strings.Contains(mErr.Errors[0].Error(), "task name") {
 		t.Fatalf("err: %s", err)
@@ -789,7 +981,7 @@ func TestTask_Validate(t *testing.T) {
 	}
 
 	task = &Task{Name: "web/foo"}
-	err = task.Validate(ephemeralDisk, JobTypeBatch)
+	err = task.Validate(ephemeralDisk, JobTypeBatch, nil)
 	mErr = err.(*multierror.Error)
 	if !strings.Contains(mErr.Errors[0].Error(), "slashes") {
 		t.Fatalf("err: %s", err)
@@ -805,7 +997,7 @@ func TestTask_Validate(t *testing.T) {
 		LogConfig: DefaultLogConfig(),
 	}
 	ephemeralDisk.SizeMB = 200
-	err = task.Validate(ephemeralDisk, JobTypeBatch)
+	err = task.Validate(ephemeralDisk, JobTypeBatch, nil)
 	if err != nil {
 		t.Fatalf("err: %s", err)
 	}
@@ -819,7 +1011,7 @@ func TestTask_Validate(t *testing.T) {
 			LTarget: "${meta.rack}",
 		})
 
-	err = task.Validate(ephemeralDisk, JobTypeBatch)
+	err = task.Validate(ephemeralDisk, JobTypeBatch, nil)
 	mErr = err.(*multierror.Error)
 	if !strings.Contains(mErr.Errors[0].Error(), "task level: distinct_hosts") {
 		t.Fatalf("err: %s", err)
@@ -901,7 +1093,7 @@ func TestTask_Validate_Services(t *testing.T) {
 		},
 	}
 
-	err := task.Validate(ephemeralDisk, JobTypeService)
+	err := task.Validate(ephemeralDisk, JobTypeService, nil)
 	if err == nil {
 		t.Fatal("expected an error")
 	}
@@ -922,7 +1114,7 @@ func TestTask_Validate_Services(t *testing.T) {
 		t.Fatalf("err: %v", err)
 	}
 
-	if err = task1.Validate(ephemeralDisk, JobTypeService); err != nil {
+	if err = task1.Validate(ephemeralDisk, JobTypeService, nil); err != nil {
 		t.Fatalf("err : %v", err)
 	}
 }
@@ -981,7 +1173,7 @@ func TestTask_Validate_Service_AddressMode_Ok(t *testing.T) {
 	for _, service := range cases {
 		task := getTask(service)
 		t.Run(service.Name, func(t *testing.T) {
-			if err := task.Validate(ephemeralDisk, JobTypeService); err != nil {
+			if err := task.Validate(ephemeralDisk, JobTypeService, nil); err != nil {
 				t.Fatalf("unexpected err: %v", err)
 			}
 		})
@@ -1034,7 +1226,7 @@ func TestTask_Validate_Service_AddressMode_Bad(t *testing.T) {
 	for _, service := range cases {
 		task := getTask(service)
 		t.Run(service.Name, func(t *testing.T) {
-			err := task.Validate(ephemeralDisk, JobTypeService)
+			err := task.Validate(ephemeralDisk, JobTypeService, nil)
 			if err == nil {
 				t.Fatalf("expected an error")
 			}
@@ -1347,6 +1539,117 @@ func TestTask_Validate_Service_Check_CheckRestart(t *testing.T) {
 	assert.Nil(t, validCheckRestart.Validate())
 }
 
+func TestTask_Validate_ConnectProxyKind(t *testing.T) {
+	ephemeralDisk := DefaultEphemeralDisk()
+	getTask := func(kind TaskKind, leader bool) *Task {
+		task := &Task{
+			Name:      "web",
+			Driver:    "docker",
+			Resources: DefaultResources(),
+			LogConfig: DefaultLogConfig(),
+			Kind:      kind,
+			Leader:    leader,
+		}
+		task.Resources.Networks = []*NetworkResource{
+			{
+				MBits: 10,
+				DynamicPorts: []Port{
+					{
+						Label: "http",
+						Value: 80,
+					},
+				},
+			},
+		}
+		return task
+	}
+
+	cases := []struct {
+		Desc        string
+		Kind        TaskKind
+		Leader      bool
+		Service     *Service
+		TgService   []*Service
+		ErrContains string
+	}{
+		{
+			Desc: "Not connect",
+			Kind: "test",
+		},
+		{
+			Desc: "Invalid because of service in task definition",
+			Kind: "connect-proxy:redis",
+			Service: &Service{
+				Name: "redis",
+			},
+			ErrContains: "Connect proxy task must not have a service stanza",
+		},
+		{
+			Desc:   "Leader should not be set",
+			Kind:   "connect-proxy:redis",
+			Leader: true,
+			Service: &Service{
+				Name: "redis",
+			},
+			ErrContains: "Connect proxy task must not have leader set",
+		},
+		{
+			Desc: "Service name invalid",
+			Kind: "connect-proxy:redis:test",
+			Service: &Service{
+				Name: "redis",
+			},
+			ErrContains: "Connect proxy service name not found in services from task group",
+		},
+		{
+			Desc:        "Service name not found in group",
+			Kind:        "connect-proxy:redis",
+			ErrContains: "Connect proxy service name not found in services from task group",
+		},
+		{
+			Desc: "Connect stanza not configured in group",
+			Kind: "connect-proxy:redis",
+			TgService: []*Service{{
+				Name: "redis",
+			}},
+			ErrContains: "Connect proxy service name not found in services from task group",
+		},
+		{
+			Desc: "Valid connect proxy kind",
+			Kind: "connect-proxy:redis",
+			TgService: []*Service{{
+				Name: "redis",
+				Connect: &ConsulConnect{
+					SidecarService: &ConsulSidecarService{
+						Port: "db",
+					},
+				},
+			}},
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		task := getTask(tc.Kind, tc.Leader)
+		if tc.Service != nil {
+			task.Services = []*Service{tc.Service}
+		}
+		t.Run(tc.Desc, func(t *testing.T) {
+			err := task.Validate(ephemeralDisk, "service", tc.TgService)
+			if err == nil && tc.ErrContains == "" {
+				// Ok!
+				return
+			}
+			if err == nil {
+				t.Fatalf("no error returned. expected: %s", tc.ErrContains)
+			}
+			if !strings.Contains(err.Error(), tc.ErrContains) {
+				t.Fatalf("expected %q but found: %v", tc.ErrContains, err)
+			}
+		})
+	}
+
+}
 func TestTask_Validate_LogConfig(t *testing.T) {
 	task := &Task{
 		LogConfig: DefaultLogConfig(),
@@ -1355,7 +1658,7 @@ func TestTask_Validate_LogConfig(t *testing.T) {
 		SizeMB: 1,
 	}
 
-	err := task.Validate(ephemeralDisk, JobTypeService)
+	err := task.Validate(ephemeralDisk, JobTypeService, nil)
 	mErr := err.(*multierror.Error)
 	if !strings.Contains(mErr.Errors[3].Error(), "log storage") {
 		t.Fatalf("err: %s", err)
@@ -1372,7 +1675,7 @@ func TestTask_Validate_Template(t *testing.T) {
 		SizeMB: 1,
 	}
 
-	err := task.Validate(ephemeralDisk, JobTypeService)
+	err := task.Validate(ephemeralDisk, JobTypeService, nil)
 	if !strings.Contains(err.Error(), "Template 1 validation failed") {
 		t.Fatalf("err: %s", err)
 	}
@@ -1385,7 +1688,7 @@ func TestTask_Validate_Template(t *testing.T) {
 	}
 
 	task.Templates = []*Template{good, good}
-	err = task.Validate(ephemeralDisk, JobTypeService)
+	err = task.Validate(ephemeralDisk, JobTypeService, nil)
 	if !strings.Contains(err.Error(), "same destination as") {
 		t.Fatalf("err: %s", err)
 	}
@@ -1398,7 +1701,7 @@ func TestTask_Validate_Template(t *testing.T) {
 		},
 	}
 
-	err = task.Validate(ephemeralDisk, JobTypeService)
+	err = task.Validate(ephemeralDisk, JobTypeService, nil)
 	if err == nil {
 		t.Fatalf("expected error from Template.Validate")
 	}
@@ -1690,7 +1993,7 @@ func TestAffinity_Validate(t *testing.T) {
 
 func TestUpdateStrategy_Validate(t *testing.T) {
 	u := &UpdateStrategy{
-		MaxParallel:      0,
+		MaxParallel:      -1,
 		HealthCheck:      "foo",
 		MinHealthyTime:   -10,
 		HealthyDeadline:  -15,
@@ -1704,7 +2007,7 @@ func TestUpdateStrategy_Validate(t *testing.T) {
 	if !strings.Contains(mErr.Errors[0].Error(), "Invalid health check given") {
 		t.Fatalf("err: %s", err)
 	}
-	if !strings.Contains(mErr.Errors[1].Error(), "Max parallel can not be less than one") {
+	if !strings.Contains(mErr.Errors[1].Error(), "Max parallel can not be less than zero") {
 		t.Fatalf("err: %s", err)
 	}
 	if !strings.Contains(mErr.Errors[2].Error(), "Canary count can not be less than zero") {
@@ -1781,7 +2084,7 @@ func TestResource_Add(t *testing.T) {
 			{
 				CIDR:          "10.0.0.0/8",
 				MBits:         100,
-				ReservedPorts: []Port{{"ssh", 22}},
+				ReservedPorts: []Port{{"ssh", 22, 0}},
 			},
 		},
 	}
@@ -1793,7 +2096,7 @@ func TestResource_Add(t *testing.T) {
 			{
 				IP:            "10.0.0.1",
 				MBits:         50,
-				ReservedPorts: []Port{{"web", 80}},
+				ReservedPorts: []Port{{"web", 80, 0}},
 			},
 		},
 	}
@@ -1811,7 +2114,7 @@ func TestResource_Add(t *testing.T) {
 			{
 				CIDR:          "10.0.0.0/8",
 				MBits:         150,
-				ReservedPorts: []Port{{"ssh", 22}, {"web", 80}},
+				ReservedPorts: []Port{{"ssh", 22, 0}, {"web", 80, 0}},
 			},
 		},
 	}
@@ -1827,7 +2130,7 @@ func TestResource_Add_Network(t *testing.T) {
 		Networks: []*NetworkResource{
 			{
 				MBits:        50,
-				DynamicPorts: []Port{{"http", 0}, {"https", 0}},
+				DynamicPorts: []Port{{"http", 0, 80}, {"https", 0, 443}},
 			},
 		},
 	}
@@ -1835,7 +2138,7 @@ func TestResource_Add_Network(t *testing.T) {
 		Networks: []*NetworkResource{
 			{
 				MBits:        25,
-				DynamicPorts: []Port{{"admin", 0}},
+				DynamicPorts: []Port{{"admin", 0, 8080}},
 			},
 		},
 	}
@@ -1853,7 +2156,7 @@ func TestResource_Add_Network(t *testing.T) {
 		Networks: []*NetworkResource{
 			{
 				MBits:        75,
-				DynamicPorts: []Port{{"http", 0}, {"https", 0}, {"admin", 0}},
+				DynamicPorts: []Port{{"http", 0, 80}, {"https", 0, 443}, {"admin", 0, 8080}},
 			},
 		},
 	}
@@ -1876,7 +2179,7 @@ func TestComparableResources_Subtract(t *testing.T) {
 				{
 					CIDR:          "10.0.0.0/8",
 					MBits:         100,
-					ReservedPorts: []Port{{"ssh", 22}},
+					ReservedPorts: []Port{{"ssh", 22, 0}},
 				},
 			},
 		},
@@ -1897,7 +2200,7 @@ func TestComparableResources_Subtract(t *testing.T) {
 				{
 					CIDR:          "10.0.0.0/8",
 					MBits:         20,
-					ReservedPorts: []Port{{"ssh", 22}},
+					ReservedPorts: []Port{{"ssh", 22, 0}},
 				},
 			},
 		},
@@ -1919,7 +2222,7 @@ func TestComparableResources_Subtract(t *testing.T) {
 				{
 					CIDR:          "10.0.0.0/8",
 					MBits:         100,
-					ReservedPorts: []Port{{"ssh", 22}},
+					ReservedPorts: []Port{{"ssh", 22, 0}},
 				},
 			},
 		},
@@ -2068,6 +2371,22 @@ func TestInvalidServiceCheck(t *testing.T) {
 	if err := s.Validate(); err != nil {
 		t.Fatalf("un-expected error: %v", err)
 	}
+
+	s = Service{
+		Name: "service-name",
+		Checks: []*ServiceCheck{
+			{
+				Name:     "tcp-check",
+				Type:     ServiceCheckTCP,
+				Interval: 5 * time.Second,
+				Timeout:  2 * time.Second,
+			},
+		},
+		Connect: &ConsulConnect{
+			SidecarService: &ConsulSidecarService{},
+		},
+	}
+	require.Error(t, s.Validate())
 }
 
 func TestDistinctCheckID(t *testing.T) {
@@ -2136,6 +2455,69 @@ func TestService_Canonicalize(t *testing.T) {
 		t.Fatalf("Expected name: %v, Actual: %v", "example-cache-redis-db", s.Name)
 	}
 
+}
+
+func TestService_Validate(t *testing.T) {
+	s := Service{
+		Name: "testservice",
+	}
+
+	s.Canonicalize("testjob", "testgroup", "testtask")
+
+	// Base service should be valid
+	require.NoError(t, s.Validate())
+
+	// Native Connect should be valid
+	s.Connect = &ConsulConnect{
+		Native: true,
+	}
+	require.NoError(t, s.Validate())
+
+	// Native Connect + Sidecar should be invalid
+	s.Connect.SidecarService = &ConsulSidecarService{}
+	require.Error(t, s.Validate())
+}
+
+func TestService_Equals(t *testing.T) {
+	s := Service{
+		Name: "testservice",
+	}
+
+	s.Canonicalize("testjob", "testgroup", "testtask")
+
+	o := s.Copy()
+
+	// Base service should be equal to copy of itself
+	require.True(t, s.Equals(o))
+
+	// create a helper to assert a diff and reset the struct
+	assertDiff := func() {
+		require.False(t, s.Equals(o))
+		o = s.Copy()
+		require.True(t, s.Equals(o), "bug in copy")
+	}
+
+	// Changing any field should cause inequality
+	o.Name = "diff"
+	assertDiff()
+
+	o.PortLabel = "diff"
+	assertDiff()
+
+	o.AddressMode = AddressModeDriver
+	assertDiff()
+
+	o.Tags = []string{"diff"}
+	assertDiff()
+
+	o.CanaryTags = []string{"diff"}
+	assertDiff()
+
+	o.Checks = []*ServiceCheck{{Name: "diff"}}
+	assertDiff()
+
+	o.Connect = &ConsulConnect{Native: true}
+	assertDiff()
 }
 
 func TestJob_ExpandServiceNames(t *testing.T) {
@@ -2840,6 +3222,100 @@ func TestTaskArtifact_Validate_Checksum(t *testing.T) {
 			continue
 		}
 	}
+}
+
+func TestPlan_NormalizeAllocations(t *testing.T) {
+	t.Parallel()
+	plan := &Plan{
+		NodeUpdate:      make(map[string][]*Allocation),
+		NodePreemptions: make(map[string][]*Allocation),
+	}
+	stoppedAlloc := MockAlloc()
+	desiredDesc := "Desired desc"
+	plan.AppendStoppedAlloc(stoppedAlloc, desiredDesc, AllocClientStatusLost)
+	preemptedAlloc := MockAlloc()
+	preemptingAllocID := uuid.Generate()
+	plan.AppendPreemptedAlloc(preemptedAlloc, preemptingAllocID)
+
+	plan.NormalizeAllocations()
+
+	actualStoppedAlloc := plan.NodeUpdate[stoppedAlloc.NodeID][0]
+	expectedStoppedAlloc := &Allocation{
+		ID:                 stoppedAlloc.ID,
+		DesiredDescription: desiredDesc,
+		ClientStatus:       AllocClientStatusLost,
+	}
+	assert.Equal(t, expectedStoppedAlloc, actualStoppedAlloc)
+	actualPreemptedAlloc := plan.NodePreemptions[preemptedAlloc.NodeID][0]
+	expectedPreemptedAlloc := &Allocation{
+		ID:                    preemptedAlloc.ID,
+		PreemptedByAllocation: preemptingAllocID,
+	}
+	assert.Equal(t, expectedPreemptedAlloc, actualPreemptedAlloc)
+}
+
+func TestPlan_AppendStoppedAllocAppendsAllocWithUpdatedAttrs(t *testing.T) {
+	t.Parallel()
+	plan := &Plan{
+		NodeUpdate: make(map[string][]*Allocation),
+	}
+	alloc := MockAlloc()
+	desiredDesc := "Desired desc"
+
+	plan.AppendStoppedAlloc(alloc, desiredDesc, AllocClientStatusLost)
+
+	appendedAlloc := plan.NodeUpdate[alloc.NodeID][0]
+	expectedAlloc := new(Allocation)
+	*expectedAlloc = *alloc
+	expectedAlloc.DesiredDescription = desiredDesc
+	expectedAlloc.DesiredStatus = AllocDesiredStatusStop
+	expectedAlloc.ClientStatus = AllocClientStatusLost
+	expectedAlloc.Job = nil
+	assert.Equal(t, expectedAlloc, appendedAlloc)
+	assert.Equal(t, alloc.Job, plan.Job)
+}
+
+func TestPlan_AppendPreemptedAllocAppendsAllocWithUpdatedAttrs(t *testing.T) {
+	t.Parallel()
+	plan := &Plan{
+		NodePreemptions: make(map[string][]*Allocation),
+	}
+	alloc := MockAlloc()
+	preemptingAllocID := uuid.Generate()
+
+	plan.AppendPreemptedAlloc(alloc, preemptingAllocID)
+
+	appendedAlloc := plan.NodePreemptions[alloc.NodeID][0]
+	expectedAlloc := &Allocation{
+		ID:                    alloc.ID,
+		PreemptedByAllocation: preemptingAllocID,
+		JobID:                 alloc.JobID,
+		Namespace:             alloc.Namespace,
+		DesiredStatus:         AllocDesiredStatusEvict,
+		DesiredDescription:    fmt.Sprintf("Preempted by alloc ID %v", preemptingAllocID),
+		AllocatedResources:    alloc.AllocatedResources,
+		TaskResources:         alloc.TaskResources,
+		SharedResources:       alloc.SharedResources,
+	}
+	assert.Equal(t, expectedAlloc, appendedAlloc)
+}
+
+func TestAllocation_MsgPackTags(t *testing.T) {
+	t.Parallel()
+	planType := reflect.TypeOf(Allocation{})
+
+	msgPackTags, _ := planType.FieldByName("_struct")
+
+	assert.Equal(t, msgPackTags.Tag, reflect.StructTag(`codec:",omitempty"`))
+}
+
+func TestEvaluation_MsgPackTags(t *testing.T) {
+	t.Parallel()
+	planType := reflect.TypeOf(Evaluation{})
+
+	msgPackTags, _ := planType.FieldByName("_struct")
+
+	assert.Equal(t, msgPackTags.Tag, reflect.StructTag(`codec:",omitempty"`))
 }
 
 func TestAllocation_Terminated(t *testing.T) {
@@ -3871,12 +4347,12 @@ func TestNetworkResourcesEquals(t *testing.T) {
 				{
 					IP:            "10.0.0.1",
 					MBits:         50,
-					ReservedPorts: []Port{{"web", 80}},
+					ReservedPorts: []Port{{"web", 80, 0}},
 				},
 				{
 					IP:            "10.0.0.1",
 					MBits:         50,
-					ReservedPorts: []Port{{"web", 80}},
+					ReservedPorts: []Port{{"web", 80, 0}},
 				},
 			},
 			true,
@@ -3887,12 +4363,12 @@ func TestNetworkResourcesEquals(t *testing.T) {
 				{
 					IP:            "10.0.0.0",
 					MBits:         50,
-					ReservedPorts: []Port{{"web", 80}},
+					ReservedPorts: []Port{{"web", 80, 0}},
 				},
 				{
 					IP:            "10.0.0.1",
 					MBits:         50,
-					ReservedPorts: []Port{{"web", 80}},
+					ReservedPorts: []Port{{"web", 80, 0}},
 				},
 			},
 			false,
@@ -3903,12 +4379,12 @@ func TestNetworkResourcesEquals(t *testing.T) {
 				{
 					IP:            "10.0.0.1",
 					MBits:         40,
-					ReservedPorts: []Port{{"web", 80}},
+					ReservedPorts: []Port{{"web", 80, 0}},
 				},
 				{
 					IP:            "10.0.0.1",
 					MBits:         50,
-					ReservedPorts: []Port{{"web", 80}},
+					ReservedPorts: []Port{{"web", 80, 0}},
 				},
 			},
 			false,
@@ -3919,12 +4395,12 @@ func TestNetworkResourcesEquals(t *testing.T) {
 				{
 					IP:            "10.0.0.1",
 					MBits:         50,
-					ReservedPorts: []Port{{"web", 80}},
+					ReservedPorts: []Port{{"web", 80, 0}},
 				},
 				{
 					IP:            "10.0.0.1",
 					MBits:         50,
-					ReservedPorts: []Port{{"web", 80}, {"web", 80}},
+					ReservedPorts: []Port{{"web", 80, 0}, {"web", 80, 0}},
 				},
 			},
 			false,
@@ -3935,7 +4411,7 @@ func TestNetworkResourcesEquals(t *testing.T) {
 				{
 					IP:            "10.0.0.1",
 					MBits:         50,
-					ReservedPorts: []Port{{"web", 80}},
+					ReservedPorts: []Port{{"web", 80, 0}},
 				},
 				{
 					IP:            "10.0.0.1",
@@ -3951,12 +4427,12 @@ func TestNetworkResourcesEquals(t *testing.T) {
 				{
 					IP:            "10.0.0.1",
 					MBits:         50,
-					ReservedPorts: []Port{{"web", 80}},
+					ReservedPorts: []Port{{"web", 80, 0}},
 				},
 				{
 					IP:            "10.0.0.1",
 					MBits:         50,
-					ReservedPorts: []Port{{"notweb", 80}},
+					ReservedPorts: []Port{{"notweb", 80, 0}},
 				},
 			},
 			false,
@@ -3967,12 +4443,12 @@ func TestNetworkResourcesEquals(t *testing.T) {
 				{
 					IP:           "10.0.0.1",
 					MBits:        50,
-					DynamicPorts: []Port{{"web", 80}},
+					DynamicPorts: []Port{{"web", 80, 0}},
 				},
 				{
 					IP:           "10.0.0.1",
 					MBits:        50,
-					DynamicPorts: []Port{{"web", 80}, {"web", 80}},
+					DynamicPorts: []Port{{"web", 80, 0}, {"web", 80, 0}},
 				},
 			},
 			false,
@@ -3983,7 +4459,7 @@ func TestNetworkResourcesEquals(t *testing.T) {
 				{
 					IP:           "10.0.0.1",
 					MBits:        50,
-					DynamicPorts: []Port{{"web", 80}},
+					DynamicPorts: []Port{{"web", 80, 0}},
 				},
 				{
 					IP:           "10.0.0.1",
@@ -3999,12 +4475,12 @@ func TestNetworkResourcesEquals(t *testing.T) {
 				{
 					IP:           "10.0.0.1",
 					MBits:        50,
-					DynamicPorts: []Port{{"web", 80}},
+					DynamicPorts: []Port{{"web", 80, 0}},
 				},
 				{
 					IP:           "10.0.0.1",
 					MBits:        50,
-					DynamicPorts: []Port{{"notweb", 80}},
+					DynamicPorts: []Port{{"notweb", 80, 0}},
 				},
 			},
 			false,

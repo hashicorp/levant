@@ -39,8 +39,10 @@ func (b *driverPluginServer) Capabilities(ctx context.Context, req *proto.Capabi
 	}
 	resp := &proto.CapabilitiesResponse{
 		Capabilities: &proto.DriverCapabilities{
-			SendSignals: caps.SendSignals,
-			Exec:        caps.Exec,
+			SendSignals:           caps.SendSignals,
+			Exec:                  caps.Exec,
+			MustCreateNetwork:     caps.MustInitiateNetwork,
+			NetworkIsolationModes: []proto.NetworkIsolationSpec_NetworkIsolationMode{},
 		},
 	}
 
@@ -53,6 +55,10 @@ func (b *driverPluginServer) Capabilities(ctx context.Context, req *proto.Capabi
 		resp.Capabilities.FsIsolation = proto.DriverCapabilities_IMAGE
 	default:
 		resp.Capabilities.FsIsolation = proto.DriverCapabilities_NONE
+	}
+
+	for _, mode := range caps.NetIsolationModes {
+		resp.Capabilities.NetworkIsolationModes = append(resp.Capabilities.NetworkIsolationModes, netIsolationModeToProto(mode))
 	}
 	return resp, nil
 }
@@ -277,6 +283,60 @@ func (b *driverPluginServer) ExecTask(ctx context.Context, req *proto.ExecTaskRe
 	return resp, nil
 }
 
+func (b *driverPluginServer) ExecTaskStreaming(server proto.Driver_ExecTaskStreamingServer) error {
+	msg, err := server.Recv()
+	if err != nil {
+		return fmt.Errorf("failed to receive initial message: %v", err)
+	}
+
+	if msg.Setup == nil {
+		return fmt.Errorf("first message should always be setup")
+	}
+
+	if impl, ok := b.impl.(ExecTaskStreamingRawDriver); ok {
+		return impl.ExecTaskStreamingRaw(server.Context(),
+			msg.Setup.TaskId, msg.Setup.Command, msg.Setup.Tty,
+			server)
+	}
+
+	d, ok := b.impl.(ExecTaskStreamingDriver)
+	if !ok {
+		return fmt.Errorf("driver does not support exec")
+	}
+
+	execOpts, errCh := StreamToExecOptions(server.Context(),
+		msg.Setup.Command, msg.Setup.Tty,
+		server)
+
+	result, err := d.ExecTaskStreaming(server.Context(),
+		msg.Setup.TaskId, execOpts)
+
+	execOpts.Stdout.Close()
+	execOpts.Stderr.Close()
+
+	if err != nil {
+		return err
+	}
+
+	// wait for copy to be done
+	select {
+	case err = <-errCh:
+	case <-server.Context().Done():
+		err = fmt.Errorf("exec timed out: %v", server.Context().Err())
+	}
+
+	if err != nil {
+		return err
+	}
+
+	server.Send(&ExecTaskStreamingResponseMsg{
+		Exited: true,
+		Result: exitResultToProto(result),
+	})
+
+	return err
+}
+
 func (b *driverPluginServer) SignalTask(ctx context.Context, req *proto.SignalTaskRequest) (*proto.SignalTaskResponse, error) {
 	err := b.impl.SignalTask(req.TaskId, req.Signal)
 	if err != nil {
@@ -319,4 +379,36 @@ func (b *driverPluginServer) TaskEvents(req *proto.TaskEventsRequest, srv proto.
 		}
 	}
 	return nil
+}
+
+func (b *driverPluginServer) CreateNetwork(ctx context.Context, req *proto.CreateNetworkRequest) (*proto.CreateNetworkResponse, error) {
+	nm, ok := b.impl.(DriverNetworkManager)
+	if !ok {
+		return nil, fmt.Errorf("CreateNetwork RPC not supported by driver")
+	}
+
+	spec, created, err := nm.CreateNetwork(req.AllocId)
+	if err != nil {
+		return nil, err
+	}
+
+	return &proto.CreateNetworkResponse{
+		IsolationSpec: NetworkIsolationSpecToProto(spec),
+		Created:       created,
+	}, nil
+
+}
+
+func (b *driverPluginServer) DestroyNetwork(ctx context.Context, req *proto.DestroyNetworkRequest) (*proto.DestroyNetworkResponse, error) {
+	nm, ok := b.impl.(DriverNetworkManager)
+	if !ok {
+		return nil, fmt.Errorf("DestroyNetwork RPC not supported by driver")
+	}
+
+	err := nm.DestroyNetwork(req.AllocId, NetworkIsolationSpecFromProto(req.IsolationSpec))
+	if err != nil {
+		return nil, err
+	}
+
+	return &proto.DestroyNetworkResponse{}, nil
 }

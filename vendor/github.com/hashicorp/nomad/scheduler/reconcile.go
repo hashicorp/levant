@@ -128,6 +128,8 @@ type delayedRescheduleInfo struct {
 	// allocID is the ID of the allocation eligible to be rescheduled
 	allocID string
 
+	alloc *structs.Allocation
+
 	// rescheduleTime is the time to use in the delayed evaluation
 	rescheduleTime time.Time
 }
@@ -218,7 +220,11 @@ func (a *allocReconciler) Compute() *reconcileResults {
 	// Set the description of a created deployment
 	if d := a.result.deployment; d != nil {
 		if d.RequiresPromotion() {
-			d.StatusDescription = structs.DeploymentStatusDescriptionRunningNeedsPromotion
+			if d.HasAutoPromote() {
+				d.StatusDescription = structs.DeploymentStatusDescriptionRunningAutoPromotion
+			} else {
+				d.StatusDescription = structs.DeploymentStatusDescriptionRunningNeedsPromotion
+			}
 		}
 	}
 
@@ -325,8 +331,9 @@ func (a *allocReconciler) computeGroup(group string, all allocSet) bool {
 	}
 	if !existingDeployment {
 		dstate = &structs.DeploymentState{}
-		if tg.Update != nil {
+		if !tg.Update.IsEmpty() {
 			dstate.AutoRevert = tg.Update.AutoRevert
+			dstate.AutoPromote = tg.Update.AutoPromote
 			dstate.ProgressDeadline = tg.Update.ProgressDeadline
 		}
 	}
@@ -420,6 +427,8 @@ func (a *allocReconciler) computeGroup(group string, all allocSet) bool {
 		for _, p := range place {
 			a.result.place = append(a.result.place, p)
 		}
+		a.markStop(rescheduleNow, "", allocRescheduled)
+		desiredChanges.Stop += uint64(len(rescheduleNow))
 
 		min := helper.IntMin(len(place), limit)
 		limit -= min
@@ -444,6 +453,12 @@ func (a *allocReconciler) computeGroup(group string, all allocSet) bool {
 				if p.IsRescheduling() && !(a.deploymentFailed && prev != nil && a.deployment.ID == prev.DeploymentID) {
 					a.result.place = append(a.result.place, p)
 					desiredChanges.Place++
+
+					a.result.stop = append(a.result.stop, allocStopResult{
+						alloc:             prev,
+						statusDescription: allocRescheduled,
+					})
+					desiredChanges.Stop++
 				}
 			}
 		}
@@ -494,7 +509,7 @@ func (a *allocReconciler) computeGroup(group string, all allocSet) bool {
 	}
 
 	// Create a new deployment if necessary
-	if !existingDeployment && strategy != nil && dstate.DesiredTotal != 0 && (!hadRunning || updatingSpec) {
+	if !existingDeployment && !strategy.IsEmpty() && dstate.DesiredTotal != 0 && (!hadRunning || updatingSpec) {
 		// A previous group may have made the deployment already
 		if a.deployment == nil {
 			a.deployment = structs.NewDeployment(a.job)
@@ -603,7 +618,7 @@ func (a *allocReconciler) handleGroupCanaries(all allocSet, desiredChanges *stru
 func (a *allocReconciler) computeLimit(group *structs.TaskGroup, untainted, destructive, migrate allocSet, canaryState bool) int {
 	// If there is no update strategy or deployment for the group we can deploy
 	// as many as the group has
-	if group.Update == nil || len(destructive)+len(migrate) == 0 {
+	if group.Update.IsEmpty() || len(destructive)+len(migrate) == 0 {
 		return group.Count
 	} else if a.deploymentPaused || a.deploymentFailed {
 		// If the deployment is paused or failed, do not create anything else

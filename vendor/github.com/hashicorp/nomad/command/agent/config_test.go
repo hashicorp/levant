@@ -7,10 +7,13 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/hashicorp/consul/lib/freeport"
+	"github.com/hashicorp/nomad/client/testutil"
 	"github.com/hashicorp/nomad/helper"
 	"github.com/hashicorp/nomad/nomad/structs"
 	"github.com/hashicorp/nomad/nomad/structs/config"
@@ -88,11 +91,16 @@ func TestConfig_Merge(t *testing.T) {
 			Options: map[string]string{
 				"foo": "bar",
 			},
-			NetworkSpeed:   100,
-			CpuCompute:     100,
-			MemoryMB:       100,
-			MaxKillTimeout: "20s",
-			ClientMaxPort:  19996,
+			NetworkSpeed:      100,
+			CpuCompute:        100,
+			MemoryMB:          100,
+			MaxKillTimeout:    "20s",
+			ClientMaxPort:     19996,
+			DisableRemoteExec: false,
+			TemplateConfig: &ClientTemplateConfig{
+				FunctionBlacklist: []string{"plugin"},
+				DisableSandbox:    false,
+			},
 			Reserved: &Resources{
 				CPU:           10,
 				MemoryMB:      10,
@@ -188,7 +196,7 @@ func TestConfig_Merge(t *testing.T) {
 	}
 
 	c3 := &Config{
-		Region:                    "region2",
+		Region:                    "global",
 		Datacenter:                "dc2",
 		NodeName:                  "node2",
 		DataDir:                   "/tmp/dir2",
@@ -244,13 +252,18 @@ func TestConfig_Merge(t *testing.T) {
 				"foo": "bar",
 				"baz": "zip",
 			},
-			ChrootEnv:      map[string]string{},
-			ClientMaxPort:  20000,
-			ClientMinPort:  22000,
-			NetworkSpeed:   105,
-			CpuCompute:     105,
-			MemoryMB:       105,
-			MaxKillTimeout: "50s",
+			ChrootEnv:         map[string]string{},
+			ClientMaxPort:     20000,
+			ClientMinPort:     22000,
+			NetworkSpeed:      105,
+			CpuCompute:        105,
+			MemoryMB:          105,
+			MaxKillTimeout:    "50s",
+			DisableRemoteExec: false,
+			TemplateConfig: &ClientTemplateConfig{
+				FunctionBlacklist: []string{"plugin"},
+				DisableSandbox:    false,
+			},
 			Reserved: &Resources{
 				CPU:           15,
 				MemoryMB:      15,
@@ -607,6 +620,62 @@ func TestConfig_Listener(t *testing.T) {
 	want = fmt.Sprintf("0.0.0.0:%d", ports[1])
 	if addr := ln.Addr().String(); addr != want {
 		t.Fatalf("expected %q, got: %q", want, addr)
+	}
+}
+
+func TestConfig_DevModeFlag(t *testing.T) {
+	cases := []struct {
+		dev         bool
+		connect     bool
+		expected    *devModeConfig
+		expectedErr string
+	}{}
+	if runtime.GOOS != "linux" {
+		cases = []struct {
+			dev         bool
+			connect     bool
+			expected    *devModeConfig
+			expectedErr string
+		}{
+			{false, false, nil, ""},
+			{true, false, &devModeConfig{defaultMode: true, connectMode: false}, ""},
+			{true, true, nil, "-dev-connect is only supported on linux"},
+			{false, true, nil, "-dev-connect is only supported on linux"},
+		}
+	}
+	if runtime.GOOS == "linux" {
+		testutil.RequireRoot(t)
+		cases = []struct {
+			dev         bool
+			connect     bool
+			expected    *devModeConfig
+			expectedErr string
+		}{
+			{false, false, nil, ""},
+			{true, false, &devModeConfig{defaultMode: true, connectMode: false}, ""},
+			{true, true, &devModeConfig{defaultMode: true, connectMode: true}, ""},
+			{false, true, &devModeConfig{defaultMode: false, connectMode: true}, ""},
+		}
+	}
+	for _, c := range cases {
+		t.Run("", func(t *testing.T) {
+			mode, err := newDevModeConfig(c.dev, c.connect)
+			if err != nil && c.expectedErr == "" {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if err != nil && !strings.Contains(err.Error(), c.expectedErr) {
+				t.Fatalf("expected %s; got %v", c.expectedErr, err)
+			}
+			if mode == nil && c.expected != nil {
+				t.Fatalf("expected %+v but got nil", c.expected)
+			}
+			if mode != nil {
+				if c.expected.defaultMode != mode.defaultMode ||
+					c.expected.connectMode != mode.connectMode {
+					t.Fatalf("expected %+v, got %+v", c.expected, mode)
+				}
+			}
+		})
 	}
 }
 

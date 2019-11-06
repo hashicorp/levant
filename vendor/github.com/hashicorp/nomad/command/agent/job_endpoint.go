@@ -8,6 +8,7 @@ import (
 
 	"github.com/golang/snappy"
 	"github.com/hashicorp/nomad/api"
+	"github.com/hashicorp/nomad/helper"
 	"github.com/hashicorp/nomad/jobspec"
 	"github.com/hashicorp/nomad/nomad/structs"
 )
@@ -140,15 +141,28 @@ func (s *HTTPServer) jobPlan(resp http.ResponseWriter, req *http.Request,
 		return nil, CodedError(400, "Job ID does not match")
 	}
 
+	// Region in http request query param takes precedence over region in job hcl config
+	if args.WriteRequest.Region != "" {
+		args.Job.Region = helper.StringToPtr(args.WriteRequest.Region)
+	}
+	// If 'global' region is specified or if no region is given,
+	// default to region of the node you're submitting to
+	if args.Job.Region == nil || *args.Job.Region == "" || *args.Job.Region == api.GlobalRegion {
+		args.Job.Region = &s.agent.config.Region
+	}
+
 	sJob := ApiJobToStructJob(args.Job)
+
 	planReq := structs.JobPlanRequest{
 		Job:            sJob,
 		Diff:           args.Diff,
 		PolicyOverride: args.PolicyOverride,
 		WriteRequest: structs.WriteRequest{
-			Region: args.WriteRequest.Region,
+			Region: sJob.Region,
 		},
 	}
+	// parseWriteRequest overrides Namespace, Region and AuthToken
+	// based on values from the original http request
 	s.parseWriteRequest(req, &planReq.WriteRequest)
 	planReq.Namespace = sJob.Namespace
 
@@ -175,6 +189,7 @@ func (s *HTTPServer) ValidateJobRequest(resp http.ResponseWriter, req *http.Requ
 	}
 
 	job := ApiJobToStructJob(validateRequest.Job)
+
 	args := structs.JobValidateRequest{
 		Job: job,
 		WriteRequest: structs.WriteRequest{
@@ -219,8 +234,8 @@ func (s *HTTPServer) jobAllocations(resp http.ResponseWriter, req *http.Request,
 	allAllocs, _ := strconv.ParseBool(req.URL.Query().Get("all"))
 
 	args := structs.JobSpecificRequest{
-		JobID:     jobName,
-		AllAllocs: allAllocs,
+		JobID: jobName,
+		All:   allAllocs,
 	}
 	if s.parse(resp, req, &args.Region, &args.QueryOptions) {
 		return nil, nil
@@ -270,8 +285,10 @@ func (s *HTTPServer) jobDeployments(resp http.ResponseWriter, req *http.Request,
 	if req.Method != "GET" {
 		return nil, CodedError(405, ErrInvalidMethod)
 	}
+	all, _ := strconv.ParseBool(req.URL.Query().Get("all"))
 	args := structs.JobSpecificRequest{
 		JobID: jobName,
+		All:   all,
 	}
 	if s.parse(resp, req, &args.Region, &args.QueryOptions) {
 		return nil, nil
@@ -374,6 +391,16 @@ func (s *HTTPServer) jobUpdate(resp http.ResponseWriter, req *http.Request,
 		return nil, CodedError(400, "Job ID does not match name")
 	}
 
+	// Region in http request query param takes precedence over region in job hcl config
+	if args.WriteRequest.Region != "" {
+		args.Job.Region = helper.StringToPtr(args.WriteRequest.Region)
+	}
+	// If 'global' region is specified or if no region is given,
+	// default to region of the node you're submitting to
+	if args.Job.Region == nil || *args.Job.Region == "" || *args.Job.Region == api.GlobalRegion {
+		args.Job.Region = &s.agent.config.Region
+	}
+
 	sJob := ApiJobToStructJob(args.Job)
 
 	regReq := structs.JobRegisterRequest{
@@ -382,10 +409,12 @@ func (s *HTTPServer) jobUpdate(resp http.ResponseWriter, req *http.Request,
 		JobModifyIndex: args.JobModifyIndex,
 		PolicyOverride: args.PolicyOverride,
 		WriteRequest: structs.WriteRequest{
-			Region:    args.WriteRequest.Region,
+			Region:    sJob.Region,
 			AuthToken: args.WriteRequest.SecretID,
 		},
 	}
+	// parseWriteRequest overrides Namespace, Region and AuthToken
+	// based on values from the original http request
 	s.parseWriteRequest(req, &regReq.WriteRequest)
 	regReq.Namespace = sJob.Namespace
 
@@ -609,8 +638,10 @@ func ApiJobToStructJob(job *api.Job) *structs.Job {
 		Affinities:  ApiAffinitiesToStructs(job.Affinities),
 	}
 
-	// COMPAT: Remove in 0.7.0. Update has been pushed into the task groups
-	if job.Update != nil {
+	// Update has been pushed into the task groups. stagger and max_parallel are
+	// preserved at the job level, but all other values are discarded. The job.Update
+	// api value is merged into TaskGroups already in api.Canonicalize
+	if job.Update != nil && job.Update.MaxParallel != nil && *job.Update.MaxParallel > 0 {
 		j.Update = structs.UpdateStrategy{}
 
 		if job.Update.Stagger != nil {
@@ -667,6 +698,8 @@ func ApiTgToStructsTG(taskGroup *api.TaskGroup, tg *structs.TaskGroup) {
 	tg.Meta = taskGroup.Meta
 	tg.Constraints = ApiConstraintsToStructs(taskGroup.Constraints)
 	tg.Affinities = ApiAffinitiesToStructs(taskGroup.Affinities)
+	tg.Networks = ApiNetworkResourceToStructs(taskGroup.Networks)
+	tg.Services = ApiServicesToStructs(taskGroup.Services)
 
 	tg.RestartPolicy = &structs.RestartPolicy{
 		Attempts: *taskGroup.RestartPolicy.Attempts,
@@ -708,6 +741,25 @@ func ApiTgToStructsTG(taskGroup *api.TaskGroup, tg *structs.TaskGroup) {
 		}
 	}
 
+	if l := len(taskGroup.Volumes); l != 0 {
+		tg.Volumes = make(map[string]*structs.VolumeRequest, l)
+		for k, v := range taskGroup.Volumes {
+			if v.Type != structs.VolumeTypeHost {
+				// Ignore non-host volumes in this iteration currently.
+				continue
+			}
+
+			vol := &structs.VolumeRequest{
+				Name:     v.Name,
+				Type:     v.Type,
+				ReadOnly: v.ReadOnly,
+				Source:   v.Source,
+			}
+
+			tg.Volumes[k] = vol
+		}
+	}
+
 	if taskGroup.Update != nil {
 		tg.Update = &structs.UpdateStrategy{
 			Stagger:          *taskGroup.Update.Stagger,
@@ -716,8 +768,16 @@ func ApiTgToStructsTG(taskGroup *api.TaskGroup, tg *structs.TaskGroup) {
 			MinHealthyTime:   *taskGroup.Update.MinHealthyTime,
 			HealthyDeadline:  *taskGroup.Update.HealthyDeadline,
 			ProgressDeadline: *taskGroup.Update.ProgressDeadline,
-			AutoRevert:       *taskGroup.Update.AutoRevert,
 			Canary:           *taskGroup.Update.Canary,
+		}
+
+		// boolPtr fields may be nil, others will have pointers to default values via Canonicalize
+		if taskGroup.Update.AutoRevert != nil {
+			tg.Update.AutoRevert = *taskGroup.Update.AutoRevert
+		}
+
+		if taskGroup.Update.AutoPromote != nil {
+			tg.Update.AutoPromote = *taskGroup.Update.AutoPromote
 		}
 	}
 
@@ -744,8 +804,20 @@ func ApiTaskToStructsTask(apiTask *api.Task, structsTask *structs.Task) {
 	structsTask.KillTimeout = *apiTask.KillTimeout
 	structsTask.ShutdownDelay = apiTask.ShutdownDelay
 	structsTask.KillSignal = apiTask.KillSignal
+	structsTask.Kind = structs.TaskKind(apiTask.Kind)
 	structsTask.Constraints = ApiConstraintsToStructs(apiTask.Constraints)
 	structsTask.Affinities = ApiAffinitiesToStructs(apiTask.Affinities)
+
+	if l := len(apiTask.VolumeMounts); l != 0 {
+		structsTask.VolumeMounts = make([]*structs.VolumeMount, l)
+		for i, mount := range apiTask.VolumeMounts {
+			structsTask.VolumeMounts[i] = &structs.VolumeMount{
+				Volume:      mount.Volume,
+				Destination: mount.Destination,
+				ReadOnly:    mount.ReadOnly,
+			}
+		}
+	}
 
 	if l := len(apiTask.Services); l != 0 {
 		structsTask.Services = make([]*structs.Service, l)
@@ -756,6 +828,7 @@ func ApiTaskToStructsTask(apiTask *api.Task, structsTask *structs.Task) {
 				Tags:        service.Tags,
 				CanaryTags:  service.CanaryTags,
 				AddressMode: service.AddressMode,
+				Meta:        helper.CopyMapStringString(service.Meta),
 			}
 
 			if l := len(service.Checks); l != 0 {
@@ -860,35 +933,8 @@ func ApiResourcesToStructs(in *api.Resources) *structs.Resources {
 		out.IOPS = *in.IOPS
 	}
 
-	if l := len(in.Networks); l != 0 {
-		out.Networks = make([]*structs.NetworkResource, l)
-		for i, nw := range in.Networks {
-			out.Networks[i] = &structs.NetworkResource{
-				CIDR:  nw.CIDR,
-				IP:    nw.IP,
-				MBits: *nw.MBits,
-			}
-
-			if l := len(nw.DynamicPorts); l != 0 {
-				out.Networks[i].DynamicPorts = make([]structs.Port, l)
-				for j, dp := range nw.DynamicPorts {
-					out.Networks[i].DynamicPorts[j] = structs.Port{
-						Label: dp.Label,
-						Value: dp.Value,
-					}
-				}
-			}
-
-			if l := len(nw.ReservedPorts); l != 0 {
-				out.Networks[i].ReservedPorts = make([]structs.Port, l)
-				for j, rp := range nw.ReservedPorts {
-					out.Networks[i].ReservedPorts[j] = structs.Port{
-						Label: rp.Label,
-						Value: rp.Value,
-					}
-				}
-			}
-		}
+	if len(in.Networks) != 0 {
+		out.Networks = ApiNetworkResourceToStructs(in.Networks)
 	}
 
 	if l := len(in.Devices); l != 0 {
@@ -899,6 +945,170 @@ func ApiResourcesToStructs(in *api.Resources) *structs.Resources {
 				Count:       *d.Count,
 				Constraints: ApiConstraintsToStructs(d.Constraints),
 				Affinities:  ApiAffinitiesToStructs(d.Affinities),
+			}
+		}
+	}
+
+	return out
+}
+
+func ApiNetworkResourceToStructs(in []*api.NetworkResource) []*structs.NetworkResource {
+	var out []*structs.NetworkResource
+	if len(in) == 0 {
+		return out
+	}
+	out = make([]*structs.NetworkResource, len(in))
+	for i, nw := range in {
+		out[i] = &structs.NetworkResource{
+			Mode:  nw.Mode,
+			CIDR:  nw.CIDR,
+			IP:    nw.IP,
+			MBits: *nw.MBits,
+		}
+
+		if l := len(nw.DynamicPorts); l != 0 {
+			out[i].DynamicPorts = make([]structs.Port, l)
+			for j, dp := range nw.DynamicPorts {
+				out[i].DynamicPorts[j] = structs.Port{
+					Label: dp.Label,
+					Value: dp.Value,
+					To:    dp.To,
+				}
+			}
+		}
+
+		if l := len(nw.ReservedPorts); l != 0 {
+			out[i].ReservedPorts = make([]structs.Port, l)
+			for j, rp := range nw.ReservedPorts {
+				out[i].ReservedPorts[j] = structs.Port{
+					Label: rp.Label,
+					Value: rp.Value,
+					To:    rp.To,
+				}
+			}
+		}
+	}
+
+	return out
+}
+
+//TODO(schmichael) refactor and reuse in service parsing above
+func ApiServicesToStructs(in []*api.Service) []*structs.Service {
+	if len(in) == 0 {
+		return nil
+	}
+
+	out := make([]*structs.Service, len(in))
+	for i, s := range in {
+		out[i] = &structs.Service{
+			Name:        s.Name,
+			PortLabel:   s.PortLabel,
+			Tags:        s.Tags,
+			CanaryTags:  s.CanaryTags,
+			AddressMode: s.AddressMode,
+			Meta:        helper.CopyMapStringString(s.Meta),
+		}
+
+		if l := len(s.Checks); l != 0 {
+			out[i].Checks = make([]*structs.ServiceCheck, l)
+			for j, check := range s.Checks {
+				out[i].Checks[j] = &structs.ServiceCheck{
+					Name:          check.Name,
+					Type:          check.Type,
+					Command:       check.Command,
+					Args:          check.Args,
+					Path:          check.Path,
+					Protocol:      check.Protocol,
+					PortLabel:     check.PortLabel,
+					AddressMode:   check.AddressMode,
+					Interval:      check.Interval,
+					Timeout:       check.Timeout,
+					InitialStatus: check.InitialStatus,
+					TLSSkipVerify: check.TLSSkipVerify,
+					Header:        check.Header,
+					Method:        check.Method,
+					GRPCService:   check.GRPCService,
+					GRPCUseTLS:    check.GRPCUseTLS,
+					TaskName:      check.TaskName,
+				}
+				if check.CheckRestart != nil {
+					out[i].Checks[j].CheckRestart = &structs.CheckRestart{
+						Limit:          check.CheckRestart.Limit,
+						Grace:          *check.CheckRestart.Grace,
+						IgnoreWarnings: check.CheckRestart.IgnoreWarnings,
+					}
+				}
+			}
+		}
+
+		if s.Connect != nil {
+			out[i].Connect = ApiConsulConnectToStructs(s.Connect)
+		}
+
+	}
+
+	return out
+}
+
+func ApiConsulConnectToStructs(in *api.ConsulConnect) *structs.ConsulConnect {
+	if in == nil {
+		return nil
+	}
+
+	out := &structs.ConsulConnect{
+		Native: in.Native,
+	}
+
+	if in.SidecarService != nil {
+
+		out.SidecarService = &structs.ConsulSidecarService{
+			Port: in.SidecarService.Port,
+		}
+
+		if in.SidecarService.Proxy != nil {
+
+			out.SidecarService.Proxy = &structs.ConsulProxy{
+				LocalServiceAddress: in.SidecarService.Proxy.LocalServiceAddress,
+				LocalServicePort:    in.SidecarService.Proxy.LocalServicePort,
+				Config:              in.SidecarService.Proxy.Config,
+			}
+
+			upstreams := make([]structs.ConsulUpstream, len(in.SidecarService.Proxy.Upstreams))
+			for i, p := range in.SidecarService.Proxy.Upstreams {
+				upstreams[i] = structs.ConsulUpstream{
+					DestinationName: p.DestinationName,
+					LocalBindPort:   p.LocalBindPort,
+				}
+			}
+
+			out.SidecarService.Proxy.Upstreams = upstreams
+		}
+	}
+
+	if in.SidecarTask != nil {
+		out.SidecarTask = &structs.SidecarTask{
+			Name:          in.SidecarTask.Name,
+			Driver:        in.SidecarTask.Driver,
+			Config:        in.SidecarTask.Config,
+			User:          in.SidecarTask.User,
+			Env:           in.SidecarTask.Env,
+			Resources:     ApiResourcesToStructs(in.SidecarTask.Resources),
+			Meta:          in.SidecarTask.Meta,
+			LogConfig:     &structs.LogConfig{},
+			ShutdownDelay: in.SidecarTask.ShutdownDelay,
+			KillSignal:    in.SidecarTask.KillSignal,
+		}
+
+		if in.SidecarTask.KillTimeout != nil {
+			out.SidecarTask.KillTimeout = in.SidecarTask.KillTimeout
+		}
+		if in.SidecarTask.LogConfig != nil {
+			out.SidecarTask.LogConfig = &structs.LogConfig{}
+			if in.SidecarTask.LogConfig.MaxFiles != nil {
+				out.SidecarTask.LogConfig.MaxFiles = *in.SidecarTask.LogConfig.MaxFiles
+			}
+			if in.SidecarTask.LogConfig.MaxFileSizeMB != nil {
+				out.SidecarTask.LogConfig.MaxFileSizeMB = *in.SidecarTask.LogConfig.MaxFileSizeMB
 			}
 		}
 	}

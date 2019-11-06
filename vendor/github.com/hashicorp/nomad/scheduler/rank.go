@@ -17,10 +17,11 @@ const (
 // along with a node when iterating. This state can be modified as
 // various rank methods are applied.
 type RankedNode struct {
-	Node          *structs.Node
-	FinalScore    float64
-	Scores        []float64
-	TaskResources map[string]*structs.AllocatedTaskResources
+	Node           *structs.Node
+	FinalScore     float64
+	Scores         []float64
+	TaskResources  map[string]*structs.AllocatedTaskResources
+	AllocResources *structs.AllocatedSharedResources
 
 	// Allocs is used to cache the proposed allocations on the
 	// node. This can be shared between iterators that require it.
@@ -147,6 +148,7 @@ type BinPackIterator struct {
 	source    RankIterator
 	evict     bool
 	priority  int
+	jobId     *structs.NamespacedID
 	taskGroup *structs.TaskGroup
 }
 
@@ -162,8 +164,9 @@ func NewBinPackIterator(ctx Context, source RankIterator, evict bool, priority i
 	return iter
 }
 
-func (iter *BinPackIterator) SetPriority(p int) {
-	iter.priority = p
+func (iter *BinPackIterator) SetJob(job *structs.Job) {
+	iter.priority = job.Priority
+	iter.jobId = job.NamespacedID()
 }
 
 func (iter *BinPackIterator) SetTaskGroup(taskGroup *structs.TaskGroup) {
@@ -211,7 +214,7 @@ OUTER:
 		var allocsToPreempt []*structs.Allocation
 
 		// Initialize preemptor with node
-		preemptor := NewPreemptor(iter.priority, iter.ctx)
+		preemptor := NewPreemptor(iter.priority, iter.ctx, iter.jobId)
 		preemptor.SetNode(option.Node)
 
 		// Count the number of existing preemptions
@@ -221,6 +224,59 @@ OUTER:
 			currentPreemptions = append(currentPreemptions, allocs...)
 		}
 		preemptor.SetPreemptions(currentPreemptions)
+
+		// Check if we need task group network resource
+		if len(iter.taskGroup.Networks) > 0 {
+			ask := iter.taskGroup.Networks[0].Copy()
+			offer, err := netIdx.AssignNetwork(ask)
+			if offer == nil {
+				// If eviction is not enabled, mark this node as exhausted and continue
+				if !iter.evict {
+					iter.ctx.Metrics().ExhaustedNode(option.Node,
+						fmt.Sprintf("network: %s", err))
+					netIdx.Release()
+					continue OUTER
+				}
+
+				// Look for preemptible allocations to satisfy the network resource for this task
+				preemptor.SetCandidates(proposed)
+
+				netPreemptions := preemptor.PreemptForNetwork(ask, netIdx)
+				if netPreemptions == nil {
+					iter.ctx.Logger().Named("binpack").Error("preemption not possible ", "network_resource", ask)
+					netIdx.Release()
+					continue OUTER
+				}
+				allocsToPreempt = append(allocsToPreempt, netPreemptions...)
+
+				// First subtract out preempted allocations
+				proposed = structs.RemoveAllocs(proposed, netPreemptions)
+
+				// Reset the network index and try the offer again
+				netIdx.Release()
+				netIdx = structs.NewNetworkIndex()
+				netIdx.SetNode(option.Node)
+				netIdx.AddAllocs(proposed)
+
+				offer, err = netIdx.AssignNetwork(ask)
+				if offer == nil {
+					iter.ctx.Logger().Named("binpack").Error("unexpected error, unable to create network offer after considering preemption", "error", err)
+					netIdx.Release()
+					continue OUTER
+				}
+			}
+
+			// Reserve this to prevent another task from colliding
+			netIdx.AddReserved(offer)
+
+			// Update the network ask to the offer
+			total.Shared.Networks = []*structs.NetworkResource{offer}
+			option.AllocResources = &structs.AllocatedSharedResources{
+				Networks: []*structs.NetworkResource{offer},
+				DiskMB:   int64(iter.taskGroup.EphemeralDisk.SizeMB),
+			}
+
+		}
 
 		for _, task := range iter.taskGroup.Tasks {
 			// Allocate the resources

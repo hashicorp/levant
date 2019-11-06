@@ -1,20 +1,20 @@
 import EmberObject, { computed } from '@ember/object';
 import Service from '@ember/service';
-import { getOwner } from '@ember/application';
-import { test, moduleForComponent } from 'ember-qunit';
-import wait from 'ember-test-helpers/wait';
+import { module, test } from 'qunit';
+import { setupRenderingTest } from 'ember-qunit';
 import hbs from 'htmlbars-inline-precompile';
-import { find } from 'ember-native-dom-helpers';
+import { find, render } from '@ember/test-helpers';
 import { task } from 'ember-concurrency';
 import sinon from 'sinon';
 import { startMirage } from 'nomad-ui/initializers/ember-cli-mirage';
 import { initialize as fragmentSerializerInitializer } from 'nomad-ui/initializers/fragment-serializer';
 
-moduleForComponent('primary-metric', 'Integration | Component | primary metric', {
-  integration: true,
-  beforeEach() {
-    fragmentSerializerInitializer(getOwner(this));
-    this.store = getOwner(this).lookup('service:store');
+module('Integration | Component | primary metric', function(hooks) {
+  setupRenderingTest(hooks);
+
+  hooks.beforeEach(function() {
+    fragmentSerializerInitializer(this.owner);
+    this.store = this.owner.lookup('service:store');
     this.server = startMirage();
     this.server.create('namespace');
     this.server.create('node');
@@ -42,157 +42,121 @@ moduleForComponent('primary-metric', 'Integration | Component | primary metric',
       },
     });
 
-    this.register('service:stats-trackers-registry', mockStatsTrackersRegistry);
-    this.statsTrackersRegistry = getOwner(this).lookup('service:stats-trackers-registry');
-  },
-  afterEach() {
+    this.owner.register('service:stats-trackers-registry', mockStatsTrackersRegistry);
+    this.statsTrackersRegistry = this.owner.lookup('service:stats-trackers-registry');
+  });
+
+  hooks.afterEach(function() {
     this.server.shutdown();
-  },
-});
+  });
 
-const commonTemplate = hbs`
-  {{primary-metric
-    resource=resource
-    metric=metric}}
-`;
+  const commonTemplate = hbs`
+    {{primary-metric
+      resource=resource
+      metric=metric}}
+  `;
 
-test('Contains a line chart, a percentage bar, a percentage figure, and an absolute usage figure', function(assert) {
-  let resource;
-  const metric = 'cpu';
+  test('Contains a line chart, a percentage bar, a percentage figure, and an absolute usage figure', async function(assert) {
+    let resource;
+    const metric = 'cpu';
 
-  this.store.findAll('node');
+    await this.store.findAll('node');
 
-  return wait()
-    .then(() => {
-      resource = this.store.peekAll('node').get('firstObject');
-      this.setProperties({ resource, metric });
+    resource = this.store.peekAll('node').get('firstObject');
+    this.setProperties({ resource, metric });
 
-      this.render(commonTemplate);
-      return wait();
-    })
-    .then(() => {
-      assert.ok(find('[data-test-line-chart]'), 'Line chart');
-      assert.ok(find('[data-test-percentage-bar]'), 'Percentage bar');
-      assert.ok(find('[data-test-percentage]'), 'Percentage figure');
-      assert.ok(find('[data-test-absolute-value]'), 'Absolute usage figure');
-    });
-});
+    await render(commonTemplate);
 
-test('The CPU metric maps to is-info', function(assert) {
-  let resource;
-  const metric = 'cpu';
+    assert.ok(find('[data-test-line-chart]'), 'Line chart');
+    assert.ok(find('[data-test-percentage-bar]'), 'Percentage bar');
+    assert.ok(find('[data-test-percentage]'), 'Percentage figure');
+    assert.ok(find('[data-test-absolute-value]'), 'Absolute usage figure');
+  });
 
-  this.store.findAll('node');
+  test('The CPU metric maps to is-info', async function(assert) {
+    const metric = 'cpu';
 
-  return wait()
-    .then(() => {
-      resource = this.store.peekAll('node').get('firstObject');
-      this.setProperties({ resource, metric });
+    await this.store.findAll('node');
 
-      this.render(commonTemplate);
-      return wait();
-    })
-    .then(() => {
-      assert.ok(
-        find('[data-test-line-chart] .canvas').classList.contains('is-info'),
-        'Info class for CPU metric'
-      );
-    });
-});
+    const resource = this.store.peekAll('node').get('firstObject');
+    this.setProperties({ resource, metric });
 
-test('The Memory metric maps to is-danger', function(assert) {
-  let resource;
-  const metric = 'memory';
+    await render(commonTemplate);
 
-  this.store.findAll('node');
+    assert.ok(
+      find('[data-test-line-chart] .canvas').classList.contains('is-info'),
+      'Info class for CPU metric'
+    );
+  });
 
-  return wait()
-    .then(() => {
-      resource = this.store.peekAll('node').get('firstObject');
-      this.setProperties({ resource, metric });
+  test('The Memory metric maps to is-danger', async function(assert) {
+    const metric = 'memory';
 
-      this.render(commonTemplate);
-      return wait();
-    })
-    .then(() => {
-      assert.ok(
-        find('[data-test-line-chart] .canvas').classList.contains('is-danger'),
-        'Danger class for Memory metric'
-      );
-    });
-});
+    await this.store.findAll('node');
 
-test('Gets the tracker from the tracker registry', function(assert) {
-  let resource;
-  const metric = 'cpu';
+    const resource = this.store.peekAll('node').get('firstObject');
+    this.setProperties({ resource, metric });
 
-  this.store.findAll('node');
+    await render(commonTemplate);
 
-  return wait()
-    .then(() => {
-      resource = this.store.peekAll('node').get('firstObject');
-      this.setProperties({ resource, metric });
+    assert.ok(
+      find('[data-test-line-chart] .canvas').classList.contains('is-danger'),
+      'Danger class for Memory metric'
+    );
+  });
 
-      this.render(commonTemplate);
-      return wait();
-    })
-    .then(() => {
-      assert.ok(
-        this.getTrackerSpy.calledWith(resource),
-        'Uses the tracker registry to get the tracker for the provided resource'
-      );
-    });
-});
+  test('Gets the tracker from the tracker registry', async function(assert) {
+    const metric = 'cpu';
 
-test('Immediately polls the tracker', function(assert) {
-  let resource;
-  const metric = 'cpu';
+    await this.store.findAll('node');
 
-  this.store.findAll('node');
+    const resource = this.store.peekAll('node').get('firstObject');
+    this.setProperties({ resource, metric });
 
-  return wait()
-    .then(() => {
-      resource = this.store.peekAll('node').get('firstObject');
-      this.setProperties({ resource, metric });
+    await render(commonTemplate);
 
-      this.render(commonTemplate);
-      return wait();
-    })
-    .then(() => {
-      assert.ok(this.trackerPollSpy.calledOnce, 'The tracker is polled immediately');
-    });
-});
+    assert.ok(
+      this.getTrackerSpy.calledWith(resource),
+      'Uses the tracker registry to get the tracker for the provided resource'
+    );
+  });
 
-test('A pause signal is sent to the tracker when the component is destroyed', function(assert) {
-  let resource;
-  const metric = 'cpu';
+  test('Immediately polls the tracker', async function(assert) {
+    const metric = 'cpu';
 
-  // Capture a reference to the spy before the component is destroyed
-  const trackerSignalPauseSpy = this.trackerSignalPauseSpy;
+    await this.store.findAll('node');
 
-  this.store.findAll('node');
+    const resource = this.store.peekAll('node').get('firstObject');
+    this.setProperties({ resource, metric });
 
-  return wait()
-    .then(() => {
-      resource = this.store.peekAll('node').get('firstObject');
-      this.setProperties({ resource, metric, showComponent: true });
-      this.render(hbs`
-        {{#if showComponent}}
-          {{primary-metric
-            resource=resource
-            metric=metric}}
-          }}
-        {{/if}}
-      `);
-      return wait();
-    })
-    .then(() => {
-      assert.notOk(trackerSignalPauseSpy.called, 'No pause signal has been sent yet');
-      // This will toggle the if statement, resulting the primary-metric component being destroyed.
-      this.set('showComponent', false);
-      return wait();
-    })
-    .then(() => {
-      assert.ok(trackerSignalPauseSpy.calledOnce, 'A pause signal is sent to the tracker');
-    });
+    await render(commonTemplate);
+
+    assert.ok(this.trackerPollSpy.calledOnce, 'The tracker is polled immediately');
+  });
+
+  test('A pause signal is sent to the tracker when the component is destroyed', async function(assert) {
+    const metric = 'cpu';
+
+    // Capture a reference to the spy before the component is destroyed
+    const trackerSignalPauseSpy = this.trackerSignalPauseSpy;
+
+    await this.store.findAll('node');
+
+    const resource = this.store.peekAll('node').get('firstObject');
+    this.setProperties({ resource, metric, showComponent: true });
+    await render(hbs`
+      {{#if showComponent}}
+        {{primary-metric
+          resource=resource
+          metric=metric}}
+        }}
+      {{/if}}
+    `);
+
+    assert.notOk(trackerSignalPauseSpy.called, 'No pause signal has been sent yet');
+    // This will toggle the if statement, resulting the primary-metric component being destroyed.
+    this.set('showComponent', false);
+
+    assert.ok(trackerSignalPauseSpy.calledOnce, 'A pause signal is sent to the tracker');
+  });
 });

@@ -22,6 +22,7 @@ import (
 	"github.com/hashicorp/nomad/client/stats"
 	cstructs "github.com/hashicorp/nomad/client/structs"
 	"github.com/hashicorp/nomad/plugins/drivers"
+	"github.com/kr/pty"
 
 	shelpers "github.com/hashicorp/nomad/helper/stats"
 )
@@ -77,6 +78,9 @@ type Executor interface {
 	// Exec executes the given command and args inside the executor context
 	// and returns the output and exit code.
 	Exec(deadline time.Time, cmd string, args []string) ([]byte, int, error)
+
+	ExecStreaming(ctx context.Context, cmd []string, tty bool,
+		stream drivers.ExecTaskStream) error
 }
 
 // ExecCommand holds the user command, args, and other isolation related
@@ -122,6 +126,8 @@ type ExecCommand struct {
 
 	// Devices are the the device nodes to be created in isolation environment
 	Devices []*drivers.DeviceConfig
+
+	NetworkIsolation *drivers.NetworkIsolationSpec
 }
 
 // SetWriters sets the writer for the process stdout and stderr. This should
@@ -248,7 +254,7 @@ func (e *UniversalExecutor) Version() (*ExecutorVersion, error) {
 // Launch launches the main process and returns its state. It also
 // configures an applies isolation on certain platforms.
 func (e *UniversalExecutor) Launch(command *ExecCommand) (*ProcessState, error) {
-	e.logger.Debug("launching command", "command", command.Cmd, "args", strings.Join(command.Args, " "))
+	e.logger.Trace("preparing to launch command", "command", command.Cmd, "args", strings.Join(command.Args, " "))
 
 	e.commandCfg = command
 
@@ -303,11 +309,11 @@ func (e *UniversalExecutor) Launch(command *ExecCommand) (*ProcessState, error) 
 	e.childCmd.Env = e.commandCfg.Env
 
 	// Start the process
-	if err := e.childCmd.Start(); err != nil {
+	if err = withNetworkIsolation(e.childCmd.Start, command.NetworkIsolation); err != nil {
 		return nil, fmt.Errorf("failed to start command path=%q --- args=%q: %v", path, e.childCmd.Args, err)
 	}
 
-	go e.pidCollector.collectPids(e.processExited, getAllPids)
+	go e.pidCollector.collectPids(e.processExited, e.getAllPids)
 	go e.wait()
 	return &ProcessState{Pid: e.childCmd.Process.Pid, ExitCode: -1, Time: time.Now()}, nil
 }
@@ -316,13 +322,14 @@ func (e *UniversalExecutor) Launch(command *ExecCommand) (*ProcessState, error) 
 func (e *UniversalExecutor) Exec(deadline time.Time, name string, args []string) ([]byte, int, error) {
 	ctx, cancel := context.WithDeadline(context.Background(), deadline)
 	defer cancel()
-	return ExecScript(ctx, e.childCmd.Dir, e.commandCfg.Env, e.childCmd.SysProcAttr, name, args)
+	return ExecScript(ctx, e.childCmd.Dir, e.commandCfg.Env, e.childCmd.SysProcAttr, e.commandCfg.NetworkIsolation, name, args)
 }
 
 // ExecScript executes cmd with args and returns the output, exit code, and
 // error. Output is truncated to drivers/shared/structs.CheckBufSize
 func ExecScript(ctx context.Context, dir string, env []string, attrs *syscall.SysProcAttr,
-	name string, args []string) ([]byte, int, error) {
+	netSpec *drivers.NetworkIsolationSpec, name string, args []string) ([]byte, int, error) {
+
 	cmd := exec.CommandContext(ctx, name, args...)
 
 	// Copy runtime environment from the main command
@@ -335,7 +342,7 @@ func ExecScript(ctx context.Context, dir string, env []string, attrs *syscall.Sy
 	cmd.Stdout = buf
 	cmd.Stderr = buf
 
-	if err := cmd.Run(); err != nil {
+	if err := withNetworkIsolation(cmd.Run, netSpec); err != nil {
 		exitErr, ok := err.(*exec.ExitError)
 		if !ok {
 			// Non-exit error, return it and let the caller treat
@@ -354,6 +361,55 @@ func ExecScript(ctx context.Context, dir string, env []string, attrs *syscall.Sy
 		return buf.Bytes(), exitCode, nil
 	}
 	return buf.Bytes(), 0, nil
+}
+
+func (e *UniversalExecutor) ExecStreaming(ctx context.Context, command []string, tty bool,
+	stream drivers.ExecTaskStream) error {
+
+	if len(command) == 0 {
+		return fmt.Errorf("command is required")
+	}
+
+	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
+
+	cmd.Dir = "/"
+	cmd.Env = e.childCmd.Env
+
+	execHelper := &execHelper{
+		logger: e.logger,
+
+		newTerminal: func() (func() (*os.File, error), *os.File, error) {
+			pty, tty, err := pty.Open()
+			if err != nil {
+				return nil, nil, err
+			}
+
+			return func() (*os.File, error) { return pty, nil }, tty, err
+		},
+		setTTY: func(tty *os.File) error {
+			cmd.SysProcAttr = sessionCmdAttr(tty)
+
+			cmd.Stdin = tty
+			cmd.Stdout = tty
+			cmd.Stderr = tty
+			return nil
+		},
+		setIO: func(stdin io.Reader, stdout, stderr io.Writer) error {
+			cmd.Stdin = stdin
+			cmd.Stdout = stdout
+			cmd.Stderr = stderr
+			return nil
+		},
+		processStart: func() error {
+			return withNetworkIsolation(cmd.Start, e.commandCfg.NetworkIsolation)
+		},
+		processWait: func() (*os.ProcessState, error) {
+			err := cmd.Wait()
+			return cmd.ProcessState, err
+		},
+	}
+
+	return execHelper.run(ctx, tty, stream)
 }
 
 // Wait waits until a process has exited and returns it's exitcode and errors
@@ -546,7 +602,8 @@ func (e *UniversalExecutor) handleStats(ch chan *cstructs.TaskResourceUsage, ctx
 }
 
 // lookupBin looks for path to the binary to run by looking for the binary in
-// the following locations, in-order: task/local/, task/, based on host $PATH.
+// the following locations, in-order:
+// task/local/, task/, on the host file system, in host $PATH
 // The return path is absolute.
 func lookupBin(taskDir string, bin string) (string, error) {
 	// Check in the local directory

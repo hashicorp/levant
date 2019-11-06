@@ -1,7 +1,9 @@
 import Ember from 'ember';
 import moment from 'moment';
-import { Factory, faker, trait } from 'ember-cli-mirage';
+import { Factory, trait } from 'ember-cli-mirage';
+import faker from 'nomad-ui/mirage/faker';
 import { provide, pickOne } from '../utils';
+import { generateResources } from '../common';
 
 const UUIDS = provide(100, faker.random.uuid.bind(faker.random));
 const CLIENT_STATUSES = ['pending', 'running', 'complete', 'failed', 'lost'];
@@ -23,15 +25,18 @@ export default Factory.extend({
 
   namespace: null,
 
-  clientStatus: faker.list.random(...CLIENT_STATUSES),
-  desiredStatus: faker.list.random(...DESIRED_STATUSES),
+  clientStatus: () => faker.helpers.randomize(CLIENT_STATUSES),
+  desiredStatus: () => faker.helpers.randomize(DESIRED_STATUSES),
+
+  // When true, doesn't create any resources, state, or events
+  shallow: false,
 
   withTaskWithPorts: trait({
     afterCreate(allocation, server) {
       const taskGroup = server.db.taskGroups.findBy({ name: allocation.taskGroup });
       const resources = taskGroup.taskIds.map(id =>
         server.create(
-          'task-resources',
+          'task-resource',
           {
             allocation,
             name: server.db.tasks.find(id).name,
@@ -40,7 +45,7 @@ export default Factory.extend({
         )
       );
 
-      allocation.update({ taskResourcesIds: resources.mapBy('id') });
+      allocation.update({ taskResourceIds: resources.mapBy('id') });
     },
   }),
 
@@ -49,7 +54,7 @@ export default Factory.extend({
       const taskGroup = server.db.taskGroups.findBy({ name: allocation.taskGroup });
       const resources = taskGroup.taskIds.map(id =>
         server.create(
-          'task-resources',
+          'task-resource',
           {
             allocation,
             name: server.db.tasks.find(id).name,
@@ -58,7 +63,15 @@ export default Factory.extend({
         )
       );
 
-      allocation.update({ taskResourcesIds: resources.mapBy('id') });
+      allocation.update({ taskResourceIds: resources.mapBy('id') });
+    },
+  }),
+
+  withAllocatedResources: trait({
+    allocatedResources: () => {
+      return {
+        Shared: generateResources({ networks: { minPorts: 2 } }),
+      };
     },
   }),
 
@@ -101,6 +114,7 @@ export default Factory.extend({
           rescheduleAttempts: Math.max(attempts, 0),
           rescheduleSuccess: allocation.rescheduleSuccess,
           previousAllocation: allocation.id,
+          shallow: allocation.shallow,
           clientStatus: 'failed',
           rescheduleTracker,
           followupEvalId: server.create('evaluation', {
@@ -111,11 +125,26 @@ export default Factory.extend({
         nextAllocation = server.create('allocation', {
           previousAllocation: allocation.id,
           clientStatus: allocation.rescheduleSuccess ? 'running' : 'failed',
+          shallow: allocation.shallow,
           rescheduleTracker,
         });
       }
 
       allocation.update({ nextAllocation: nextAllocation.id, clientStatus: 'failed' });
+    },
+  }),
+
+  preempted: trait({
+    afterCreate(allocation, server) {
+      const preempter = server.create('allocation', { preemptedAllocations: [allocation.id] });
+      allocation.update({ preemptedByAllocation: preempter.id });
+    },
+  }),
+
+  preempter: trait({
+    afterCreate(allocation, server) {
+      const preempted = server.create('allocation', { preemptedByAllocation: allocation.id });
+      allocation.update({ preemptedAllocations: [preempted.id] });
     },
   }),
 
@@ -138,35 +167,42 @@ export default Factory.extend({
       ? server.db.taskGroups.findBy({ name: allocation.taskGroup })
       : pickOne(server.db.taskGroups.where({ jobId: job.id }));
 
-    const states = taskGroup.taskIds.map(id =>
-      server.create('task-state', {
-        allocation,
-        name: server.db.tasks.find(id).name,
-      })
-    );
-
-    const resources = taskGroup.taskIds.map(id =>
-      server.create('task-resources', {
-        allocation,
-        name: server.db.tasks.find(id).name,
-      })
-    );
-
     allocation.update({
       namespace,
       jobId: job.id,
       nodeId: node.id,
-      taskStateIds: allocation.clientStatus === 'pending' ? [] : states.mapBy('id'),
-      taskResourcesIds: allocation.clientStatus === 'pending' ? [] : resources.mapBy('id'),
+      taskStateIds: [],
+      taskResourceIds: [],
       taskGroup: taskGroup.name,
       name: allocation.name || `${taskGroup.name}.[${faker.random.number(10)}]`,
     });
 
-    // Each allocation has a corresponding allocation stats running on some client.
-    // Create that record, even though it's not a relationship.
-    server.create('client-allocation-stats', {
-      id: allocation.id,
-      _tasks: states.mapBy('name'),
-    });
+    if (!allocation.shallow) {
+      const states = taskGroup.taskIds.map(id =>
+        server.create('task-state', {
+          allocation,
+          name: server.db.tasks.find(id).name,
+        })
+      );
+
+      const resources = taskGroup.taskIds.map(id =>
+        server.create('task-resource', {
+          allocation,
+          name: server.db.tasks.find(id).name,
+        })
+      );
+
+      allocation.update({
+        taskStateIds: allocation.clientStatus === 'pending' ? [] : states.mapBy('id'),
+        taskResourceIds: allocation.clientStatus === 'pending' ? [] : resources.mapBy('id'),
+      });
+
+      // Each allocation has a corresponding allocation stats running on some client.
+      // Create that record, even though it's not a relationship.
+      server.create('client-allocation-stat', {
+        id: allocation.id,
+        _taskNames: states.mapBy('name'),
+      });
+    }
   },
 });

@@ -3,6 +3,7 @@ package client
 import (
 	"fmt"
 	"math/rand"
+	"time"
 
 	"github.com/hashicorp/nomad/nomad/structs"
 )
@@ -32,7 +33,7 @@ func diffAllocs(existing map[string]uint64, allocs *allocUpdates) *diffResult {
 		_, filtered := allocs.filtered[existID]
 
 		// If not updated or filtered, removed
-		if !pulled && !filtered {
+		if !pulled && !filtered && allocs.index > existIndex {
 			result.removed = append(result.removed, existID)
 			continue
 		}
@@ -62,4 +63,14 @@ func shuffleStrings(list []string) {
 		j := rand.Intn(i + 1)
 		list[i], list[j] = list[j], list[i]
 	}
+}
+
+// stoppedTimer returns a timer that's stopped and wouldn't fire until
+// it's reset
+func stoppedTimer() *time.Timer {
+	timer := time.NewTimer(0)
+	if !timer.Stop() {
+		<-timer.C
+	}
+	return timer
 }

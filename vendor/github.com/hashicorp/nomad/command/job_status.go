@@ -169,7 +169,7 @@ func (c *JobStatusCommand) Run(args []string) int {
 	basic := []string{
 		fmt.Sprintf("ID|%s", *job.ID),
 		fmt.Sprintf("Name|%s", *job.Name),
-		fmt.Sprintf("Submit Date|%s", formatTime(getSubmitTime(job))),
+		fmt.Sprintf("Submit Date|%s", formatTime(time.Unix(0, *job.SubmitTime))),
 		fmt.Sprintf("Type|%s", *job.Type),
 		fmt.Sprintf("Priority|%d", *job.Priority),
 		fmt.Sprintf("Datacenters|%s", strings.Join(job.Datacenters, ",")),
@@ -413,12 +413,13 @@ func formatAllocListStubs(stubs []*api.AllocationListStub, verbose bool, uuidLen
 
 	allocs := make([]string, len(stubs)+1)
 	if verbose {
-		allocs[0] = "ID|Eval ID|Node ID|Task Group|Version|Desired|Status|Created|Modified"
+		allocs[0] = "ID|Eval ID|Node ID|Node Name|Task Group|Version|Desired|Status|Created|Modified"
 		for i, alloc := range stubs {
-			allocs[i+1] = fmt.Sprintf("%s|%s|%s|%s|%d|%s|%s|%s|%s",
+			allocs[i+1] = fmt.Sprintf("%s|%s|%s|%s|%s|%d|%s|%s|%s|%s",
 				limit(alloc.ID, uuidLength),
 				limit(alloc.EvalID, uuidLength),
 				limit(alloc.NodeID, uuidLength),
+				alloc.NodeName,
 				alloc.TaskGroup,
 				alloc.JobVersion,
 				alloc.DesiredStatus,
@@ -461,7 +462,7 @@ func formatAllocList(allocations []*api.Allocation, verbose bool, uuidLength int
 				limit(alloc.EvalID, uuidLength),
 				limit(alloc.NodeID, uuidLength),
 				alloc.TaskGroup,
-				getVersion(alloc.Job),
+				*alloc.Job.Version,
 				alloc.DesiredStatus,
 				alloc.ClientStatus,
 				formatUnixNanoTime(alloc.CreateTime),
@@ -477,7 +478,7 @@ func formatAllocList(allocations []*api.Allocation, verbose bool, uuidLength int
 				limit(alloc.ID, uuidLength),
 				limit(alloc.NodeID, uuidLength),
 				alloc.TaskGroup,
-				getVersion(alloc.Job),
+				*alloc.Job.Version,
 				alloc.DesiredStatus,
 				alloc.ClientStatus,
 				createTimePretty,

@@ -49,9 +49,10 @@ locals {
 
 # Generates keys to use for provisioning and access
 module "keys" {
-  name   = "nomad-e2e-${local.random_name}"
+  name   = "${local.random_name}"
   path   = "${path.root}/keys"
   source = "mitchellh/dynamic-keys/aws"
+  version = "v1.0.0"
 }
 
 data "aws_ami" "main" {
@@ -62,7 +63,15 @@ data "aws_ami" "main" {
     name   = "name"
     values = ["nomad-e2e-*"]
   }
+
+  filter {
+    name   = "tag:OS"
+    values = ["Ubuntu"]
+  }
+
 }
+
+data "aws_caller_identity" "current" {}
 
 output "servers" {
   value = "${aws_instance.server.*.public_ip}"
@@ -87,6 +96,11 @@ Then you can run e2e tests with:
 
 ```
 go test -v ./e2e
+```
+
+ssh into nodes with:
+```
+ssh -i keys/${local.random_name}.pem ubuntu@${aws_instance.client.0.public_ip}
 ```
 EOM
 }

@@ -14,7 +14,6 @@ import (
 	"github.com/hashicorp/nomad/helper/uuid"
 	"github.com/hashicorp/nomad/nomad/structs"
 	"github.com/hashicorp/nomad/plugins/drivers"
-	"github.com/hashicorp/nomad/testutil"
 	"github.com/kr/pretty"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -46,38 +45,7 @@ func testTask() *TaskServices {
 				},
 			},
 		},
-		DriverExec: newMockExec(),
 	}
-}
-
-// mockExec implements the ScriptExecutor interface and will use an alternate
-// implementation t.ExecFunc if non-nil.
-type mockExec struct {
-	// Ticked whenever a script is called
-	execs chan int
-
-	// If non-nil will be called by script checks
-	ExecFunc func(ctx context.Context, cmd string, args []string) ([]byte, int, error)
-}
-
-func newMockExec() *mockExec {
-	return &mockExec{
-		execs: make(chan int, 100),
-	}
-}
-
-func (m *mockExec) Exec(dur time.Duration, cmd string, args []string) ([]byte, int, error) {
-	select {
-	case m.execs <- 1:
-	default:
-	}
-	if m.ExecFunc == nil {
-		// Default impl is just "ok"
-		return []byte("ok"), 0, nil
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), dur)
-	defer cancel()
-	return m.ExecFunc(ctx, cmd, args)
 }
 
 // restartRecorder is a minimal TaskRestarter implementation that simply
@@ -96,7 +64,6 @@ type testFakeCtx struct {
 	ServiceClient *ServiceClient
 	FakeConsul    *MockAgent
 	Task          *TaskServices
-	MockExec      *mockExec
 }
 
 var errNoOps = fmt.Errorf("testing error: no pending operations")
@@ -107,7 +74,11 @@ func (t *testFakeCtx) syncOnce() error {
 	select {
 	case ops := <-t.ServiceClient.opCh:
 		t.ServiceClient.merge(ops)
-		return t.ServiceClient.sync()
+		err := t.ServiceClient.sync()
+		if err == nil {
+			t.ServiceClient.clearExplicitlyDeregistered()
+		}
+		return err
 	default:
 		return errNoOps
 	}
@@ -118,107 +89,52 @@ func (t *testFakeCtx) syncOnce() error {
 func setupFake(t *testing.T) *testFakeCtx {
 	fc := NewMockAgent()
 	tt := testTask()
+
+	// by default start fake client being out of probation
+	sc := NewServiceClient(fc, testlog.HCLogger(t), true)
+	sc.deregisterProbationExpiry = time.Now().Add(-1 * time.Minute)
+
 	return &testFakeCtx{
-		ServiceClient: NewServiceClient(fc, testlog.HCLogger(t), true),
+		ServiceClient: sc,
 		FakeConsul:    fc,
 		Task:          tt,
-		MockExec:      tt.DriverExec.(*mockExec),
 	}
 }
 
 func TestConsul_ChangeTags(t *testing.T) {
 	ctx := setupFake(t)
+	require := require.New(t)
 
-	if err := ctx.ServiceClient.RegisterTask(ctx.Task); err != nil {
-		t.Fatalf("unexpected error registering task: %v", err)
-	}
+	require.NoError(ctx.ServiceClient.RegisterTask(ctx.Task))
+	require.NoError(ctx.syncOnce())
+	require.Equal(1, len(ctx.FakeConsul.services), "Expected 1 service to be registered with Consul")
 
-	if err := ctx.syncOnce(); err != nil {
-		t.Fatalf("unexpected error syncing task: %v", err)
-	}
-
-	if n := len(ctx.FakeConsul.services); n != 1 {
-		t.Fatalf("expected 1 service but found %d:\n%#v", n, ctx.FakeConsul.services)
-	}
-
-	// Query the allocs registrations and then again when we update. The IDs
-	// should change
+	// Validate the alloc registration
 	reg1, err := ctx.ServiceClient.AllocRegistrations(ctx.Task.AllocID)
-	if err != nil {
-		t.Fatalf("Looking up alloc registration failed: %v", err)
-	}
-	if reg1 == nil {
-		t.Fatalf("Nil alloc registrations: %v", err)
-	}
-	if num := reg1.NumServices(); num != 1 {
-		t.Fatalf("Wrong number of services: got %d; want 1", num)
-	}
-	if num := reg1.NumChecks(); num != 0 {
-		t.Fatalf("Wrong number of checks: got %d; want 0", num)
+	require.NoError(err)
+	require.NotNil(reg1, "Unexpected nil alloc registration")
+	require.Equal(1, reg1.NumServices())
+	require.Equal(0, reg1.NumChecks())
+
+	for _, v := range ctx.FakeConsul.services {
+		require.Equal(v.Name, ctx.Task.Services[0].Name)
+		require.Equal(v.Tags, ctx.Task.Services[0].Tags)
 	}
 
-	origKey := ""
-	for k, v := range ctx.FakeConsul.services {
-		origKey = k
-		if v.Name != ctx.Task.Services[0].Name {
-			t.Errorf("expected Name=%q != %q", ctx.Task.Services[0].Name, v.Name)
-		}
-		if !reflect.DeepEqual(v.Tags, ctx.Task.Services[0].Tags) {
-			t.Errorf("expected Tags=%v != %v", ctx.Task.Services[0].Tags, v.Tags)
-		}
-	}
-
+	// Update the task definition
 	origTask := ctx.Task.Copy()
 	ctx.Task.Services[0].Tags[0] = "newtag"
-	if err := ctx.ServiceClient.UpdateTask(origTask, ctx.Task); err != nil {
-		t.Fatalf("unexpected error registering task: %v", err)
-	}
-	if err := ctx.syncOnce(); err != nil {
-		t.Fatalf("unexpected error syncing task: %v", err)
-	}
 
-	if n := len(ctx.FakeConsul.services); n != 1 {
-		t.Fatalf("expected 1 service but found %d:\n%#v", n, ctx.FakeConsul.services)
-	}
+	// Register and sync the update
+	require.NoError(ctx.ServiceClient.UpdateTask(origTask, ctx.Task))
+	require.NoError(ctx.syncOnce())
+	require.Equal(1, len(ctx.FakeConsul.services), "Expected 1 service to be registered with Consul")
 
-	for k, v := range ctx.FakeConsul.services {
-		if k == origKey {
-			t.Errorf("expected key to change but found %q", k)
-		}
-		if v.Name != ctx.Task.Services[0].Name {
-			t.Errorf("expected Name=%q != %q", ctx.Task.Services[0].Name, v.Name)
-		}
-		if !reflect.DeepEqual(v.Tags, ctx.Task.Services[0].Tags) {
-			t.Errorf("expected Tags=%v != %v", ctx.Task.Services[0].Tags, v.Tags)
-		}
-	}
-
-	// Check again and ensure the IDs changed
-	reg2, err := ctx.ServiceClient.AllocRegistrations(ctx.Task.AllocID)
-	if err != nil {
-		t.Fatalf("Looking up alloc registration failed: %v", err)
-	}
-	if reg2 == nil {
-		t.Fatalf("Nil alloc registrations: %v", err)
-	}
-	if num := reg2.NumServices(); num != 1 {
-		t.Fatalf("Wrong number of services: got %d; want 1", num)
-	}
-	if num := reg2.NumChecks(); num != 0 {
-		t.Fatalf("Wrong number of checks: got %d; want 0", num)
-	}
-
-	for task, treg := range reg1.Tasks {
-		otherTaskReg, ok := reg2.Tasks[task]
-		if !ok {
-			t.Fatalf("Task %q not in second reg", task)
-		}
-
-		for sID := range treg.Services {
-			if _, ok := otherTaskReg.Services[sID]; ok {
-				t.Fatalf("service ID didn't change")
-			}
-		}
+	// Validate the metadata changed
+	for _, v := range ctx.FakeConsul.services {
+		require.Equal(v.Name, ctx.Task.Services[0].Name)
+		require.Equal(v.Tags, ctx.Task.Services[0].Tags)
+		require.Equal("newtag", v.Tags[0])
 	}
 }
 
@@ -227,6 +143,8 @@ func TestConsul_ChangeTags(t *testing.T) {
 // slightly different code path than changing tags.
 func TestConsul_ChangePorts(t *testing.T) {
 	ctx := setupFake(t)
+	require := require.New(t)
+
 	ctx.Task.Services[0].Checks = []*structs.ServiceCheck{
 		{
 			Name:      "c1",
@@ -252,35 +170,17 @@ func TestConsul_ChangePorts(t *testing.T) {
 		},
 	}
 
-	if err := ctx.ServiceClient.RegisterTask(ctx.Task); err != nil {
-		t.Fatalf("unexpected error registering task: %v", err)
+	require.NoError(ctx.ServiceClient.RegisterTask(ctx.Task))
+	require.NoError(ctx.syncOnce())
+	require.Equal(1, len(ctx.FakeConsul.services), "Expected 1 service to be registered with Consul")
+
+	for _, v := range ctx.FakeConsul.services {
+		require.Equal(ctx.Task.Services[0].Name, v.Name)
+		require.Equal(ctx.Task.Services[0].Tags, v.Tags)
+		require.Equal(xPort, v.Port)
 	}
 
-	if err := ctx.syncOnce(); err != nil {
-		t.Fatalf("unexpected error syncing task: %v", err)
-	}
-
-	if n := len(ctx.FakeConsul.services); n != 1 {
-		t.Fatalf("expected 1 service but found %d:\n%#v", n, ctx.FakeConsul.services)
-	}
-
-	origServiceKey := ""
-	for k, v := range ctx.FakeConsul.services {
-		origServiceKey = k
-		if v.Name != ctx.Task.Services[0].Name {
-			t.Errorf("expected Name=%q != %q", ctx.Task.Services[0].Name, v.Name)
-		}
-		if !reflect.DeepEqual(v.Tags, ctx.Task.Services[0].Tags) {
-			t.Errorf("expected Tags=%v != %v", ctx.Task.Services[0].Tags, v.Tags)
-		}
-		if v.Port != xPort {
-			t.Errorf("expected Port x=%v but found: %v", xPort, v.Port)
-		}
-	}
-
-	if n := len(ctx.FakeConsul.checks); n != 3 {
-		t.Fatalf("expected 3 checks but found %d:\n%#v", n, ctx.FakeConsul.checks)
-	}
+	require.Len(ctx.FakeConsul.checks, 3)
 
 	origTCPKey := ""
 	origScriptKey := ""
@@ -289,28 +189,20 @@ func TestConsul_ChangePorts(t *testing.T) {
 		switch v.Name {
 		case "c1":
 			origTCPKey = k
-			if expected := fmt.Sprintf(":%d", xPort); v.TCP != expected {
-				t.Errorf("expected Port x=%v but found: %v", expected, v.TCP)
-			}
+			require.Equal(fmt.Sprintf(":%d", xPort), v.TCP)
 		case "c2":
 			origScriptKey = k
-			select {
-			case <-ctx.MockExec.execs:
-				if n := len(ctx.MockExec.execs); n > 0 {
-					t.Errorf("expected 1 exec but found: %d", n+1)
-				}
-			case <-time.After(3 * time.Second):
-				t.Errorf("script not called in time")
-			}
 		case "c3":
 			origHTTPKey = k
-			if expected := fmt.Sprintf("http://:%d/", yPort); v.HTTP != expected {
-				t.Errorf("expected Port y=%v but found: %v", expected, v.HTTP)
-			}
+			require.Equal(fmt.Sprintf("http://:%d/", yPort), v.HTTP)
 		default:
 			t.Fatalf("unexpected check: %q", v.Name)
 		}
 	}
+
+	require.NotEmpty(origTCPKey)
+	require.NotEmpty(origScriptKey)
+	require.NotEmpty(origHTTPKey)
 
 	// Now update the PortLabel on the Service and Check c3
 	origTask := ctx.Task.Copy()
@@ -339,64 +231,31 @@ func TestConsul_ChangePorts(t *testing.T) {
 			// Removed PortLabel; should default to service's (y)
 		},
 	}
-	if err := ctx.ServiceClient.UpdateTask(origTask, ctx.Task); err != nil {
-		t.Fatalf("unexpected error registering task: %v", err)
-	}
-	if err := ctx.syncOnce(); err != nil {
-		t.Fatalf("unexpected error syncing task: %v", err)
+
+	require.NoError(ctx.ServiceClient.UpdateTask(origTask, ctx.Task))
+	require.NoError(ctx.syncOnce())
+	require.Equal(1, len(ctx.FakeConsul.services), "Expected 1 service to be registered with Consul")
+
+	for _, v := range ctx.FakeConsul.services {
+		require.Equal(ctx.Task.Services[0].Name, v.Name)
+		require.Equal(ctx.Task.Services[0].Tags, v.Tags)
+		require.Equal(yPort, v.Port)
 	}
 
-	if n := len(ctx.FakeConsul.services); n != 1 {
-		t.Fatalf("expected 1 service but found %d:\n%#v", n, ctx.FakeConsul.services)
-	}
-
-	for k, v := range ctx.FakeConsul.services {
-		if k == origServiceKey {
-			t.Errorf("expected key change; still: %q", k)
-		}
-		if v.Name != ctx.Task.Services[0].Name {
-			t.Errorf("expected Name=%q != %q", ctx.Task.Services[0].Name, v.Name)
-		}
-		if !reflect.DeepEqual(v.Tags, ctx.Task.Services[0].Tags) {
-			t.Errorf("expected Tags=%v != %v", ctx.Task.Services[0].Tags, v.Tags)
-		}
-		if v.Port != yPort {
-			t.Errorf("expected Port y=%v but found: %v", yPort, v.Port)
-		}
-	}
-
-	if n := len(ctx.FakeConsul.checks); n != 3 {
-		t.Fatalf("expected 3 check but found %d:\n%#v", n, ctx.FakeConsul.checks)
-	}
+	require.Equal(3, len(ctx.FakeConsul.checks))
 
 	for k, v := range ctx.FakeConsul.checks {
 		switch v.Name {
 		case "c1":
-			if k == origTCPKey {
-				t.Errorf("expected key change for %s from %q", v.Name, origTCPKey)
-			}
-			if expected := fmt.Sprintf(":%d", xPort); v.TCP != expected {
-				t.Errorf("expected Port x=%v but found: %v", expected, v.TCP)
-			}
+			// C1 is changed because the service was re-registered
+			require.NotEqual(origTCPKey, k)
+			require.Equal(fmt.Sprintf(":%d", xPort), v.TCP)
 		case "c2":
-			if k == origScriptKey {
-				t.Errorf("expected key change for %s from %q", v.Name, origScriptKey)
-			}
-			select {
-			case <-ctx.MockExec.execs:
-				if n := len(ctx.MockExec.execs); n > 0 {
-					t.Errorf("expected 1 exec but found: %d", n+1)
-				}
-			case <-time.After(3 * time.Second):
-				t.Errorf("script not called in time")
-			}
+			// C2 is changed because the service was re-registered
+			require.NotEqual(origScriptKey, k)
 		case "c3":
-			if k == origHTTPKey {
-				t.Errorf("expected %s key to change from %q", v.Name, k)
-			}
-			if expected := fmt.Sprintf("http://:%d/", yPort); v.HTTP != expected {
-				t.Errorf("expected Port y=%v but found: %v", expected, v.HTTP)
-			}
+			require.NotEqual(origHTTPKey, k)
+			require.Equal(fmt.Sprintf("http://:%d/", yPort), v.HTTP)
 		default:
 			t.Errorf("Unknown check: %q", k)
 		}
@@ -778,290 +637,104 @@ func TestConsul_RegServices(t *testing.T) {
 func TestConsul_ShutdownOK(t *testing.T) {
 	require := require.New(t)
 	ctx := setupFake(t)
-
-	// Add a script check to make sure its TTL gets updated
-	ctx.Task.Services[0].Checks = []*structs.ServiceCheck{
-		{
-			Name:    "scriptcheck",
-			Type:    "script",
-			Command: "true",
-			// Make check block until shutdown
-			Interval:      9000 * time.Hour,
-			Timeout:       10 * time.Second,
-			InitialStatus: "warning",
-		},
-	}
-
 	go ctx.ServiceClient.Run()
 
-	// Register a task and agent
-	if err := ctx.ServiceClient.RegisterTask(ctx.Task); err != nil {
-		t.Fatalf("unexpected error registering task: %v", err)
-	}
-
+	// register the Nomad agent service and check
 	agentServices := []*structs.Service{
 		{
 			Name:      "http",
 			Tags:      []string{"nomad"},
 			PortLabel: "localhost:2345",
+			Checks: []*structs.ServiceCheck{
+				{
+					Name:          "nomad-tcp",
+					Type:          "tcp",
+					Interval:      9000 * time.Hour, // make check block
+					Timeout:       10 * time.Second,
+					InitialStatus: "warning",
+				},
+			},
 		},
 	}
-	if err := ctx.ServiceClient.RegisterAgent("client", agentServices); err != nil {
-		t.Fatalf("unexpected error registering agent: %v", err)
-	}
+	require.NoError(ctx.ServiceClient.RegisterAgent("client", agentServices))
+	require.Eventually(ctx.ServiceClient.hasSeen, time.Second, 10*time.Millisecond)
 
-	testutil.WaitForResult(func() (bool, error) {
-		return ctx.ServiceClient.hasSeen(), fmt.Errorf("error contacting Consul")
-	}, func(err error) {
-		t.Fatalf("err: %v", err)
-	})
+	// assert successful registration
+	require.Len(ctx.FakeConsul.services, 1, "expected agent service to be registered")
+	require.Len(ctx.FakeConsul.checks, 1, "expected agent check to be registered")
+	require.Contains(ctx.FakeConsul.services,
+		makeAgentServiceID("client", agentServices[0]))
 
-	// Shutdown should block until scripts finish
-	if err := ctx.ServiceClient.Shutdown(); err != nil {
-		t.Errorf("unexpected error shutting down client: %v", err)
-	}
-
-	// UpdateTTL should have been called once for the script check and once
-	// for shutdown
-	if n := len(ctx.FakeConsul.checkTTLs); n != 1 {
-		t.Fatalf("expected 1 checkTTL entry but found: %d", n)
-	}
-	for _, v := range ctx.FakeConsul.checkTTLs {
-		require.Equalf(2, v, "expected 2 updates but found %d", v)
-	}
-	for _, v := range ctx.FakeConsul.checks {
-		if v.Status != "passing" {
-			t.Fatalf("expected check to be passing but found %q", v.Status)
-		}
-	}
-}
-
-// TestConsul_ShutdownSlow tests the slow but ok path for the shutdown logic in
-// ServiceClient.
-func TestConsul_ShutdownSlow(t *testing.T) {
-	t.Parallel()
-	ctx := setupFake(t)
-
-	// Add a script check to make sure its TTL gets updated
-	ctx.Task.Services[0].Checks = []*structs.ServiceCheck{
-		{
-			Name:    "scriptcheck",
-			Type:    "script",
-			Command: "true",
-			// Make check block until shutdown
-			Interval:      9000 * time.Hour,
-			Timeout:       5 * time.Second,
-			InitialStatus: "warning",
-		},
-	}
-
-	// Make Exec slow, but not too slow
-	waiter := make(chan struct{})
-	ctx.MockExec.ExecFunc = func(ctx context.Context, cmd string, args []string) ([]byte, int, error) {
-		select {
-		case <-waiter:
-		default:
-			close(waiter)
-		}
-		time.Sleep(time.Second)
-		return []byte{}, 0, nil
-	}
-
-	// Make shutdown wait time just a bit longer than ctx.Exec takes
-	ctx.ServiceClient.shutdownWait = 3 * time.Second
-
-	go ctx.ServiceClient.Run()
-
-	// Register a task and agent
-	if err := ctx.ServiceClient.RegisterTask(ctx.Task); err != nil {
-		t.Fatalf("unexpected error registering task: %v", err)
-	}
-
-	// wait for Exec to get called before shutting down
-	<-waiter
-
-	// Shutdown should block until all enqueued operations finish.
-	preShutdown := time.Now()
-	if err := ctx.ServiceClient.Shutdown(); err != nil {
-		t.Errorf("unexpected error shutting down client: %v", err)
-	}
-
-	// Shutdown time should have taken: 1s <= shutdown <= 3s
-	shutdownTime := time.Now().Sub(preShutdown)
-	if shutdownTime < time.Second || shutdownTime > ctx.ServiceClient.shutdownWait {
-		t.Errorf("expected shutdown to take >1s and <%s but took: %s", ctx.ServiceClient.shutdownWait, shutdownTime)
-	}
-
-	// UpdateTTL should have been called once for the script check
-	if n := len(ctx.FakeConsul.checkTTLs); n != 1 {
-		t.Fatalf("expected 1 checkTTL entry but found: %d", n)
-	}
-	for _, v := range ctx.FakeConsul.checkTTLs {
-		if v != 1 {
-			t.Fatalf("expected script check to be updated once but found %d", v)
-		}
-	}
-	for _, v := range ctx.FakeConsul.checks {
-		if v.Status != "passing" {
-			t.Fatalf("expected check to be passing but found %q", v.Status)
-		}
-	}
+	// Shutdown() should block until Nomad agent service/check is deregistered
+	require.NoError(ctx.ServiceClient.Shutdown())
+	require.Len(ctx.FakeConsul.services, 0, "expected agent service to be deregistered")
+	require.Len(ctx.FakeConsul.checks, 0, "expected agent check to be deregistered")
 }
 
 // TestConsul_ShutdownBlocked tests the blocked past deadline path for the
 // shutdown logic in ServiceClient.
 func TestConsul_ShutdownBlocked(t *testing.T) {
+	require := require.New(t)
 	t.Parallel()
 	ctx := setupFake(t)
-
-	// Add a script check to make sure its TTL gets updated
-	ctx.Task.Services[0].Checks = []*structs.ServiceCheck{
-		{
-			Name:    "scriptcheck",
-			Type:    "script",
-			Command: "true",
-			// Make check block until shutdown
-			Interval:      9000 * time.Hour,
-			Timeout:       9000 * time.Hour,
-			InitialStatus: "warning",
-		},
-	}
-
-	block := make(chan struct{})
-	defer close(block) // cleanup after test
-
-	// Make Exec block forever
-	waiter := make(chan struct{})
-	ctx.MockExec.ExecFunc = func(ctx context.Context, cmd string, args []string) ([]byte, int, error) {
-		close(waiter)
-		<-block
-		return []byte{}, 0, nil
-	}
-
-	// Use a short shutdown deadline since we're intentionally blocking forever
+	// can be short because we're intentionally blocking, but needs to
+	// be longer than the time we'll block Consul so we can be sure
+	// we're not delayed either.
 	ctx.ServiceClient.shutdownWait = time.Second
-
 	go ctx.ServiceClient.Run()
 
-	// Register a task and agent
-	if err := ctx.ServiceClient.RegisterTask(ctx.Task); err != nil {
-		t.Fatalf("unexpected error registering task: %v", err)
+	// register the Nomad agent service and check
+	agentServices := []*structs.Service{
+		{
+			Name:      "http",
+			Tags:      []string{"nomad"},
+			PortLabel: "localhost:2345",
+			Checks: []*structs.ServiceCheck{
+				{
+					Name:          "nomad-tcp",
+					Type:          "tcp",
+					Interval:      9000 * time.Hour, // make check block
+					Timeout:       10 * time.Second,
+					InitialStatus: "warning",
+				},
+			},
+		},
 	}
+	require.NoError(ctx.ServiceClient.RegisterAgent("client", agentServices))
+	require.Eventually(ctx.ServiceClient.hasSeen, time.Second, 10*time.Millisecond)
+	require.Len(ctx.FakeConsul.services, 1, "expected agent service to be registered")
+	require.Len(ctx.FakeConsul.checks, 1, "expected agent check to be registered")
 
-	// Wait for exec to be called
-	<-waiter
+	// prevent normal shutdown by blocking Consul. the shutdown should wait
+	// until agent deregistration has finished
+	waiter := make(chan struct{})
+	result := make(chan error)
+	go func() {
+		ctx.FakeConsul.mu.Lock()
+		close(waiter)
+		result <- ctx.ServiceClient.Shutdown()
+	}()
+
+	<-waiter // wait for lock to be hit
 
 	// Shutdown should block until all enqueued operations finish.
 	preShutdown := time.Now()
-	err := ctx.ServiceClient.Shutdown()
-	if err == nil {
-		t.Errorf("expected a timed out error from shutdown")
-	}
-
-	// Shutdown time should have taken shutdownWait; to avoid timing
-	// related errors simply test for wait <= shutdown <= wait+3s
-	shutdownTime := time.Now().Sub(preShutdown)
-	maxWait := ctx.ServiceClient.shutdownWait + (3 * time.Second)
-	if shutdownTime < ctx.ServiceClient.shutdownWait || shutdownTime > maxWait {
-		t.Errorf("expected shutdown to take >%s and <%s but took: %s", ctx.ServiceClient.shutdownWait, maxWait, shutdownTime)
-	}
-
-	// UpdateTTL should not have been called for the script check
-	if n := len(ctx.FakeConsul.checkTTLs); n != 0 {
-		t.Fatalf("expected 0 checkTTL entry but found: %d", n)
-	}
-	for _, v := range ctx.FakeConsul.checks {
-		if expected := "warning"; v.Status != expected {
-			t.Fatalf("expected check to be %q but found %q", expected, v.Status)
-		}
-	}
-}
-
-// TestConsul_RemoveScript assert removing a script check removes all objects
-// related to that check.
-func TestConsul_CancelScript(t *testing.T) {
-	ctx := setupFake(t)
-	ctx.Task.Services[0].Checks = []*structs.ServiceCheck{
-		{
-			Name:     "scriptcheckDel",
-			Type:     "script",
-			Interval: 9000 * time.Hour,
-			Timeout:  9000 * time.Hour,
-		},
-		{
-			Name:     "scriptcheckKeep",
-			Type:     "script",
-			Interval: 9000 * time.Hour,
-			Timeout:  9000 * time.Hour,
-		},
-	}
-
-	if err := ctx.ServiceClient.RegisterTask(ctx.Task); err != nil {
-		t.Fatalf("unexpected error registering task: %v", err)
-	}
-
-	if err := ctx.syncOnce(); err != nil {
-		t.Fatalf("unexpected error syncing task: %v", err)
-	}
-
-	if len(ctx.FakeConsul.checks) != 2 {
-		t.Errorf("expected 2 checks but found %d", len(ctx.FakeConsul.checks))
-	}
-
-	if len(ctx.ServiceClient.scripts) != 2 && len(ctx.ServiceClient.runningScripts) != 2 {
-		t.Errorf("expected 2 running script but found scripts=%d runningScripts=%d",
-			len(ctx.ServiceClient.scripts), len(ctx.ServiceClient.runningScripts))
-	}
-
-	for i := 0; i < 2; i++ {
-		select {
-		case <-ctx.MockExec.execs:
-			// Script ran as expected!
-		case <-time.After(3 * time.Second):
-			t.Fatalf("timed out waiting for script check to run")
-		}
-	}
-
-	// Remove a check and update the task
-	origTask := ctx.Task.Copy()
-	ctx.Task.Services[0].Checks = []*structs.ServiceCheck{
-		{
-			Name:     "scriptcheckKeep",
-			Type:     "script",
-			Interval: 9000 * time.Hour,
-			Timeout:  9000 * time.Hour,
-		},
-	}
-
-	if err := ctx.ServiceClient.UpdateTask(origTask, ctx.Task); err != nil {
-		t.Fatalf("unexpected error registering task: %v", err)
-	}
-
-	if err := ctx.syncOnce(); err != nil {
-		t.Fatalf("unexpected error syncing task: %v", err)
-	}
-
-	if len(ctx.FakeConsul.checks) != 1 {
-		t.Errorf("expected 1 check but found %d", len(ctx.FakeConsul.checks))
-	}
-
-	if len(ctx.ServiceClient.scripts) != 1 && len(ctx.ServiceClient.runningScripts) != 1 {
-		t.Errorf("expected 1 running script but found scripts=%d runningScripts=%d",
-			len(ctx.ServiceClient.scripts), len(ctx.ServiceClient.runningScripts))
-	}
-
-	// Make sure exec wasn't called again
 	select {
-	case <-ctx.MockExec.execs:
-		t.Errorf("unexpected execution of script; was goroutine not cancelled?")
-	case <-time.After(100 * time.Millisecond):
-		// No unexpected script execs
+	case <-time.After(200 * time.Millisecond):
+		ctx.FakeConsul.mu.Unlock()
+		require.NoError(<-result)
+	case <-result:
+		t.Fatal("should not have received result until Consul unblocked")
 	}
-
-	// Don't leak goroutines
-	for _, scriptHandle := range ctx.ServiceClient.runningScripts {
-		scriptHandle.cancel()
-	}
+	shutdownTime := time.Now().Sub(preShutdown).Seconds()
+	require.Less(shutdownTime, time.Second.Seconds(),
+		"expected shutdown to take >200ms and <1s")
+	require.Greater(shutdownTime, 200*time.Millisecond.Seconds(),
+		"expected shutdown to take >200ms and <1s")
+	require.Len(ctx.FakeConsul.services, 0,
+		"expected agent service to be deregistered")
+	require.Len(ctx.FakeConsul.checks, 0,
+		"expected agent check to be deregistered")
 }
 
 // TestConsul_DriverNetwork_AutoUse asserts that if a driver network has
@@ -1722,4 +1395,297 @@ func TestGetAddress(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestConsul_ServiceName_Duplicates(t *testing.T) {
+	t.Parallel()
+	ctx := setupFake(t)
+	require := require.New(t)
+
+	ctx.Task.Services = []*structs.Service{
+		{
+			Name:      "best-service",
+			PortLabel: "x",
+			Tags: []string{
+				"foo",
+			},
+			Checks: []*structs.ServiceCheck{
+				{
+					Name:     "check-a",
+					Type:     "tcp",
+					Interval: time.Second,
+					Timeout:  time.Second,
+				},
+			},
+		},
+		{
+			Name:      "best-service",
+			PortLabel: "y",
+			Tags: []string{
+				"bar",
+			},
+			Checks: []*structs.ServiceCheck{
+				{
+					Name:     "checky-mccheckface",
+					Type:     "tcp",
+					Interval: time.Second,
+					Timeout:  time.Second,
+				},
+			},
+		},
+		{
+			Name:      "worst-service",
+			PortLabel: "y",
+		},
+	}
+
+	require.NoError(ctx.ServiceClient.RegisterTask(ctx.Task))
+
+	require.NoError(ctx.syncOnce())
+
+	require.Len(ctx.FakeConsul.services, 3)
+
+	for _, v := range ctx.FakeConsul.services {
+		if v.Name == ctx.Task.Services[0].Name && v.Port == xPort {
+			require.ElementsMatch(v.Tags, ctx.Task.Services[0].Tags)
+			require.Len(v.Checks, 1)
+		} else if v.Name == ctx.Task.Services[1].Name && v.Port == yPort {
+			require.ElementsMatch(v.Tags, ctx.Task.Services[1].Tags)
+			require.Len(v.Checks, 1)
+		} else if v.Name == ctx.Task.Services[2].Name {
+			require.Len(v.Checks, 0)
+		}
+	}
+}
+
+// TestConsul_ServiceDeregistration_OutOfProbation asserts that during in steady
+// state we remove any services we don't reconize locally
+func TestConsul_ServiceDeregistration_OutProbation(t *testing.T) {
+	t.Parallel()
+	ctx := setupFake(t)
+	require := require.New(t)
+
+	ctx.ServiceClient.deregisterProbationExpiry = time.Now().Add(-1 * time.Hour)
+
+	remainingTask := testTask()
+	remainingTask.Services = []*structs.Service{
+		{
+			Name:      "remaining-service",
+			PortLabel: "x",
+			Checks: []*structs.ServiceCheck{
+				{
+					Name:     "check",
+					Type:     "tcp",
+					Interval: time.Second,
+					Timeout:  time.Second,
+				},
+			},
+		},
+	}
+	remainingTaskServiceID := MakeTaskServiceID(remainingTask.AllocID,
+		remainingTask.Name, remainingTask.Services[0])
+
+	require.NoError(ctx.ServiceClient.RegisterTask(remainingTask))
+	require.NoError(ctx.syncOnce())
+	require.Len(ctx.FakeConsul.services, 1)
+	require.Len(ctx.FakeConsul.checks, 1)
+
+	explicitlyRemovedTask := testTask()
+	explicitlyRemovedTask.Services = []*structs.Service{
+		{
+			Name:      "explicitly-removed-service",
+			PortLabel: "y",
+			Checks: []*structs.ServiceCheck{
+				{
+					Name:     "check",
+					Type:     "tcp",
+					Interval: time.Second,
+					Timeout:  time.Second,
+				},
+			},
+		},
+	}
+	explicitlyRemovedTaskServiceID := MakeTaskServiceID(explicitlyRemovedTask.AllocID,
+		explicitlyRemovedTask.Name, explicitlyRemovedTask.Services[0])
+
+	require.NoError(ctx.ServiceClient.RegisterTask(explicitlyRemovedTask))
+
+	require.NoError(ctx.syncOnce())
+	require.Len(ctx.FakeConsul.services, 2)
+	require.Len(ctx.FakeConsul.checks, 2)
+
+	// we register a task through nomad API then remove it out of band
+	outofbandTask := testTask()
+	outofbandTask.Services = []*structs.Service{
+		{
+			Name:      "unknown-service",
+			PortLabel: "x",
+			Checks: []*structs.ServiceCheck{
+				{
+					Name:     "check",
+					Type:     "tcp",
+					Interval: time.Second,
+					Timeout:  time.Second,
+				},
+			},
+		},
+	}
+	outofbandTaskServiceID := MakeTaskServiceID(outofbandTask.AllocID,
+		outofbandTask.Name, outofbandTask.Services[0])
+
+	require.NoError(ctx.ServiceClient.RegisterTask(outofbandTask))
+	require.NoError(ctx.syncOnce())
+
+	require.Len(ctx.FakeConsul.services, 3)
+
+	// remove outofbandTask from local services so it appears unknown to client
+	require.Len(ctx.ServiceClient.services, 3)
+	require.Len(ctx.ServiceClient.checks, 3)
+
+	delete(ctx.ServiceClient.services, outofbandTaskServiceID)
+	delete(ctx.ServiceClient.checks, MakeCheckID(outofbandTaskServiceID, outofbandTask.Services[0].Checks[0]))
+
+	require.Len(ctx.ServiceClient.services, 2)
+	require.Len(ctx.ServiceClient.checks, 2)
+
+	// Sync and ensure that explicitly removed service as well as outofbandTask were removed
+
+	ctx.ServiceClient.RemoveTask(explicitlyRemovedTask)
+	require.NoError(ctx.syncOnce())
+	require.NoError(ctx.ServiceClient.sync())
+	require.Len(ctx.FakeConsul.services, 1)
+	require.Len(ctx.FakeConsul.checks, 1)
+
+	require.Contains(ctx.FakeConsul.services, remainingTaskServiceID)
+	require.NotContains(ctx.FakeConsul.services, outofbandTaskServiceID)
+	require.NotContains(ctx.FakeConsul.services, explicitlyRemovedTaskServiceID)
+
+	require.Contains(ctx.FakeConsul.checks, MakeCheckID(remainingTaskServiceID, remainingTask.Services[0].Checks[0]))
+	require.NotContains(ctx.FakeConsul.checks, MakeCheckID(outofbandTaskServiceID, outofbandTask.Services[0].Checks[0]))
+	require.NotContains(ctx.FakeConsul.checks, MakeCheckID(explicitlyRemovedTaskServiceID, explicitlyRemovedTask.Services[0].Checks[0]))
+}
+
+// TestConsul_ServiceDeregistration_InProbation asserts that during initialization
+// we only deregister services that were explicitly removed and leave unknown
+// services untouched.  This adds a grace period for restoring recovered tasks
+// before deregistering them
+func TestConsul_ServiceDeregistration_InProbation(t *testing.T) {
+	t.Parallel()
+	ctx := setupFake(t)
+	require := require.New(t)
+
+	ctx.ServiceClient.deregisterProbationExpiry = time.Now().Add(1 * time.Hour)
+
+	remainingTask := testTask()
+	remainingTask.Services = []*structs.Service{
+		{
+			Name:      "remaining-service",
+			PortLabel: "x",
+			Checks: []*structs.ServiceCheck{
+				{
+					Name:     "check",
+					Type:     "tcp",
+					Interval: time.Second,
+					Timeout:  time.Second,
+				},
+			},
+		},
+	}
+	remainingTaskServiceID := MakeTaskServiceID(remainingTask.AllocID,
+		remainingTask.Name, remainingTask.Services[0])
+
+	require.NoError(ctx.ServiceClient.RegisterTask(remainingTask))
+	require.NoError(ctx.syncOnce())
+	require.Len(ctx.FakeConsul.services, 1)
+	require.Len(ctx.FakeConsul.checks, 1)
+
+	explicitlyRemovedTask := testTask()
+	explicitlyRemovedTask.Services = []*structs.Service{
+		{
+			Name:      "explicitly-removed-service",
+			PortLabel: "y",
+			Checks: []*structs.ServiceCheck{
+				{
+					Name:     "check",
+					Type:     "tcp",
+					Interval: time.Second,
+					Timeout:  time.Second,
+				},
+			},
+		},
+	}
+	explicitlyRemovedTaskServiceID := MakeTaskServiceID(explicitlyRemovedTask.AllocID,
+		explicitlyRemovedTask.Name, explicitlyRemovedTask.Services[0])
+
+	require.NoError(ctx.ServiceClient.RegisterTask(explicitlyRemovedTask))
+
+	require.NoError(ctx.syncOnce())
+	require.Len(ctx.FakeConsul.services, 2)
+	require.Len(ctx.FakeConsul.checks, 2)
+
+	// we register a task through nomad API then remove it out of band
+	outofbandTask := testTask()
+	outofbandTask.Services = []*structs.Service{
+		{
+			Name:      "unknown-service",
+			PortLabel: "x",
+			Checks: []*structs.ServiceCheck{
+				{
+					Name:     "check",
+					Type:     "tcp",
+					Interval: time.Second,
+					Timeout:  time.Second,
+				},
+			},
+		},
+	}
+	outofbandTaskServiceID := MakeTaskServiceID(outofbandTask.AllocID,
+		outofbandTask.Name, outofbandTask.Services[0])
+
+	require.NoError(ctx.ServiceClient.RegisterTask(outofbandTask))
+	require.NoError(ctx.syncOnce())
+
+	require.Len(ctx.FakeConsul.services, 3)
+
+	// remove outofbandTask from local services so it appears unknown to client
+	require.Len(ctx.ServiceClient.services, 3)
+	require.Len(ctx.ServiceClient.checks, 3)
+
+	delete(ctx.ServiceClient.services, outofbandTaskServiceID)
+	delete(ctx.ServiceClient.checks, MakeCheckID(outofbandTaskServiceID, outofbandTask.Services[0].Checks[0]))
+
+	require.Len(ctx.ServiceClient.services, 2)
+	require.Len(ctx.ServiceClient.checks, 2)
+
+	// Sync and ensure that explicitly removed service was removed, but outofbandTask remains
+
+	ctx.ServiceClient.RemoveTask(explicitlyRemovedTask)
+	require.NoError(ctx.syncOnce())
+	require.NoError(ctx.ServiceClient.sync())
+	require.Len(ctx.FakeConsul.services, 2)
+	require.Len(ctx.FakeConsul.checks, 2)
+
+	require.Contains(ctx.FakeConsul.services, remainingTaskServiceID)
+	require.Contains(ctx.FakeConsul.services, outofbandTaskServiceID)
+	require.NotContains(ctx.FakeConsul.services, explicitlyRemovedTaskServiceID)
+
+	require.Contains(ctx.FakeConsul.checks, MakeCheckID(remainingTaskServiceID, remainingTask.Services[0].Checks[0]))
+	require.Contains(ctx.FakeConsul.checks, MakeCheckID(outofbandTaskServiceID, outofbandTask.Services[0].Checks[0]))
+	require.NotContains(ctx.FakeConsul.checks, MakeCheckID(explicitlyRemovedTaskServiceID, explicitlyRemovedTask.Services[0].Checks[0]))
+
+	// after probation, outofband services and checks are removed
+	ctx.ServiceClient.deregisterProbationExpiry = time.Now().Add(-1 * time.Hour)
+
+	require.NoError(ctx.ServiceClient.sync())
+	require.Len(ctx.FakeConsul.services, 1)
+	require.Len(ctx.FakeConsul.checks, 1)
+
+	require.Contains(ctx.FakeConsul.services, remainingTaskServiceID)
+	require.NotContains(ctx.FakeConsul.services, outofbandTaskServiceID)
+	require.NotContains(ctx.FakeConsul.services, explicitlyRemovedTaskServiceID)
+
+	require.Contains(ctx.FakeConsul.checks, MakeCheckID(remainingTaskServiceID, remainingTask.Services[0].Checks[0]))
+	require.NotContains(ctx.FakeConsul.checks, MakeCheckID(outofbandTaskServiceID, outofbandTask.Services[0].Checks[0]))
+	require.NotContains(ctx.FakeConsul.checks, MakeCheckID(explicitlyRemovedTaskServiceID, explicitlyRemovedTask.Services[0].Checks[0]))
+
 }

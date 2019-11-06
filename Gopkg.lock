@@ -115,6 +115,14 @@
   version = "1.0.0"
 
 [[projects]]
+  digest = "1:03168f6041f164c06dc6acaaab4ed3ad1c6088b717c365cec892b35c80f4ffc7"
+  name = "github.com/gorilla/websocket"
+  packages = ["."]
+  pruneopts = ""
+  revision = "c3e18be99d19e6b3e8f1559eea2c161a665c4b6b"
+  version = "v1.4.1"
+
+[[projects]]
   digest = "1:b33e28812c8a9773aababc17e677d20b7bedd171d3e2e9f55ceaa447444e075b"
   name = "github.com/hashicorp/consul"
   packages = ["api"]
@@ -259,7 +267,7 @@
   revision = "fa9f258a92500514cc8e9c67020487709df92432"
 
 [[projects]]
-  digest = "1:34a9267edba754028c00cd432e978e08a3c07c1abcc797ddbecdcceb475e9894"
+  digest = "1:04172509aacf8c7278df7d8c3d9a7d0a37cce5a44b032321c7ba177ac7bbdcd6"
   name = "github.com/hashicorp/nomad"
   packages = [
     "acl",
@@ -277,8 +285,8 @@
     "plugins/shared/structs/proto",
   ]
   pruneopts = ""
-  revision = "28e768721992df5097203eea6e2b247abd56ca6f"
-  version = "v0.9.0"
+  revision = "8aab33b63b39945b3cd6aa1f0b6e4a1132a34992"
+  version = "v0.10.1"
 
 [[projects]]
   branch = "library-v2-stage-one"

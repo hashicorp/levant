@@ -16,6 +16,11 @@ import (
 	"github.com/hashicorp/nomad/plugins/drivers"
 )
 
+var _ interfaces.TaskPoststartHook = &serviceHook{}
+var _ interfaces.TaskPreKillHook = &serviceHook{}
+var _ interfaces.TaskExitedHook = &serviceHook{}
+var _ interfaces.TaskStopHook = &serviceHook{}
+
 type serviceHookConfig struct {
 	alloc  *structs.Allocation
 	task   *structs.Task
@@ -58,7 +63,8 @@ func newServiceHook(c serviceHookConfig) *serviceHook {
 		delay:     c.task.ShutdownDelay,
 	}
 
-	// COMPAT(0.10): Just use the AllocatedResources
+	// COMPAT(0.11): AllocatedResources was added in 0.9 so assume its set
+	//               in 0.11.
 	if c.alloc.AllocatedResources != nil {
 		if res := c.alloc.AllocatedResources.Tasks[c.task.Name]; res != nil {
 			h.networks = res.Networks
@@ -110,7 +116,8 @@ func (h *serviceHook) Update(ctx context.Context, req *interfaces.TaskUpdateRequ
 		canary = req.Alloc.DeploymentStatus.Canary
 	}
 
-	// COMPAT(0.10): Just use the AllocatedResources
+	// COMPAT(0.11): AllocatedResources was added in 0.9 so assume its set
+	//               in 0.11.
 	var networks structs.Networks
 	if req.Alloc.AllocatedResources != nil {
 		if res := req.Alloc.AllocatedResources.Tasks[h.taskName]; res != nil {
@@ -179,6 +186,13 @@ func (h *serviceHook) deregister() {
 
 }
 
+func (h *serviceHook) Stop(ctx context.Context, req *interfaces.TaskStopRequest, resp *interfaces.TaskStopResponse) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.deregister()
+	return nil
+}
+
 func (h *serviceHook) getTaskServices() *agentconsul.TaskServices {
 	// Interpolate with the task's environment
 	interpolatedServices := interpolateServices(h.taskEnv, h.services)
@@ -240,6 +254,15 @@ func interpolateServices(taskEnv *taskenv.TaskEnv, services []*structs.Service) 
 		service.PortLabel = taskEnv.ReplaceEnv(service.PortLabel)
 		service.Tags = taskEnv.ParseAndReplace(service.Tags)
 		service.CanaryTags = taskEnv.ParseAndReplace(service.CanaryTags)
+
+		if len(service.Meta) > 0 {
+			meta := make(map[string]string, len(service.Meta))
+			for k, v := range service.Meta {
+				meta[k] = taskEnv.ReplaceEnv(v)
+			}
+			service.Meta = meta
+		}
+
 		interpolated[i] = service
 	}
 

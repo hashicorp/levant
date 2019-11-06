@@ -2,12 +2,12 @@ package logmon
 
 import (
 	"context"
+	"os"
 	"os/exec"
 
 	hclog "github.com/hashicorp/go-hclog"
 	plugin "github.com/hashicorp/go-plugin"
 	"github.com/hashicorp/nomad/client/logmon/proto"
-	"github.com/hashicorp/nomad/helper/discover"
 	"github.com/hashicorp/nomad/plugins/base"
 	"google.golang.org/grpc"
 )
@@ -16,7 +16,7 @@ import (
 // TODO: Integrate with base plugin loader
 func LaunchLogMon(logger hclog.Logger, reattachConfig *plugin.ReattachConfig) (LogMon, *plugin.Client, error) {
 	logger = logger.Named("logmon")
-	bin, err := discover.NomadExecutable()
+	bin, err := os.Executable()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -73,5 +73,8 @@ func (p *Plugin) GRPCServer(broker *plugin.GRPCBroker, s *grpc.Server) error {
 }
 
 func (p *Plugin) GRPCClient(ctx context.Context, broker *plugin.GRPCBroker, c *grpc.ClientConn) (interface{}, error) {
-	return &logmonClient{client: proto.NewLogMonClient(c)}, nil
+	return &logmonClient{
+		doneCtx: ctx,
+		client:  proto.NewLogMonClient(c),
+	}, nil
 }

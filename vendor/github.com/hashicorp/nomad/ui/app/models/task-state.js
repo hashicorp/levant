@@ -16,9 +16,13 @@ export default Fragment.extend({
   isActive: none('finishedAt'),
   isRunning: and('isActive', 'allocation.isRunning'),
 
-  task: computed('allocation.taskGroup.tasks.[]', function() {
+  isConnectProxy: computed('task.kind', function() {
+    return (this.get('task.kind') || '').startsWith('connect-proxy:');
+  }),
+
+  task: computed('name', 'allocation.taskGroup.tasks.[]', function() {
     const tasks = this.get('allocation.taskGroup.tasks');
-    return tasks && tasks.findBy('name', this.get('name'));
+    return tasks && tasks.findBy('name', this.name);
   }),
 
   driver: alias('task.driver'),
@@ -41,6 +45,18 @@ export default Fragment.extend({
       failed: 'is-error',
     };
 
-    return classMap[this.get('state')] || 'is-dark';
+    return classMap[this.state] || 'is-dark';
   }),
+
+  restart() {
+    return this.allocation.restart(this.name);
+  },
+
+  ls(path) {
+    return this.store.adapterFor('task-state').ls(this, path);
+  },
+
+  stat(path) {
+    return this.store.adapterFor('task-state').stat(this, path);
+  },
 });

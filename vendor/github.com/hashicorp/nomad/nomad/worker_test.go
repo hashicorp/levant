@@ -1,20 +1,22 @@
 package nomad
 
 import (
+	"fmt"
 	"reflect"
-	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	log "github.com/hashicorp/go-hclog"
-	memdb "github.com/hashicorp/go-memdb"
+	"github.com/hashicorp/go-memdb"
+	"github.com/stretchr/testify/require"
 
 	"github.com/hashicorp/nomad/helper/uuid"
 	"github.com/hashicorp/nomad/nomad/mock"
 	"github.com/hashicorp/nomad/nomad/structs"
 	"github.com/hashicorp/nomad/scheduler"
 	"github.com/hashicorp/nomad/testutil"
+	"github.com/stretchr/testify/assert"
 )
 
 type NoopScheduler struct {
@@ -285,26 +287,29 @@ func TestWorker_waitForIndex(t *testing.T) {
 	index := s1.raft.AppliedIndex()
 
 	// Cause an increment
+	errCh := make(chan error, 1)
 	go func() {
 		time.Sleep(10 * time.Millisecond)
 		n := mock.Node()
-		if err := s1.fsm.state.UpsertNode(index+1, n); err != nil {
-			t.Fatalf("failed to upsert node: %v", err)
-		}
+		errCh <- s1.fsm.state.UpsertNode(index+1, n)
 	}()
 
 	// Wait for a future index
 	w := &Worker{srv: s1, logger: s1.logger}
-	err := w.waitForIndex(index+1, time.Second)
-	if err != nil {
-		t.Fatalf("err: %v", err)
-	}
+	snap, err := w.snapshotMinIndex(index+1, time.Second)
+	require.NoError(t, err)
+	require.NotNil(t, snap)
+
+	// No error from upserting
+	require.NoError(t, <-errCh)
 
 	// Cause a timeout
-	err = w.waitForIndex(index+100, 10*time.Millisecond)
-	if err == nil || !strings.Contains(err.Error(), "timeout") {
-		t.Fatalf("err: %v", err)
-	}
+	waitIndex := index + 100
+	timeout := 10 * time.Millisecond
+	snap, err = w.snapshotMinIndex(index+100, timeout)
+	require.Nil(t, snap)
+	require.EqualError(t, err,
+		fmt.Sprintf("timed out after %s waiting for index=%d", timeout, waitIndex))
 }
 
 func TestWorker_invokeScheduler(t *testing.T) {
@@ -319,10 +324,11 @@ func TestWorker_invokeScheduler(t *testing.T) {
 	eval := mock.Eval()
 	eval.Type = "noop"
 
-	err := w.invokeScheduler(eval, uuid.Generate())
-	if err != nil {
-		t.Fatalf("err: %v", err)
-	}
+	snap, err := s1.fsm.state.Snapshot()
+	require.NoError(t, err)
+
+	err = w.invokeScheduler(snap, eval, uuid.Generate())
+	require.NoError(t, err)
 }
 
 func TestWorker_SubmitPlan(t *testing.T) {
@@ -388,6 +394,57 @@ func TestWorker_SubmitPlan(t *testing.T) {
 	if len(result.NodeAllocation) != 1 {
 		t.Fatalf("Bad: %#v", result)
 	}
+}
+
+func TestWorker_SubmitPlanNormalizedAllocations(t *testing.T) {
+	t.Parallel()
+	s1 := TestServer(t, func(c *Config) {
+		c.NumSchedulers = 0
+		c.EnabledSchedulers = []string{structs.JobTypeService}
+		c.Build = "0.9.2"
+	})
+	defer s1.Shutdown()
+	testutil.WaitForLeader(t, s1.RPC)
+
+	// Register node
+	node := mock.Node()
+	testRegisterNode(t, s1, node)
+
+	job := mock.Job()
+	eval1 := mock.Eval()
+	eval1.JobID = job.ID
+	s1.fsm.State().UpsertJob(0, job)
+	s1.fsm.State().UpsertEvals(0, []*structs.Evaluation{eval1})
+
+	stoppedAlloc := mock.Alloc()
+	preemptedAlloc := mock.Alloc()
+	s1.fsm.State().UpsertAllocs(5, []*structs.Allocation{stoppedAlloc, preemptedAlloc})
+
+	// Create an allocation plan
+	plan := &structs.Plan{
+		Job:             job,
+		EvalID:          eval1.ID,
+		NodeUpdate:      make(map[string][]*structs.Allocation),
+		NodePreemptions: make(map[string][]*structs.Allocation),
+	}
+	desiredDescription := "desired desc"
+	plan.AppendStoppedAlloc(stoppedAlloc, desiredDescription, structs.AllocClientStatusLost)
+	preemptingAllocID := uuid.Generate()
+	plan.AppendPreemptedAlloc(preemptedAlloc, preemptingAllocID)
+
+	// Attempt to submit a plan
+	w := &Worker{srv: s1, logger: s1.logger}
+	w.SubmitPlan(plan)
+
+	assert.Equal(t, &structs.Allocation{
+		ID:                    preemptedAlloc.ID,
+		PreemptedByAllocation: preemptingAllocID,
+	}, plan.NodePreemptions[preemptedAlloc.NodeID][0])
+	assert.Equal(t, &structs.Allocation{
+		ID:                 stoppedAlloc.ID,
+		DesiredDescription: desiredDescription,
+		ClientStatus:       structs.AllocClientStatusLost,
+	}, plan.NodeUpdate[stoppedAlloc.NodeID][0])
 }
 
 func TestWorker_SubmitPlan_MissingNodeRefresh(t *testing.T) {

@@ -161,6 +161,7 @@ func TestEnvironment_AsList(t *testing.T) {
 			},
 		},
 	}
+	a.Namespace = "not-default"
 	task := a.Job.TaskGroups[0].Tasks[0]
 	task.Env = map[string]string{
 		"taskEnvKey": "taskEnvVal",
@@ -190,6 +191,7 @@ func TestEnvironment_AsList(t *testing.T) {
 		"NOMAD_PORT_ssh_ssh=22",
 		"NOMAD_CPU_LIMIT=500",
 		"NOMAD_DC=dc1",
+		"NOMAD_NAMESPACE=not-default",
 		"NOMAD_REGION=global",
 		"NOMAD_MEMORY_LIMIT=256",
 		"NOMAD_META_ELB_CHECK_INTERVAL=30s",
@@ -228,12 +230,11 @@ func TestEnvironment_AsList_Old(t *testing.T) {
 				Device: "eth0",
 				IP:     "192.168.0.100",
 				ReservedPorts: []structs.Port{
-					{Label: "admin", Value: 5000},
 					{Label: "ssh", Value: 22},
 					{Label: "other", Value: 1234},
 				},
 				MBits:        50,
-				DynamicPorts: []structs.Port{{Label: "http"}},
+				DynamicPorts: []structs.Port{{Label: "http", Value: 2000}},
 			},
 		},
 	}
@@ -244,10 +245,10 @@ func TestEnvironment_AsList_Old(t *testing.T) {
 			Networks: []*structs.NetworkResource{
 				{
 					Device:        "eth0",
-					IP:            "192.168.0.100",
-					ReservedPorts: []structs.Port{{Label: "admin", Value: 5000}},
+					IP:            "127.0.0.1",
+					ReservedPorts: []structs.Port{{Label: "https", Value: 8080}},
 					MBits:         50,
-					DynamicPorts:  []structs.Port{{Label: "http", Value: 2000}},
+					DynamicPorts:  []structs.Port{{Label: "http", Value: 80}},
 				},
 			},
 		},
@@ -270,10 +271,11 @@ func TestEnvironment_AsList_Old(t *testing.T) {
 		"taskEnvKey": "taskEnvVal",
 	}
 	task.Resources.Networks = []*structs.NetworkResource{
+		// Nomad 0.8 didn't fully populate the fields in task Resource Networks
 		{
-			IP:            "127.0.0.1",
-			ReservedPorts: []structs.Port{{Label: "http", Value: 80}},
-			DynamicPorts:  []structs.Port{{Label: "https", Value: 8080}},
+			IP:            "",
+			ReservedPorts: []structs.Port{{Label: "https"}},
+			DynamicPorts:  []structs.Port{{Label: "http"}},
 		},
 	}
 	env := NewBuilder(n, a, task, "global").SetDriverNetwork(
@@ -301,6 +303,7 @@ func TestEnvironment_AsList_Old(t *testing.T) {
 		"NOMAD_PORT_ssh_ssh=22",
 		"NOMAD_CPU_LIMIT=500",
 		"NOMAD_DC=dc1",
+		"NOMAD_NAMESPACE=default",
 		"NOMAD_REGION=global",
 		"NOMAD_MEMORY_LIMIT=256",
 		"NOMAD_META_ELB_CHECK_INTERVAL=30s",
@@ -331,7 +334,7 @@ func TestEnvironment_AllValues(t *testing.T) {
 		"nested.meta.key":   "a",
 		"invalid...metakey": "b",
 	}
-	a := mock.Alloc()
+	a := mock.ConnectAlloc()
 	a.AllocatedResources.Tasks["web"].Networks[0] = &structs.NetworkResource{
 		Device:        "eth0",
 		IP:            "127.0.0.1",
@@ -352,6 +355,22 @@ func TestEnvironment_AllValues(t *testing.T) {
 			},
 		},
 	}
+
+	sharedNet := a.AllocatedResources.Shared.Networks[0]
+
+	// Add group network port with only a host port.
+	sharedNet.DynamicPorts = append(sharedNet.DynamicPorts, structs.Port{
+		Label: "hostonly",
+		Value: 9998,
+	})
+
+	// Add group network reserved port with a To value.
+	sharedNet.ReservedPorts = append(sharedNet.ReservedPorts, structs.Port{
+		Label: "static",
+		Value: 9997,
+		To:    97,
+	})
+
 	task := a.Job.TaskGroups[0].Tasks[0]
 	task.Env = map[string]string{
 		"taskEnvKey":        "taskEnvVal",
@@ -399,40 +418,47 @@ func TestEnvironment_AllValues(t *testing.T) {
 		"node.attr.nomad.version":      "0.5.0",
 
 		// Env
-		"taskEnvKey":                    "taskEnvVal",
-		"NOMAD_ADDR_http":               "127.0.0.1:80",
-		"NOMAD_PORT_http":               "80",
-		"NOMAD_IP_http":                 "127.0.0.1",
-		"NOMAD_ADDR_https":              "127.0.0.1:8080",
-		"NOMAD_PORT_https":              "443",
-		"NOMAD_IP_https":                "127.0.0.1",
-		"NOMAD_HOST_PORT_http":          "80",
-		"NOMAD_HOST_PORT_https":         "8080",
-		"NOMAD_TASK_NAME":               "web",
-		"NOMAD_GROUP_NAME":              "web",
-		"NOMAD_ADDR_ssh_other":          "192.168.0.100:1234",
-		"NOMAD_ADDR_ssh_ssh":            "192.168.0.100:22",
-		"NOMAD_IP_ssh_other":            "192.168.0.100",
-		"NOMAD_IP_ssh_ssh":              "192.168.0.100",
-		"NOMAD_PORT_ssh_other":          "1234",
-		"NOMAD_PORT_ssh_ssh":            "22",
-		"NOMAD_CPU_LIMIT":               "500",
-		"NOMAD_DC":                      "dc1",
-		"NOMAD_REGION":                  "global",
-		"NOMAD_MEMORY_LIMIT":            "256",
-		"NOMAD_META_ELB_CHECK_INTERVAL": "30s",
-		"NOMAD_META_ELB_CHECK_MIN":      "3",
-		"NOMAD_META_ELB_CHECK_TYPE":     "http",
-		"NOMAD_META_FOO":                "bar",
-		"NOMAD_META_OWNER":              "armon",
-		"NOMAD_META_elb_check_interval": "30s",
-		"NOMAD_META_elb_check_min":      "3",
-		"NOMAD_META_elb_check_type":     "http",
-		"NOMAD_META_foo":                "bar",
-		"NOMAD_META_owner":              "armon",
-		"NOMAD_JOB_NAME":                "my-job",
-		"NOMAD_ALLOC_ID":                a.ID,
-		"NOMAD_ALLOC_INDEX":             "0",
+		"taskEnvKey":                                "taskEnvVal",
+		"NOMAD_ADDR_http":                           "127.0.0.1:80",
+		"NOMAD_PORT_http":                           "80",
+		"NOMAD_IP_http":                             "127.0.0.1",
+		"NOMAD_ADDR_https":                          "127.0.0.1:8080",
+		"NOMAD_PORT_https":                          "443",
+		"NOMAD_IP_https":                            "127.0.0.1",
+		"NOMAD_HOST_PORT_http":                      "80",
+		"NOMAD_HOST_PORT_https":                     "8080",
+		"NOMAD_TASK_NAME":                           "web",
+		"NOMAD_GROUP_NAME":                          "web",
+		"NOMAD_ADDR_ssh_other":                      "192.168.0.100:1234",
+		"NOMAD_ADDR_ssh_ssh":                        "192.168.0.100:22",
+		"NOMAD_IP_ssh_other":                        "192.168.0.100",
+		"NOMAD_IP_ssh_ssh":                          "192.168.0.100",
+		"NOMAD_PORT_ssh_other":                      "1234",
+		"NOMAD_PORT_ssh_ssh":                        "22",
+		"NOMAD_CPU_LIMIT":                           "500",
+		"NOMAD_DC":                                  "dc1",
+		"NOMAD_NAMESPACE":                           "default",
+		"NOMAD_REGION":                              "global",
+		"NOMAD_MEMORY_LIMIT":                        "256",
+		"NOMAD_META_ELB_CHECK_INTERVAL":             "30s",
+		"NOMAD_META_ELB_CHECK_MIN":                  "3",
+		"NOMAD_META_ELB_CHECK_TYPE":                 "http",
+		"NOMAD_META_FOO":                            "bar",
+		"NOMAD_META_OWNER":                          "armon",
+		"NOMAD_META_elb_check_interval":             "30s",
+		"NOMAD_META_elb_check_min":                  "3",
+		"NOMAD_META_elb_check_type":                 "http",
+		"NOMAD_META_foo":                            "bar",
+		"NOMAD_META_owner":                          "armon",
+		"NOMAD_JOB_NAME":                            "my-job",
+		"NOMAD_ALLOC_ID":                            a.ID,
+		"NOMAD_ALLOC_INDEX":                         "0",
+		"NOMAD_PORT_connect_proxy_testconnect":      "9999",
+		"NOMAD_HOST_PORT_connect_proxy_testconnect": "9999",
+		"NOMAD_PORT_hostonly":                       "9998",
+		"NOMAD_HOST_PORT_hostonly":                  "9998",
+		"NOMAD_PORT_static":                         "97",
+		"NOMAD_HOST_PORT_static":                    "9997",
 
 		// 0.9 style env map
 		`env["taskEnvKey"]`:        "taskEnvVal",
@@ -468,27 +494,58 @@ func TestEnvironment_VaultToken(t *testing.T) {
 	n := mock.Node()
 	a := mock.Alloc()
 	env := NewBuilder(n, a, a.Job.TaskGroups[0].Tasks[0], "global")
-	env.SetVaultToken("123", false)
+	env.SetVaultToken("123", "vault-namespace", false)
 
 	{
 		act := env.Build().All()
 		if act[VaultToken] != "" {
 			t.Fatalf("Unexpected environment variables: %s=%q", VaultToken, act[VaultToken])
 		}
+		if act[VaultNamespace] != "" {
+			t.Fatalf("Unexpected environment variables: %s=%q", VaultNamespace, act[VaultNamespace])
+		}
 	}
 
 	{
-		act := env.SetVaultToken("123", true).Build().List()
+		act := env.SetVaultToken("123", "", true).Build().List()
 		exp := "VAULT_TOKEN=123"
 		found := false
+		foundNs := false
 		for _, entry := range act {
 			if entry == exp {
 				found = true
-				break
+			}
+			if strings.HasPrefix(entry, "VAULT_NAMESPACE=") {
+				foundNs = true
 			}
 		}
 		if !found {
 			t.Fatalf("did not find %q in:\n%s", exp, strings.Join(act, "\n"))
+		}
+		if foundNs {
+			t.Fatalf("found unwanted VAULT_NAMESPACE in:\n%s", strings.Join(act, "\n"))
+		}
+	}
+
+	{
+		act := env.SetVaultToken("123", "vault-namespace", true).Build().List()
+		exp := "VAULT_TOKEN=123"
+		expNs := "VAULT_NAMESPACE=vault-namespace"
+		found := false
+		foundNs := false
+		for _, entry := range act {
+			if entry == exp {
+				found = true
+			}
+			if entry == expNs {
+				foundNs = true
+			}
+		}
+		if !found {
+			t.Fatalf("did not find %q in:\n%s", exp, strings.Join(act, "\n"))
+		}
+		if !foundNs {
+			t.Fatalf("did not find %q in:\n%s", expNs, strings.Join(act, "\n"))
 		}
 	}
 }
@@ -625,11 +682,17 @@ func TestEnvironment_AppendHostEnvvars(t *testing.T) {
 func TestEnvironment_DashesInTaskName(t *testing.T) {
 	a := mock.Alloc()
 	task := a.Job.TaskGroups[0].Tasks[0]
-	task.Env = map[string]string{"test-one-two": "three-four"}
+	task.Env = map[string]string{
+		"test-one-two":       "three-four",
+		"NOMAD_test_one_two": "three-five",
+	}
 	envMap := NewBuilder(mock.Node(), a, task, "global").Build().Map()
 
-	if envMap["test_one_two"] != "three-four" {
-		t.Fatalf("Expected test_one_two=three-four in TaskEnv; found:\n%#v", envMap)
+	if envMap["test-one-two"] != "three-four" {
+		t.Fatalf("Expected test-one-two=three-four in TaskEnv; found:\n%#v", envMap)
+	}
+	if envMap["NOMAD_test_one_two"] != "three-five" {
+		t.Fatalf("Expected NOMAD_test_one_two=three-five in TaskEnv; found:\n%#v", envMap)
 	}
 }
 
@@ -696,4 +759,76 @@ func TestEnvironment_InterpolateEmptyOptionalMeta(t *testing.T) {
 	env := NewBuilder(mock.Node(), a, task, "global").Build()
 	require.Equal("metaopt1val", env.ReplaceEnv("${NOMAD_META_metaopt1}"))
 	require.Empty(env.ReplaceEnv("${NOMAD_META_metaopt2}"))
+}
+
+// TestEnvironment_Upsteams asserts that group.service.upstreams entries are
+// added to the environment.
+func TestEnvironment_Upstreams(t *testing.T) {
+	t.Parallel()
+
+	// Add some upstreams to the mock alloc
+	a := mock.Alloc()
+	tg := a.Job.LookupTaskGroup(a.TaskGroup)
+	tg.Services = []*structs.Service{
+		// Services without Connect should be ignored
+		{
+			Name: "ignoreme",
+		},
+		// All upstreams from a service should be added
+		{
+			Name: "remote_service",
+			Connect: &structs.ConsulConnect{
+				SidecarService: &structs.ConsulSidecarService{
+					Proxy: &structs.ConsulProxy{
+						Upstreams: []structs.ConsulUpstream{
+							{
+								DestinationName: "foo-bar",
+								LocalBindPort:   1234,
+							},
+							{
+								DestinationName: "bar",
+								LocalBindPort:   5678,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Ensure the upstreams can be interpolated
+	tg.Tasks[0].Env = map[string]string{
+		"foo": "${NOMAD_UPSTREAM_ADDR_foo_bar}",
+		"bar": "${NOMAD_UPSTREAM_PORT_foo-bar}",
+	}
+
+	env := NewBuilder(mock.Node(), a, tg.Tasks[0], "global").Build().Map()
+	require.Equal(t, "127.0.0.1:1234", env["NOMAD_UPSTREAM_ADDR_foo_bar"])
+	require.Equal(t, "127.0.0.1", env["NOMAD_UPSTREAM_IP_foo_bar"])
+	require.Equal(t, "1234", env["NOMAD_UPSTREAM_PORT_foo_bar"])
+	require.Equal(t, "127.0.0.1:5678", env["NOMAD_UPSTREAM_ADDR_bar"])
+	require.Equal(t, "127.0.0.1", env["NOMAD_UPSTREAM_IP_bar"])
+	require.Equal(t, "5678", env["NOMAD_UPSTREAM_PORT_bar"])
+	require.Equal(t, "127.0.0.1:1234", env["foo"])
+	require.Equal(t, "1234", env["bar"])
+}
+
+func TestEnvironment_SetPortMapEnvs(t *testing.T) {
+	envs := map[string]string{
+		"foo":            "bar",
+		"NOMAD_PORT_ssh": "2342",
+	}
+	ports := map[string]int{
+		"ssh":  22,
+		"http": 80,
+	}
+
+	envs = SetPortMapEnvs(envs, ports)
+
+	expected := map[string]string{
+		"foo":             "bar",
+		"NOMAD_PORT_ssh":  "22",
+		"NOMAD_PORT_http": "80",
+	}
+	require.Equal(t, expected, envs)
 }

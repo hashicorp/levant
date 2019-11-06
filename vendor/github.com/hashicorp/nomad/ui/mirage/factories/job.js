@@ -1,5 +1,6 @@
 import { assign } from '@ember/polyfills';
-import { Factory, faker, trait } from 'ember-cli-mirage';
+import { Factory, trait } from 'ember-cli-mirage';
+import faker from 'nomad-ui/mirage/faker';
 import { provide, provider, pickOne } from '../utils';
 import { DATACENTERS } from '../common';
 
@@ -9,25 +10,25 @@ const JOB_STATUSES = ['pending', 'running', 'dead'];
 
 export default Factory.extend({
   id: i =>
-    `${faker.list.random(...JOB_PREFIXES)()}-${faker.hacker.noun().dasherize()}-${i}`.toLowerCase(),
+    `${faker.helpers.randomize(
+      JOB_PREFIXES
+    )}-${faker.hacker.noun().dasherize()}-${i}`.toLowerCase(),
 
   name() {
     return this.id;
   },
 
-  groupsCount: () => faker.random.number({ min: 1, max: 5 }),
+  groupsCount: () => faker.random.number({ min: 1, max: 2 }),
 
   region: () => 'global',
-  type: faker.list.random(...JOB_TYPES),
+  type: () => faker.helpers.randomize(JOB_TYPES),
   priority: () => faker.random.number(100),
   all_at_once: faker.random.boolean,
-  status: faker.list.random(...JOB_STATUSES),
-  datacenters: provider(
-    () => faker.random.number({ min: 1, max: 4 }),
-    faker.list.random(...DATACENTERS)
-  ),
+  status: () => faker.helpers.randomize(JOB_STATUSES),
+  datacenters: () =>
+    faker.helpers.shuffle(DATACENTERS).slice(0, faker.random.number({ min: 1, max: 4 })),
 
-  childrenCount: () => faker.random.number({ min: 1, max: 5 }),
+  childrenCount: () => faker.random.number({ min: 1, max: 2 }),
 
   periodic: trait({
     type: 'batch',
@@ -51,7 +52,7 @@ export default Factory.extend({
     parameterizedDetails: () => ({
       MetaOptional: null,
       MetaRequired: null,
-      Payload: Math.random() > 0.5 ? 'required' : null,
+      Payload: faker.random.boolean() ? 'required' : null,
     }),
   }),
 
@@ -98,6 +99,12 @@ export default Factory.extend({
   // When true, allocations for this job will fail and reschedule, randomly succeeding or not
   withRescheduling: false,
 
+  // When true, task groups will have services
+  withGroupServices: false,
+
+  // When true, only task groups and allocations are made
+  shallow: false,
+
   afterCreate(job, server) {
     if (!job.namespaceId) {
       const namespace = server.db.namespaces.length ? pickOne(server.db.namespaces).id : null;
@@ -115,6 +122,8 @@ export default Factory.extend({
       job,
       createAllocations: job.createAllocations,
       withRescheduling: job.withRescheduling,
+      withServices: job.withGroupServices,
+      shallow: job.shallow,
     });
 
     job.update({
@@ -137,7 +146,7 @@ export default Factory.extend({
     });
 
     if (!job.noDeployments) {
-      Array(faker.random.number({ min: 1, max: 10 }))
+      Array(faker.random.number({ min: 1, max: 3 }))
         .fill(null)
         .map((_, index) => {
           return server.create('job-version', {
@@ -150,32 +159,34 @@ export default Factory.extend({
         });
     }
 
-    const knownEvaluationProperties = {
-      job,
-      namespace: job.namespace,
-    };
-    server.createList(
-      'evaluation',
-      faker.random.number({ min: 1, max: 5 }),
-      knownEvaluationProperties
-    );
-    if (!job.noFailedPlacements) {
+    if (!job.shallow) {
+      const knownEvaluationProperties = {
+        job,
+        namespace: job.namespace,
+      };
       server.createList(
         'evaluation',
-        faker.random.number(3),
-        'withPlacementFailures',
+        faker.random.number({ min: 1, max: 5 }),
         knownEvaluationProperties
       );
-    }
+      if (!job.noFailedPlacements) {
+        server.createList(
+          'evaluation',
+          faker.random.number(3),
+          'withPlacementFailures',
+          knownEvaluationProperties
+        );
+      }
 
-    if (job.failedPlacements) {
-      server.create(
-        'evaluation',
-        'withPlacementFailures',
-        assign(knownEvaluationProperties, {
-          modifyIndex: 4000,
-        })
-      );
+      if (job.failedPlacements) {
+        server.create(
+          'evaluation',
+          'withPlacementFailures',
+          assign(knownEvaluationProperties, {
+            modifyIndex: 4000,
+          })
+        );
+      }
     }
 
     if (job.periodic) {
@@ -185,6 +196,7 @@ export default Factory.extend({
         namespaceId: job.namespaceId,
         namespace: job.namespace,
         createAllocations: job.createAllocations,
+        shallow: job.shallow,
       });
     }
 
@@ -195,6 +207,7 @@ export default Factory.extend({
         namespaceId: job.namespaceId,
         namespace: job.namespace,
         createAllocations: job.createAllocations,
+        shallow: job.shallow,
       });
     }
   },

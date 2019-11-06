@@ -39,7 +39,7 @@ The table below shows this endpoint's support for
 ### Parameters
 
 - `stale` - Specifies if the cluster should respond without an active leader.
-  This is specified as a querystring parameter.
+  This is specified as a query string parameter.
 
 ### Sample Request
 
@@ -129,7 +129,7 @@ This endpoint retrieves its latest Autopilot configuration.
 
 | Method | Path                         | Produces                   |
 | ------ | ---------------------------- | -------------------------- |
-| `GET`  | `/operator/autopilot/configuration` | `application/json` |
+| `GET`  | `/v1/operator/autopilot/configuration` | `application/json` |
 
 The table below shows this endpoint's support for
 [blocking queries](/api/index.html#blocking-queries) and
@@ -143,7 +143,7 @@ The table below shows this endpoint's support for
 
 ```text
 $ curl \
-    https://localhost:4646/operator/autopilot/configuration
+    https://localhost:4646/v1/operator/autopilot/configuration
 ```
 
 ### Sample Response
@@ -171,7 +171,7 @@ This endpoint updates the Autopilot configuration of the cluster.
 
 | Method | Path                         | Produces                   |
 | ------ | ---------------------------- | -------------------------- |
-| `PUT`  | `/operator/autopilot/configuration` | `application/json` |
+| `PUT`  | `/v1/operator/autopilot/configuration` | `application/json` |
 
 The table below shows this endpoint's support for
 [blocking queries](/api/index.html#blocking-queries) and
@@ -235,7 +235,7 @@ This endpoint queries the health of the autopilot status.
 
 | Method | Path                         | Produces                   |
 | ------ | ---------------------------- | -------------------------- |
-| `GET`  | `/operator/autopilot/health` | `application/json`         |
+| `GET`  | `/v1/operator/autopilot/health` | `application/json`         |
 
 The table below shows this endpoint's support for
 [blocking queries](/api/index.html#blocking-queries) and
@@ -335,7 +335,7 @@ the future.
 
 | Method | Path                         | Produces                   |
 | ------ | ---------------------------- | -------------------------- |
-| `GET`  | `/operator/scheduler/configuration` | `application/json` |
+| `GET`  | `/v1/operator/scheduler/configuration` | `application/json` |
 
 The table below shows this endpoint's support for
 [blocking queries](/api/index.html#blocking-queries) and
@@ -349,7 +349,7 @@ The table below shows this endpoint's support for
 
 ```text
 $ curl \
-    https://localhost:4646/operator/scheduler/configuration
+    https://localhost:4646/v1/operator/scheduler/configuration
 ```
 
 ### Sample Response
@@ -363,7 +363,9 @@ $ curl \
     "CreateIndex": 5,
     "ModifyIndex": 5,
     "PreemptionConfig": {
-      "SystemSchedulerEnabled": true
+      "SystemSchedulerEnabled": true,
+      "BatchSchedulerEnabled": false,
+      "ServiceSchedulerEnabled": false
     }
   }
 }
@@ -379,6 +381,10 @@ $ curl \
   - `PreemptionConfig` `(PreemptionConfig)` - Options to enable preemption for various schedulers.
          - `SystemSchedulerEnabled` `(bool: true)` - Specifies whether preemption for system jobs is enabled. Note that
          this defaults to true.
+         - `BatchSchedulerEnabled` `(bool: false)` (Enterprise Only) - Specifies whether preemption for batch jobs is enabled. Note that
+         this defaults to false and must be explicitly enabled.
+         - `ServiceSchedulerEnabled` `(bool: false)` (Enterprise Only) - Specifies whether preemption for service jobs is enabled. Note that
+         this defaults to false and must be explicitly enabled.
   - `CreateIndex` - The Raft index at which the config was created.
   - `ModifyIndex` - The Raft index at which the config was modified.
 
@@ -388,7 +394,7 @@ This endpoint updates the scheduler configuration of the cluster.
 
 | Method | Path                         | Produces                   |
 | ------ | ---------------------------- | -------------------------- |
-| `PUT`, `POST`  | `/operator/scheduler/configuration` | `application/json` |
+| `PUT`, `POST`  | `/v1/operator/scheduler/configuration` | `application/json` |
 
 The table below shows this endpoint's support for
 [blocking queries](/api/index.html#blocking-queries) and
@@ -409,7 +415,9 @@ The table below shows this endpoint's support for
 ```json
 {
   "PreemptionConfig": {
-    "EnablePreemption": false
+    "SystemSchedulerEnabled": true,
+    "BatchSchedulerEnabled": false,
+    "ServiceSchedulerEnabled": true
   }
 }
 ```
@@ -417,3 +425,7 @@ The table below shows this endpoint's support for
 - `PreemptionConfig` `(PreemptionConfig)` - Options to enable preemption for various schedulers.
  - `SystemSchedulerEnabled` `(bool: true)` - Specifies whether preemption for system jobs is enabled. Note that
          if this is set to true, then system jobs can preempt any other jobs.
+ - `BatchSchedulerEnabled` `(bool: false)` (Enterprise Only) - Specifies whether preemption for batch jobs is enabled. Note that
+         if this is set to true, then batch jobs can preempt any other jobs.
+ - `ServiceSchedulerEnabled` `(bool: false)` (Enterprise Only) - Specifies whether preemption for service jobs is enabled. Note that
+         if this is set to true, then service jobs can preempt any other jobs.

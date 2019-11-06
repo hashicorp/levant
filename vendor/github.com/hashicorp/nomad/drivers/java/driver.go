@@ -83,6 +83,10 @@ var (
 		SendSignals: false,
 		Exec:        false,
 		FSIsolation: drivers.FSIsolationNone,
+		NetIsolationModes: []drivers.NetIsolationMode{
+			drivers.NetIsolationModeHost,
+			drivers.NetIsolationModeGroup,
+		},
 	}
 
 	_ drivers.DriverPlugin = (*Driver)(nil)
@@ -340,17 +344,18 @@ func (d *Driver) StartTask(cfg *drivers.TaskConfig) (*drivers.TaskHandle, *drive
 	}
 
 	execCmd := &executor.ExecCommand{
-		Cmd:            absPath,
-		Args:           args,
-		Env:            cfg.EnvList(),
-		User:           user,
-		ResourceLimits: true,
-		Resources:      cfg.Resources,
-		TaskDir:        cfg.TaskDir().Dir,
-		StdoutPath:     cfg.StdoutPath,
-		StderrPath:     cfg.StderrPath,
-		Mounts:         cfg.Mounts,
-		Devices:        cfg.Devices,
+		Cmd:              absPath,
+		Args:             args,
+		Env:              cfg.EnvList(),
+		User:             user,
+		ResourceLimits:   true,
+		Resources:        cfg.Resources,
+		TaskDir:          cfg.TaskDir().Dir,
+		StdoutPath:       cfg.StdoutPath,
+		StderrPath:       cfg.StderrPath,
+		Mounts:           cfg.Mounts,
+		Devices:          cfg.Devices,
+		NetworkIsolation: cfg.NetworkIsolation,
 	}
 
 	ps, err := exec.Launch(execCmd)
@@ -552,6 +557,25 @@ func (d *Driver) ExecTask(taskID string, cmd []string, timeout time.Duration) (*
 			ExitCode: exitCode,
 		},
 	}, nil
+}
+
+var _ drivers.ExecTaskStreamingRawDriver = (*Driver)(nil)
+
+func (d *Driver) ExecTaskStreamingRaw(ctx context.Context,
+	taskID string,
+	command []string,
+	tty bool,
+	stream drivers.ExecTaskStream) error {
+
+	if len(command) == 0 {
+		return fmt.Errorf("error cmd must have at least one value")
+	}
+	handle, ok := d.tasks.Get(taskID)
+	if !ok {
+		return drivers.ErrTaskNotFound
+	}
+
+	return handle.exec.ExecStreaming(ctx, command, tty, stream)
 }
 
 // GetAbsolutePath returns the absolute path of the passed binary by resolving

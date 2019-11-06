@@ -512,7 +512,7 @@ func TestPreemption(t *testing.T) {
 						},
 					},
 				}),
-				createAlloc(allocIDs[1], lowPrioJob, &structs.Resources{
+				createAllocWithTaskgroupNetwork(allocIDs[1], lowPrioJob, &structs.Resources{
 					CPU:      200,
 					MemoryMB: 256,
 					DiskMB:   4 * 1024,
@@ -520,9 +520,13 @@ func TestPreemption(t *testing.T) {
 						{
 							Device: "eth0",
 							IP:     "192.168.0.200",
-							MBits:  500,
+							MBits:  200,
 						},
 					},
+				}, &structs.NetworkResource{
+					Device: "eth0",
+					IP:     "192.168.0.201",
+					MBits:  300,
 				}),
 				createAlloc(allocIDs[2], lowPrioJob, &structs.Resources{
 					CPU:      200,
@@ -562,6 +566,84 @@ func TestPreemption(t *testing.T) {
 				allocIDs[2]: {},
 				allocIDs[3]: {},
 			},
+		},
+		{
+			desc: "preempt allocs with network devices",
+			currentAllocations: []*structs.Allocation{
+				createAlloc(allocIDs[0], lowPrioJob, &structs.Resources{
+					CPU:      2800,
+					MemoryMB: 2256,
+					DiskMB:   4 * 1024,
+				}),
+				createAlloc(allocIDs[1], lowPrioJob, &structs.Resources{
+					CPU:      200,
+					MemoryMB: 256,
+					DiskMB:   4 * 1024,
+					Networks: []*structs.NetworkResource{
+						{
+							Device: "eth0",
+							IP:     "192.168.0.200",
+							MBits:  800,
+						},
+					},
+				}),
+			},
+			nodeReservedCapacity: reservedNodeResources,
+			nodeCapacity:         defaultNodeResources,
+			jobPriority:          100,
+			resourceAsk: &structs.Resources{
+				CPU:      1100,
+				MemoryMB: 1000,
+				DiskMB:   25 * 1024,
+				Networks: []*structs.NetworkResource{
+					{
+						Device: "eth0",
+						IP:     "192.168.0.100",
+						MBits:  840,
+					},
+				},
+			},
+			preemptedAllocIDs: map[string]struct{}{
+				allocIDs[1]: {},
+			},
+		},
+		{
+			desc: "ignore allocs with close enough priority for network devices",
+			currentAllocations: []*structs.Allocation{
+				createAlloc(allocIDs[0], lowPrioJob, &structs.Resources{
+					CPU:      2800,
+					MemoryMB: 2256,
+					DiskMB:   4 * 1024,
+				}),
+				createAlloc(allocIDs[1], lowPrioJob, &structs.Resources{
+					CPU:      200,
+					MemoryMB: 256,
+					DiskMB:   4 * 1024,
+					Networks: []*structs.NetworkResource{
+						{
+							Device: "eth0",
+							IP:     "192.168.0.200",
+							MBits:  800,
+						},
+					},
+				}),
+			},
+			nodeReservedCapacity: reservedNodeResources,
+			nodeCapacity:         defaultNodeResources,
+			jobPriority:          lowPrioJob.Priority + 5,
+			resourceAsk: &structs.Resources{
+				CPU:      1100,
+				MemoryMB: 1000,
+				DiskMB:   25 * 1024,
+				Networks: []*structs.NetworkResource{
+					{
+						Device: "eth0",
+						IP:     "192.168.0.100",
+						MBits:  840,
+					},
+				},
+			},
+			preemptedAllocIDs: nil,
 		},
 		{
 			desc: "Preemption needed for all resources except network",
@@ -1249,6 +1331,7 @@ func TestPreemption(t *testing.T) {
 			node.ReservedResources = tc.nodeReservedCapacity
 
 			state, ctx := testContext(t)
+
 			nodes := []*RankedNode{
 				{
 					Node: node,
@@ -1267,6 +1350,9 @@ func TestPreemption(t *testing.T) {
 			}
 			static := NewStaticRankIterator(ctx, nodes)
 			binPackIter := NewBinPackIterator(ctx, static, true, tc.jobPriority)
+			job := mock.Job()
+			job.Priority = tc.jobPriority
+			binPackIter.SetJob(job)
 
 			taskGroup := &structs.TaskGroup{
 				EphemeralDisk: &structs.EphemeralDisk{},
@@ -1288,7 +1374,7 @@ func TestPreemption(t *testing.T) {
 				require.Equal(len(tc.preemptedAllocIDs), len(preemptedAllocs))
 				for _, alloc := range preemptedAllocs {
 					_, ok := tc.preemptedAllocIDs[alloc.ID]
-					require.True(ok)
+					require.Truef(ok, "alloc %s was preempted unexpectedly", alloc.ID)
 				}
 			}
 		})
@@ -1297,10 +1383,19 @@ func TestPreemption(t *testing.T) {
 
 // helper method to create allocations with given jobs and resources
 func createAlloc(id string, job *structs.Job, resource *structs.Resources) *structs.Allocation {
-	return createAllocWithDevice(id, job, resource, nil)
+	return createAllocInner(id, job, resource, nil, nil)
+}
+
+// helper method to create allocation with network at the task group level
+func createAllocWithTaskgroupNetwork(id string, job *structs.Job, resource *structs.Resources, tgNet *structs.NetworkResource) *structs.Allocation {
+	return createAllocInner(id, job, resource, nil, tgNet)
 }
 
 func createAllocWithDevice(id string, job *structs.Job, resource *structs.Resources, allocatedDevices *structs.AllocatedDeviceResource) *structs.Allocation {
+	return createAllocInner(id, job, resource, allocatedDevices, nil)
+}
+
+func createAllocInner(id string, job *structs.Job, resource *structs.Resources, allocatedDevices *structs.AllocatedDeviceResource, tgNetwork *structs.NetworkResource) *structs.Allocation {
 	alloc := &structs.Allocation{
 		ID:    id,
 		Job:   job,
@@ -1330,6 +1425,12 @@ func createAllocWithDevice(id string, job *structs.Job, resource *structs.Resour
 
 	if allocatedDevices != nil {
 		alloc.AllocatedResources.Tasks["web"].Devices = []*structs.AllocatedDeviceResource{allocatedDevices}
+	}
+
+	if tgNetwork != nil {
+		alloc.AllocatedResources.Shared = structs.AllocatedSharedResources{
+			Networks: []*structs.NetworkResource{tgNetwork},
+		}
 	}
 	return alloc
 }

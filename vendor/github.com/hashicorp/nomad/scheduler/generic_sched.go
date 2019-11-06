@@ -5,8 +5,8 @@ import (
 	"time"
 
 	log "github.com/hashicorp/go-hclog"
-	memdb "github.com/hashicorp/go-memdb"
-	multierror "github.com/hashicorp/go-multierror"
+	"github.com/hashicorp/go-memdb"
+	"github.com/hashicorp/go-multierror"
 	"github.com/hashicorp/nomad/helper/uuid"
 	"github.com/hashicorp/nomad/nomad/structs"
 )
@@ -38,6 +38,9 @@ const (
 	// allocNodeTainted is the status used when stopping an alloc because it's
 	// node is tainted.
 	allocNodeTainted = "alloc not needed as node is tainted"
+
+	// allocRescheduled is the status used when an allocation failed and was rescheduled
+	allocRescheduled = "alloc was rescheduled because it failed"
 
 	// blockedEvalMaxPlanDesc is the description used for blocked evals that are
 	// a result of hitting the max number of plan attempts
@@ -127,6 +130,7 @@ func (s *GenericScheduler) Process(eval *structs.Evaluation) error {
 	switch eval.TriggeredBy {
 	case structs.EvalTriggerJobRegister, structs.EvalTriggerJobDeregister,
 		structs.EvalTriggerNodeDrain, structs.EvalTriggerNodeUpdate,
+		structs.EvalTriggerAllocStop,
 		structs.EvalTriggerRollingUpdate, structs.EvalTriggerQueuedAllocs,
 		structs.EvalTriggerPeriodicJob, structs.EvalTriggerMaxPlans,
 		structs.EvalTriggerDeploymentWatcher, structs.EvalTriggerRetryFailedAlloc,
@@ -253,7 +257,8 @@ func (s *GenericScheduler) process() (bool, error) {
 
 	// If there are failed allocations, we need to create a blocked evaluation
 	// to place the failed allocations when resources become available. If the
-	// current evaluation is already a blocked eval, we reuse it.
+	// current evaluation is already a blocked eval, we reuse it by submitting
+	// a new eval to the planner in createBlockedEval
 	if s.eval.Status != structs.EvalStatusBlocked && len(s.failedTGAllocs) != 0 && s.blocked == nil {
 		if err := s.createBlockedEval(false); err != nil {
 			s.logger.Error("failed to make blocked eval", "error", err)
@@ -365,7 +370,7 @@ func (s *GenericScheduler) computeJobAllocs() error {
 
 	// Handle the stop
 	for _, stop := range results.stop {
-		s.plan.AppendUpdate(stop.alloc, structs.AllocDesiredStatusStop, stop.statusDescription, stop.clientStatus)
+		s.plan.AppendStoppedAlloc(stop.alloc, stop.statusDescription, stop.clientStatus)
 	}
 
 	// Handle the in-place updates
@@ -463,12 +468,12 @@ func (s *GenericScheduler) computePlacements(destructive, place []placementResul
 			stopPrevAlloc, stopPrevAllocDesc := missing.StopPreviousAlloc()
 			prevAllocation := missing.PreviousAllocation()
 			if stopPrevAlloc {
-				s.plan.AppendUpdate(prevAllocation, structs.AllocDesiredStatusStop, stopPrevAllocDesc, "")
+				s.plan.AppendStoppedAlloc(prevAllocation, stopPrevAllocDesc, "")
 			}
 
 			// Compute penalty nodes for rescheduled allocs
 			selectOptions := getSelectOptions(prevAllocation, preferredNode)
-			option := s.stack.Select(tg, selectOptions)
+			option := s.selectNextOption(tg, selectOptions)
 
 			// Store the available nodes by datacenter
 			s.ctx.Metrics().NodesAvailable = byDC
@@ -484,6 +489,9 @@ func (s *GenericScheduler) computePlacements(destructive, place []placementResul
 						DiskMB: int64(tg.EphemeralDisk.SizeMB),
 					},
 				}
+				if option.AllocResources != nil {
+					resources.Shared.Networks = option.AllocResources.Networks
+				}
 
 				// Create an allocation for this
 				alloc := &structs.Allocation{
@@ -495,14 +503,17 @@ func (s *GenericScheduler) computePlacements(destructive, place []placementResul
 					TaskGroup:          tg.Name,
 					Metrics:            s.ctx.Metrics(),
 					NodeID:             option.Node.ID,
+					NodeName:           option.Node.Name,
 					DeploymentID:       deploymentID,
 					TaskResources:      resources.OldTaskResources(),
 					AllocatedResources: resources,
 					DesiredStatus:      structs.AllocDesiredStatusRun,
 					ClientStatus:       structs.AllocClientStatusPending,
-
+					// SharedResources is considered deprecated, will be removed in 0.11.
+					// It is only set for compat reasons.
 					SharedResources: &structs.Resources{
-						DiskMB: tg.EphemeralDisk.SizeMB,
+						DiskMB:   tg.EphemeralDisk.SizeMB,
+						Networks: resources.Shared.Networks,
 					},
 				}
 
@@ -526,6 +537,8 @@ func (s *GenericScheduler) computePlacements(destructive, place []placementResul
 						Canary: true,
 					}
 				}
+
+				s.handlePreemptions(option, alloc, missing)
 
 				// Track the placement
 				s.plan.AppendAlloc(alloc)

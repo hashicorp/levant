@@ -7,15 +7,15 @@ CONFIGDIR=/ops/shared/config
 CONSULCONFIGDIR=/etc/consul.d
 NOMADCONFIGDIR=/etc/nomad.d
 CONSULTEMPLATECONFIGDIR=/etc/consul-template.d
-HADOOP_VERSION=hadoop-2.7.6
+HADOOP_VERSION=hadoop-2.7.7
 HADOOPCONFIGDIR=/usr/local/$HADOOP_VERSION/etc/hadoop
 HOME_DIR=ubuntu
 
 # Wait for network
 sleep 15
 
-# IP_ADDRESS=$(curl http://instance-data/latest/meta-data/local-ipv4)
-IP_ADDRESS="$(/sbin/ifconfig eth0 | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1}')"
+IP_ADDRESS=$(curl http://instance-data/latest/meta-data/local-ipv4)
+# IP_ADDRESS="$(/sbin/ifconfig eth0 | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1}')"
 DOCKER_BRIDGE_IP_ADDRESS=(`ifconfig docker0 2>/dev/null|awk '/inet addr:/ {print $2}'|sed 's/addr://'`)
 CLOUD=$1
 RETRY_JOIN=$2
@@ -27,6 +27,7 @@ sed -i "s/RETRY_JOIN/$RETRY_JOIN/g" $CONFIGDIR/consul_client.json
 sudo cp $CONFIGDIR/consul_client.json $CONSULCONFIGDIR/consul.json
 sudo cp $CONFIGDIR/consul_$CLOUD.service /etc/systemd/system/consul.service
 
+sudo systemctl enable consul.service
 sudo systemctl start consul.service
 sleep 10
 
@@ -43,6 +44,7 @@ fi
 sudo cp $CONFIGDIR/nomad_client.hcl $NOMADCONFIGDIR/nomad.hcl
 sudo cp $CONFIGDIR/nomad.service /etc/systemd/system/nomad.service
 
+sudo systemctl enable nomad.service
 sudo systemctl start nomad.service
 sleep 10
 export NOMAD_ADDR=http://$IP_ADDRESS:4646

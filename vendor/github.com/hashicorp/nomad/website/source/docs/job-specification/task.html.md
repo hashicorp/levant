@@ -108,6 +108,9 @@ job "docs" {
   required by the task. This overrides any `vault` block set at the `group` or
   `job` level.
 
+- `kind` `(string: <varies>)` - Used internally to manage tasks according to
+  the value of this field. Initial use case is for Consul Connect.
+
 ## `task` Examples
 
 The following examples only show the `task` stanzas. Remember that the
@@ -205,7 +208,7 @@ task "server" {
 [java]: /docs/drivers/java.html "Nomad Java Driver"
 [Docker]: /docs/drivers/docker.html "Nomad Docker Driver"
 [rkt]: /docs/drivers/rkt.html "Nomad rkt Driver"
-[service_discovery]: /guides/operations/consul-integration/index.html#service-discovery/index.html "Nomad Service Discovery"
+[service_discovery]: /guides/integrations/consul-integration/index.html#service-discovery/index.html "Nomad Service Discovery"
 [template]: /docs/job-specification/template.html "Nomad template Job Specification"
 [user_drivers]: /docs/configuration/client.html#_quot_user_checked_drivers_quot_
 [user_blacklist]: /docs/configuration/client.html#_quot_user_blacklist_quot_

@@ -28,16 +28,17 @@ func (tr *TaskRunner) Restart(ctx context.Context, event *structs.TaskEvent, fai
 	// Tell the restart tracker that a restart triggered the exit
 	tr.restartTracker.SetRestartTriggered(failure)
 
+	// Grab a handle to the wait channel that will timeout with context cancelation
+	// _before_ killing the task.
+	waitCh, err := handle.WaitCh(ctx)
+	if err != nil {
+		return err
+	}
+
 	// Kill the task using an exponential backoff in-case of failures.
 	if err := tr.killTask(handle); err != nil {
 		// We couldn't successfully destroy the resource created.
 		tr.logger.Error("failed to kill task. Resources may have been leaked", "error", err)
-	}
-
-	// Drain the wait channel or wait for the request context to be canceled
-	waitCh, err := handle.WaitCh(ctx)
-	if err != nil {
-		return err
 	}
 
 	select {
@@ -76,14 +77,6 @@ func (tr *TaskRunner) Kill(ctx context.Context, event *structs.TaskEvent) error 
 
 	// Emit kill event
 	tr.EmitEvent(event)
-
-	// Check if the Run method has started yet. If it hasn't we return early,
-	// since the task hasn't even started so there is nothing to wait for. This
-	// is still correct since the Run method no-op since the kill context has
-	// already been cancelled.
-	if !tr.hasRunLaunched() {
-		return nil
-	}
 
 	select {
 	case <-tr.WaitCh():

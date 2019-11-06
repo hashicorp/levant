@@ -166,8 +166,8 @@ The `docker` driver supports the following configuration in the job spec.  Only
     }
     ```
 
-* `logging` - (Optional) A key-value map of Docker logging options. The default
-  value is `syslog`.
+* `logging` - (Optional) A key-value map of Docker logging options. 
+    Defaults to `json-file` with log rotation (`max-file=2` and `max-size=2m`).
 
     ```hcl
     config {
@@ -259,7 +259,8 @@ The `docker` driver supports the following configuration in the job spec.  Only
   host paths to container paths. Mounting host paths outside of the allocation
   directory can be disabled on clients by setting the `docker.volumes.enabled`
   option set to false. This will limit volumes to directories that exist inside
-  the allocation directory.
+  the allocation directory. We recommend using [`mounts`](#mounts) if you wish
+  to have more control over volume definitions.
 
     ```hcl
     config {
@@ -274,10 +275,11 @@ The `docker` driver supports the following configuration in the job spec.  Only
     ```
 
 * `volume_driver` - (Optional) The name of the volume driver used to mount
-  volumes. Must be used along with `volumes`.
-  Using a `volume_driver` also allows to use `volumes` with a named volume as
-  well as absolute paths. If `docker.volumes.enabled` is false then volume
-  drivers are disallowed.
+  volumes. Must be used along with `volumes`. If `volume_driver` is omitted,
+  then relative paths will be mounted from inside the allocation dir. If a
+  `"local"` or other driver is used, then they may be named volumes instead.
+  If `docker.volumes.enabled` is false then volume drivers and paths outside the
+  allocation directory are disallowed.
 
     ```hcl
     config {
@@ -725,6 +727,10 @@ plugin "docker" {
       allocation and task local bind-mounts to containers. If used with
       `docker.volumes.enabled` set to false, the labels will still be applied to
       the standard binds in the container.
+
+* `infra_image` - This is the Docker image to use when creating the parent
+  container necessary when sharing network namespaces between tasks. Defaults
+  to "gcr.io/google_containers/pause-amd64:3.0".
 
 ## Client Configuration
 

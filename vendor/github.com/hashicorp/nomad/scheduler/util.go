@@ -351,6 +351,11 @@ func tasksUpdated(jobA, jobB *structs.Job, taskGroup string) bool {
 		return true
 	}
 
+	// Check that the network resources haven't changed
+	if networkUpdated(a.Networks, b.Networks) {
+		return true
+	}
+
 	// Check each task
 	for _, at := range a.Tasks {
 		bt := b.LookupTask(at.Name)
@@ -387,27 +392,34 @@ func tasksUpdated(jobA, jobB *structs.Job, taskGroup string) bool {
 		}
 
 		// Inspect the network to see if the dynamic ports are different
-		if len(at.Resources.Networks) != len(bt.Resources.Networks) {
+		if networkUpdated(at.Resources.Networks, bt.Resources.Networks) {
 			return true
-		}
-		for idx := range at.Resources.Networks {
-			an := at.Resources.Networks[idx]
-			bn := bt.Resources.Networks[idx]
-
-			if an.MBits != bn.MBits {
-				return true
-			}
-
-			aPorts, bPorts := networkPortMap(an), networkPortMap(bn)
-			if !reflect.DeepEqual(aPorts, bPorts) {
-				return true
-			}
 		}
 
 		// Inspect the non-network resources
 		if ar, br := at.Resources, bt.Resources; ar.CPU != br.CPU {
 			return true
 		} else if ar.MemoryMB != br.MemoryMB {
+			return true
+		}
+	}
+	return false
+}
+
+func networkUpdated(netA, netB []*structs.NetworkResource) bool {
+	if len(netA) != len(netB) {
+		return true
+	}
+	for idx := range netA {
+		an := netA[idx]
+		bn := netB[idx]
+
+		if an.MBits != bn.MBits {
+			return true
+		}
+
+		aPorts, bPorts := networkPortMap(an), networkPortMap(bn)
+		if !reflect.DeepEqual(aPorts, bPorts) {
 			return true
 		}
 	}
@@ -507,8 +519,7 @@ func inplaceUpdate(ctx Context, eval *structs.Evaluation, job *structs.Job,
 		// the current allocation is discounted when checking for feasibility.
 		// Otherwise we would be trying to fit the tasks current resources and
 		// updated resources. After select is called we can remove the evict.
-		ctx.Plan().AppendUpdate(update.Alloc, structs.AllocDesiredStatusStop,
-			allocInPlace, "")
+		ctx.Plan().AppendStoppedAlloc(update.Alloc, allocInPlace, "")
 
 		// Attempt to match the task group
 		option := stack.Select(update.TaskGroup, nil) // This select only looks at one node so we don't pass selectOptions
@@ -573,7 +584,7 @@ func evictAndPlace(ctx Context, diff *diffResult, allocs []allocTuple, desc stri
 	n := len(allocs)
 	for i := 0; i < n && i < *limit; i++ {
 		a := allocs[i]
-		ctx.Plan().AppendUpdate(a.Alloc, structs.AllocDesiredStatusStop, desc, "")
+		ctx.Plan().AppendStoppedAlloc(a.Alloc, desc, "")
 		diff.place = append(diff.place, a)
 	}
 	if n <= *limit {
@@ -734,7 +745,7 @@ func updateNonTerminalAllocsToLost(plan *structs.Plan, tainted map[string]*struc
 		if alloc.DesiredStatus == structs.AllocDesiredStatusStop &&
 			(alloc.ClientStatus == structs.AllocClientStatusRunning ||
 				alloc.ClientStatus == structs.AllocClientStatusPending) {
-			plan.AppendUpdate(alloc, structs.AllocDesiredStatusStop, allocLost, structs.AllocClientStatusLost)
+			plan.AppendStoppedAlloc(alloc, allocLost, structs.AllocClientStatusLost)
 		}
 	}
 }
@@ -784,7 +795,7 @@ func genericAllocUpdateFn(ctx Context, stack Stack, evalID string) allocUpdateTy
 		// the current allocation is discounted when checking for feasibility.
 		// Otherwise we would be trying to fit the tasks current resources and
 		// updated resources. After select is called we can remove the evict.
-		ctx.Plan().AppendUpdate(existing, structs.AllocDesiredStatusStop, allocInPlace, "")
+		ctx.Plan().AppendStoppedAlloc(existing, allocInPlace, "")
 
 		// Attempt to match the task group
 		option := stack.Select(newTG, nil) // This select only looks at one node so we don't pass selectOptions
@@ -811,7 +822,7 @@ func genericAllocUpdateFn(ctx Context, stack Stack, evalID string) allocUpdateTy
 				networks = tr.Networks
 			}
 
-			// Add thhe networks back
+			// Add the networks back
 			resources.Networks = networks
 		}
 
@@ -829,6 +840,17 @@ func genericAllocUpdateFn(ctx Context, stack Stack, evalID string) allocUpdateTy
 				DiskMB: int64(newTG.EphemeralDisk.SizeMB),
 			},
 		}
+
+		// Since this is an inplace update, we should copy network
+		// information from the original alloc. This is similar to how
+		// we copy network info for task level networks above.
+		//
+		// existing.AllocatedResources is nil on Allocations created by
+		// Nomad v0.8 or earlier.
+		if existing.AllocatedResources != nil {
+			newAlloc.AllocatedResources.Shared.Networks = existing.AllocatedResources.Shared.Networks
+		}
+
 		// Use metrics from existing alloc for in place upgrade
 		// This is because if the inplace upgrade succeeded, any scoring metadata from
 		// when it first went through the scheduler should still be preserved. Using scoring

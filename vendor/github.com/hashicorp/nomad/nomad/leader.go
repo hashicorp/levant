@@ -47,7 +47,9 @@ var minSchedulerConfigVersion = version.Must(version.NewVersion("0.9.0"))
 // Default configuration for scheduler with preemption enabled for system jobs
 var defaultSchedulerConfig = &structs.SchedulerConfiguration{
 	PreemptionConfig: structs.PreemptionConfig{
-		SystemSchedulerEnabled: true,
+		SystemSchedulerEnabled:  true,
+		BatchSchedulerEnabled:   false,
+		ServiceSchedulerEnabled: false,
 	},
 }
 
@@ -252,6 +254,9 @@ func (s *Server) establishLeadership(stopCh chan struct{}) error {
 	// Periodically publish job summary metrics
 	go s.publishJobSummaryMetrics(stopCh)
 
+	// Periodically publish job status metrics
+	go s.publishJobStatusMetrics(stopCh)
+
 	// Setup the heartbeat timers. This is done both when starting up or when
 	// a leader fail over happens. Since the timers are maintained by the leader
 	// node, effectively this means all the timers are renewed at the time of failover.
@@ -266,15 +271,6 @@ func (s *Server) establishLeadership(stopCh chan struct{}) error {
 		return err
 	}
 
-	// COMPAT 0.4 - 0.4.1
-	// Reconcile the summaries of the registered jobs. We reconcile summaries
-	// only if the server is 0.4.1 since summaries are not present in 0.4 they
-	// might be incorrect after upgrading to 0.4.1 the summaries might not be
-	// correct
-	if err := s.reconcileJobSummaries(); err != nil {
-		return fmt.Errorf("unable to reconcile job summaries: %v", err)
-	}
-
 	// Start replication of ACLs and Policies if they are enabled,
 	// and we are not the authoritative region.
 	if s.config.ACLEnabled && s.config.Region != s.config.AuthoritativeRegion {
@@ -286,6 +282,8 @@ func (s *Server) establishLeadership(stopCh chan struct{}) error {
 	if err := s.establishEnterpriseLeadership(stopCh); err != nil {
 		return err
 	}
+
+	s.setConsistentReadReady()
 
 	return nil
 }
@@ -530,8 +528,10 @@ func (s *Server) reapFailedEvaluations(stopCh chan struct{}) {
 			// due to the fairly large backoff.
 			followupEvalWait := s.config.EvalFailedFollowupBaselineDelay +
 				time.Duration(rand.Int63n(int64(s.config.EvalFailedFollowupDelayRange)))
+
 			followupEval := eval.CreateFailedFollowUpEval(followupEvalWait)
 			updateEval.NextEval = followupEval.ID
+			updateEval.UpdateModifyTime()
 
 			// Update via Raft
 			req := structs.EvalUpdateRequest{
@@ -568,6 +568,7 @@ func (s *Server) reapDupBlockedEvaluations(stopCh chan struct{}) {
 				newEval := dup.Copy()
 				newEval.Status = structs.EvalStatusCancelled
 				newEval.StatusDescription = fmt.Sprintf("existing blocked evaluation exists for job %q", newEval.JobID)
+				newEval.UpdateModifyTime()
 				cancel[i] = newEval
 			}
 
@@ -655,6 +656,10 @@ func (s *Server) iterateJobSummaryMetrics(summary *structs.JobSummary) {
 					Name:  "task_group",
 					Value: name,
 				},
+				{
+					Name:  "namespace",
+					Value: summary.Namespace,
+				},
 			}
 
 			if strings.Contains(summary.JobID, "/dispatch-") {
@@ -703,10 +708,68 @@ func (s *Server) iterateJobSummaryMetrics(summary *structs.JobSummary) {
 	}
 }
 
+// publishJobStatusMetrics publishes the job statuses as metrics
+func (s *Server) publishJobStatusMetrics(stopCh chan struct{}) {
+	timer := time.NewTimer(0)
+	defer timer.Stop()
+
+	for {
+		select {
+		case <-stopCh:
+			return
+		case <-timer.C:
+			timer.Reset(s.config.StatsCollectionInterval)
+			state, err := s.State().Snapshot()
+			if err != nil {
+				s.logger.Error("failed to get state", "error", err)
+				continue
+			}
+			ws := memdb.NewWatchSet()
+			iter, err := state.Jobs(ws)
+			if err != nil {
+				s.logger.Error("failed to get job statuses", "error", err)
+				continue
+			}
+
+			s.iterateJobStatusMetrics(&iter)
+		}
+	}
+}
+
+func (s *Server) iterateJobStatusMetrics(jobs *memdb.ResultIterator) {
+	var pending int64 // Sum of all jobs in 'pending' state
+	var running int64 // Sum of all jobs in 'running' state
+	var dead int64    // Sum of all jobs in 'dead' state
+
+	for {
+		raw := (*jobs).Next()
+		if raw == nil {
+			break
+		}
+
+		job := raw.(*structs.Job)
+
+		switch job.Status {
+		case structs.JobStatusPending:
+			pending++
+		case structs.JobStatusRunning:
+			running++
+		case structs.JobStatusDead:
+			dead++
+		}
+	}
+
+	metrics.SetGauge([]string{"nomad", "job_status", "pending"}, float32(pending))
+	metrics.SetGauge([]string{"nomad", "job_status", "running"}, float32(running))
+	metrics.SetGauge([]string{"nomad", "job_status", "dead"}, float32(dead))
+}
+
 // revokeLeadership is invoked once we step down as leader.
 // This is used to cleanup any state that may be specific to a leader.
 func (s *Server) revokeLeadership() error {
 	defer metrics.MeasureSince([]string{"nomad", "leader", "revoke_leadership"}, time.Now())
+
+	s.resetConsistentReadReady()
 
 	// Clear the leader token since we are no longer the leader.
 	s.setLeaderAcl("")
@@ -789,25 +852,6 @@ func (s *Server) reconcileMember(member serf.Member) error {
 		s.logger.Error("failed to reconcile member", "member", member, "error", err)
 		return err
 	}
-	return nil
-}
-
-// reconcileJobSummaries reconciles the summaries of all the jobs registered in
-// the system
-// COMPAT 0.4 -> 0.4.1
-func (s *Server) reconcileJobSummaries() error {
-	index, err := s.fsm.state.LatestIndex()
-	if err != nil {
-		return fmt.Errorf("unable to read latest index: %v", err)
-	}
-	s.logger.Debug("leader reconciling job summaries", "index", index)
-
-	args := &structs.GenericResponse{}
-	msg := structs.ReconcileJobSummariesRequestType | structs.IgnoreUnknownTypeFlag
-	if _, _, err = s.raftApply(msg, args); err != nil {
-		return fmt.Errorf("reconciliation of job summaries failed: %v", err)
-	}
-
 	return nil
 }
 
@@ -1243,7 +1287,7 @@ func (s *Server) getOrCreateAutopilotConfig() *structs.AutopilotConfig {
 		return config
 	}
 
-	if !ServersMeetMinimumVersion(s.Members(), minAutopilotVersion) {
+	if !ServersMeetMinimumVersion(s.Members(), minAutopilotVersion, false) {
 		s.logger.Named("autopilot").Warn("can't initialize until all servers are above minimum version", "min_version", minAutopilotVersion)
 		return nil
 	}
@@ -1270,7 +1314,7 @@ func (s *Server) getOrCreateSchedulerConfig() *structs.SchedulerConfiguration {
 	if config != nil {
 		return config
 	}
-	if !ServersMeetMinimumVersion(s.Members(), minSchedulerConfigVersion) {
+	if !ServersMeetMinimumVersion(s.Members(), minSchedulerConfigVersion, false) {
 		s.logger.Named("core").Warn("can't initialize scheduler config until all servers are above minimum version", "min_version", minSchedulerConfigVersion)
 		return nil
 	}

@@ -22,11 +22,11 @@ description: |-
 </table>
 
 The `update` stanza specifies the group's update strategy. The update strategy
-is used to control things like rolling upgrades and canary deployments. If
-omitted, rolling updates and canaries are disabled. If specified at the job
-level, the configuration will apply to all groups within the job. If multiple
-`update` stanzas are specified, they are merged with the group stanza taking the
-highest precedence and then the job.
+is used to control things like [rolling upgrades][rolling] and [canary
+deployments][canary]. If omitted, rolling updates and canaries are disabled. If
+specified at the job level, the configuration will apply to all groups within
+the job. If multiple `update` stanzas are specified, they are merged with the
+group stanza taking the highest precedence and then the job.
 
 ```hcl
 job "docs" {
@@ -37,22 +37,26 @@ job "docs" {
     healthy_deadline  = "5m"
     progress_deadline = "10m"
     auto_revert       = true
+    auto_promote      = true
     canary            = 1
     stagger           = "30s"
   }
 }
 ```
 
-~> For `system` jobs, only `max_parallel` and `stagger` are enforced. The job is
-updated at a rate of `max_parallel`, waiting `stagger` duration before the next
-set of updates. The `system` scheduler will be updated to support the new
-`update` stanza in a future release.
+~> For `system` jobs, only [`max_parallel`](#max_parallel) and
+   [`stagger`](#stagger) are enforced. The job is updated at a rate of
+   `max_parallel`, waiting `stagger` duration before the next set of updates.
+   The `system` scheduler will be updated to support the new `update` stanza in
+   a future release.
 
 ## `update` Parameters
 
-- `max_parallel` `(int: 0)` - Specifies the number of allocations within a task group that can be
+- `max_parallel` `(int: 1)` - Specifies the number of allocations within a task group that can be
   updated at the same time.  The task groups themselves are updated in parallel.
 
+  - `max_parallel = 0` - Specifies that the allocation should use forced updates instead of deployments
+  
 - `health_check` `(string: "checks")` - Specifies the mechanism in which
   allocations health is determined. The potential values are:
 
@@ -91,15 +95,21 @@ set of updates. The `system` scheduler will be updated to support the new
   last stable job on deployment failure. A job is marked as stable if all the
   allocations as part of its deployment were marked healthy.
 
+- `auto_promote` `(bool: false)` - Specifies if the job should auto-promote to the
+  canary version when all canaries become healthy during a deployment. Defaults to
+  false which means canaries must be manually updated with the `nomad deployment promote`
+  command.
+
 - `canary` `(int: 0)` - Specifies that changes to the job that would result in
   destructive updates should create the specified number of canaries without
   stopping any previous allocations. Once the operator determines the canaries
   are healthy, they can be promoted which unblocks a rolling update of the
   remaining allocations at a rate of `max_parallel`.
 
-- `stagger` `(string: "30s")` - Specifies the delay between migrating
-  allocations off nodes marked for draining. This is specified using a label
-  suffix like "30s" or "1h".
+- `stagger` `(string: "30s")` - Specifies the delay between each set of
+  [`max_parallel`](#max_parallel) updates when updating system jobs. This
+  setting no longer applies to service jobs which use
+  [deployments.][strategies]
 
 ## `update` Examples
 
@@ -258,4 +268,7 @@ group "two" {
 }
 ```
 
+[canary]: /guides/operating-a-job/update-strategies/blue-green-and-canary-deployments.html "Nomad Canary Deployments"
 [checks]: /docs/job-specification/service.html#check-parameters "Nomad check Job Specification"
+[rolling]: /guides/operating-a-job/update-strategies/rolling-upgrades.html "Nomad Rolling Upgrades"
+[strategies]: /guides/operating-a-job/update-strategies/index.html "Nomad Update Strategies"

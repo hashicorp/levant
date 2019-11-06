@@ -10,6 +10,8 @@ import (
 	multierror "github.com/hashicorp/go-multierror"
 
 	"github.com/hashicorp/nomad/acl"
+	"github.com/hashicorp/nomad/helper"
+	"github.com/hashicorp/nomad/helper/uuid"
 	"github.com/hashicorp/nomad/nomad/state"
 	"github.com/hashicorp/nomad/nomad/structs"
 )
@@ -84,8 +86,10 @@ func (a *Alloc) GetAlloc(args *structs.AllocSpecificRequest,
 	}
 	defer metrics.MeasureSince([]string{"nomad", "alloc", "get_alloc"}, time.Now())
 
-	// Check namespace read-job permissions
-	if aclObj, err := a.srv.ResolveToken(args.AuthToken); err != nil {
+	// Check namespace read-job permissions before performing blocking query.
+	allowNsOp := acl.NamespaceValidator(acl.NamespaceCapabilityReadJob)
+	aclObj, err := a.srv.ResolveToken(args.AuthToken)
+	if err != nil {
 		// If ResolveToken had an unexpected error return that
 		if err != structs.ErrTokenNotFound {
 			return err
@@ -105,8 +109,6 @@ func (a *Alloc) GetAlloc(args *structs.AllocSpecificRequest,
 		if node == nil {
 			return structs.ErrTokenNotFound
 		}
-	} else if aclObj != nil && !aclObj.AllowNsOp(args.RequestNamespace(), acl.NamespaceCapabilityReadJob) {
-		return structs.ErrPermissionDenied
 	}
 
 	// Setup the blocking query
@@ -123,6 +125,11 @@ func (a *Alloc) GetAlloc(args *structs.AllocSpecificRequest,
 			// Setup the output
 			reply.Alloc = out
 			if out != nil {
+				// Re-check namespace in case it differs from request.
+				if !allowNsOp(aclObj, out.Namespace) {
+					return structs.NewErrUnknownAllocation(args.AllocID)
+				}
+
 				reply.Index = out.ModifyIndex
 			} else {
 				// Use the last index that affected the allocs table
@@ -203,6 +210,63 @@ func (a *Alloc) GetAllocs(args *structs.AllocsGetRequest,
 		},
 	}
 	return a.srv.blockingRPC(&opts)
+}
+
+// Stop is used to stop an allocation and migrate it to another node.
+func (a *Alloc) Stop(args *structs.AllocStopRequest, reply *structs.AllocStopResponse) error {
+	if done, err := a.srv.forward("Alloc.Stop", args, args, reply); done {
+		return err
+	}
+	defer metrics.MeasureSince([]string{"nomad", "alloc", "stop"}, time.Now())
+
+	alloc, err := getAlloc(a.srv.State(), args.AllocID)
+	if err != nil {
+		return err
+	}
+
+	// Check for namespace alloc-lifecycle permissions.
+	allowNsOp := acl.NamespaceValidator(acl.NamespaceCapabilityAllocLifecycle)
+	aclObj, err := a.srv.ResolveToken(args.AuthToken)
+	if err != nil {
+		return err
+	} else if !allowNsOp(aclObj, alloc.Namespace) {
+		return structs.ErrPermissionDenied
+	}
+
+	now := time.Now().UTC().UnixNano()
+	eval := &structs.Evaluation{
+		ID:             uuid.Generate(),
+		Namespace:      alloc.Namespace,
+		Priority:       alloc.Job.Priority,
+		Type:           alloc.Job.Type,
+		TriggeredBy:    structs.EvalTriggerAllocStop,
+		JobID:          alloc.Job.ID,
+		JobModifyIndex: alloc.Job.ModifyIndex,
+		Status:         structs.EvalStatusPending,
+		CreateTime:     now,
+		ModifyTime:     now,
+	}
+
+	transitionReq := &structs.AllocUpdateDesiredTransitionRequest{
+		Evals: []*structs.Evaluation{eval},
+		Allocs: map[string]*structs.DesiredTransition{
+			args.AllocID: {
+				Migrate: helper.BoolToPtr(true),
+			},
+		},
+	}
+
+	// Commit this update via Raft
+	_, index, err := a.srv.raftApply(structs.AllocUpdateDesiredTransitionRequestType, transitionReq)
+	if err != nil {
+		a.logger.Error("AllocUpdateDesiredTransitionRequest failed", "error", err)
+		return err
+	}
+
+	// Setup the response
+	reply.Index = index
+	reply.EvalID = eval.ID
+	return nil
 }
 
 // UpdateDesiredTransition is used to update the desired transitions of an

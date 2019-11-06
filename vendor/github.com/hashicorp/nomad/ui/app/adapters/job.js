@@ -1,5 +1,6 @@
 import { inject as service } from '@ember/service';
 import Watchable from './watchable';
+import addToPath from 'nomad-ui/utils/add-to-path';
 
 export default Watchable.extend({
   system: service(),
@@ -78,7 +79,7 @@ export default Watchable.extend({
 
   plan(job) {
     const jobId = job.get('id');
-    const store = this.get('store');
+    const store = this.store;
     const url = addToPath(this.urlForFindRecord(jobId, 'job'), '/plan');
 
     return this.ajax(url, 'POST', {
@@ -117,15 +118,4 @@ function associateNamespace(url, namespace) {
     url += `?namespace=${namespace}`;
   }
   return url;
-}
-
-function addToPath(url, extension = '') {
-  const [path, params] = url.split('?');
-  let newUrl = `${path}${extension}`;
-
-  if (params) {
-    newUrl += `?${params}`;
-  }
-
-  return newUrl;
 }

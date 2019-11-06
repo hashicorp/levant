@@ -6,6 +6,7 @@
 /*.hcl
 .DS_Store
 Thumbs.db
+.idea
 
 # Folders
 _obj
@@ -59,6 +60,7 @@ nomad_linux_amd64
 nomad_darwin_amd64
 TODO.md
 codecgen-*.generated.go
+GNUMakefile.local
 
 .terraform
 *.tfstate*
@@ -85,6 +87,11 @@ rkt-*
 /ui/npm-debug.log*
 /ui/testem.log
 .ignore
+
+# ember-try
+/ui/.node_modules.ember-try/
+/ui/bower.json.ember-try
+/ui/package.json.ember-try
 
 # generated routes file
 command/agent/bindata_assetfs.go

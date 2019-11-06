@@ -275,6 +275,15 @@ func convertServerConfig(agentConfig *Config) (*nomad.Config, error) {
 		}
 		conf.NodeGCThreshold = dur
 	}
+	if gcInterval := agentConfig.Server.JobGCInterval; gcInterval != "" {
+		dur, err := time.ParseDuration(gcInterval)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse job_gc_interval: %v", err)
+		} else if dur <= time.Duration(0) {
+			return nil, fmt.Errorf("job_gc_interval should be greater than 0s")
+		}
+		conf.JobGCInterval = dur
+	}
 	if gcThreshold := agentConfig.Server.JobGCThreshold; gcThreshold != "" {
 		dur, err := time.ParseDuration(gcThreshold)
 		if err != nil {
@@ -460,6 +469,15 @@ func convertClientConfig(agentConfig *Config) (*clientconfig.Config, error) {
 	}
 	conf.ClientMaxPort = uint(agentConfig.Client.ClientMaxPort)
 	conf.ClientMinPort = uint(agentConfig.Client.ClientMinPort)
+	conf.DisableRemoteExec = agentConfig.Client.DisableRemoteExec
+	conf.TemplateConfig.FunctionBlacklist = agentConfig.Client.TemplateConfig.FunctionBlacklist
+	conf.TemplateConfig.DisableSandbox = agentConfig.Client.TemplateConfig.DisableSandbox
+
+	hvMap := make(map[string]*structs.ClientHostVolumeConfig, len(agentConfig.Client.HostVolumes))
+	for _, v := range agentConfig.Client.HostVolumes {
+		hvMap[v.Name] = v
+	}
+	conf.HostVolumes = hvMap
 
 	// Setup the node
 	conf.Node = new(structs.Node)
@@ -530,6 +548,11 @@ func convertClientConfig(agentConfig *Config) (*clientconfig.Config, error) {
 	conf.ACLTokenTTL = agentConfig.ACL.TokenTTL
 	conf.ACLPolicyTTL = agentConfig.ACL.PolicyTTL
 
+	// Setup networking configration
+	conf.CNIPath = agentConfig.Client.CNIPath
+	conf.BridgeNetworkName = agentConfig.Client.BridgeNetworkName
+	conf.BridgeNetworkAllocSubnet = agentConfig.Client.BridgeNetworkSubnet
+
 	return conf, nil
 }
 
@@ -576,7 +599,7 @@ func (a *Agent) setupServer() error {
 		httpServ := &structs.Service{
 			Name:      a.config.Consul.ServerServiceName,
 			PortLabel: a.config.AdvertiseAddrs.HTTP,
-			Tags:      []string{consul.ServiceTagHTTP},
+			Tags:      append([]string{consul.ServiceTagHTTP}, a.config.Consul.Tags...),
 		}
 		const isServer = true
 		if check := a.agentHTTPCheck(isServer); check != nil {
@@ -585,7 +608,7 @@ func (a *Agent) setupServer() error {
 		rpcServ := &structs.Service{
 			Name:      a.config.Consul.ServerServiceName,
 			PortLabel: a.config.AdvertiseAddrs.RPC,
-			Tags:      []string{consul.ServiceTagRPC},
+			Tags:      append([]string{consul.ServiceTagRPC}, a.config.Consul.Tags...),
 			Checks: []*structs.ServiceCheck{
 				{
 					Name:      a.config.Consul.ServerRPCCheckName,
@@ -599,7 +622,7 @@ func (a *Agent) setupServer() error {
 		serfServ := &structs.Service{
 			Name:      a.config.Consul.ServerServiceName,
 			PortLabel: a.config.AdvertiseAddrs.Serf,
-			Tags:      []string{consul.ServiceTagSerf},
+			Tags:      append([]string{consul.ServiceTagSerf}, a.config.Consul.Tags...),
 			Checks: []*structs.ServiceCheck{
 				{
 					Name:      a.config.Consul.ServerSerfCheckName,
@@ -741,7 +764,7 @@ func (a *Agent) setupClient() error {
 		httpServ := &structs.Service{
 			Name:      a.config.Consul.ClientServiceName,
 			PortLabel: a.config.AdvertiseAddrs.HTTP,
-			Tags:      []string{consul.ServiceTagHTTP},
+			Tags:      append([]string{consul.ServiceTagHTTP}, a.config.Consul.Tags...),
 		}
 		const isServer = false
 		if check := a.agentHTTPCheck(isServer); check != nil {
@@ -933,10 +956,14 @@ func (a *Agent) ShouldReload(newConfig *Config) (agent, http bool) {
 	a.configLock.Lock()
 	defer a.configLock.Unlock()
 
+	if newConfig.LogLevel != "" && newConfig.LogLevel != a.config.LogLevel {
+		agent = true
+	}
+
 	isEqual, err := a.config.TLSConfig.CertificateInfoIsEqual(newConfig.TLSConfig)
 	if err != nil {
 		a.logger.Error("parsing TLS certificate", "error", err)
-		return false, false
+		return agent, false
 	} else if !isEqual {
 		return true, true
 	}
@@ -961,13 +988,27 @@ func (a *Agent) Reload(newConfig *Config) error {
 	a.configLock.Lock()
 	defer a.configLock.Unlock()
 
-	if newConfig == nil || newConfig.TLSConfig == nil {
+	updatedLogging := newConfig != nil && (newConfig.LogLevel != a.config.LogLevel)
+
+	if newConfig == nil || newConfig.TLSConfig == nil && !updatedLogging {
 		return fmt.Errorf("cannot reload agent with nil configuration")
 	}
 
-	// This is just a TLS configuration reload, we don't need to refresh
-	// existing network connections
+	if updatedLogging {
+		a.config.LogLevel = newConfig.LogLevel
+		a.logger.SetLevel(log.LevelFromString(newConfig.LogLevel))
+	}
+
+	fullUpdateTLSConfig := func() {
+		// Completely reload the agent's TLS configuration (moving from non-TLS to
+		// TLS, or vice versa)
+		// This does not handle errors in loading the new TLS configuration
+		a.config.TLSConfig = newConfig.TLSConfig.Copy()
+	}
+
 	if !a.config.TLSConfig.IsEmpty() && !newConfig.TLSConfig.IsEmpty() {
+		// This is just a TLS configuration reload, we don't need to refresh
+		// existing network connections
 
 		// Reload the certificates on the keyloader and on success store the
 		// updated TLS config. It is important to reuse the same keyloader
@@ -982,17 +1023,12 @@ func (a *Agent) Reload(newConfig *Config) error {
 		a.config.TLSConfig = newConfig.TLSConfig
 		a.config.TLSConfig.KeyLoader = keyloader
 		return nil
-	}
-
-	// Completely reload the agent's TLS configuration (moving from non-TLS to
-	// TLS, or vice versa)
-	// This does not handle errors in loading the new TLS configuration
-	a.config.TLSConfig = newConfig.TLSConfig.Copy()
-
-	if newConfig.TLSConfig.IsEmpty() {
+	} else if newConfig.TLSConfig.IsEmpty() && !a.config.TLSConfig.IsEmpty() {
 		a.logger.Warn("downgrading agent's existing TLS configuration to plaintext")
-	} else {
+		fullUpdateTLSConfig()
+	} else if !newConfig.TLSConfig.IsEmpty() && a.config.TLSConfig.IsEmpty() {
 		a.logger.Info("upgrading from plaintext configuration to TLS")
+		fullUpdateTLSConfig()
 	}
 
 	return nil

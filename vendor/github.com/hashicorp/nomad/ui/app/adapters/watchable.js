@@ -1,4 +1,4 @@
-import { get, computed } from '@ember/object';
+import { get } from '@ember/object';
 import { assign } from '@ember/polyfills';
 import { inject as service } from '@ember/service';
 import queryString from 'query-string';
@@ -9,50 +9,22 @@ export default ApplicationAdapter.extend({
   watchList: service(),
   store: service(),
 
-  xhrs: computed(function() {
-    return {
-      list: {},
-      track(key, xhr) {
-        if (this.list[key]) {
-          this.list[key].push(xhr);
-        } else {
-          this.list[key] = [xhr];
-        }
-      },
-      cancel(key) {
-        while (this.list[key] && this.list[key].length) {
-          this.remove(key, this.list[key][0]);
-        }
-      },
-      remove(key, xhr) {
-        if (this.list[key]) {
-          xhr.abort();
-          this.list[key].removeObject(xhr);
-        }
-      },
-    };
-  }),
-
-  ajaxOptions() {
+  ajaxOptions(url, type, options) {
     const ajaxOptions = this._super(...arguments);
-    const key = this.xhrKey(...arguments);
+    const abortToken = (options || {}).abortToken;
+    if (abortToken) {
+      delete options.abortToken;
 
-    const previousBeforeSend = ajaxOptions.beforeSend;
-    ajaxOptions.beforeSend = function(jqXHR) {
-      if (previousBeforeSend) {
-        previousBeforeSend(...arguments);
-      }
-      this.get('xhrs').track(key, jqXHR);
-      jqXHR.always(() => {
-        this.get('xhrs').remove(key, jqXHR);
-      });
-    };
+      const previousBeforeSend = ajaxOptions.beforeSend;
+      ajaxOptions.beforeSend = function(jqXHR) {
+        abortToken.capture(jqXHR);
+        if (previousBeforeSend) {
+          previousBeforeSend(...arguments);
+        }
+      };
+    }
 
     return ajaxOptions;
-  },
-
-  xhrKey(url, method /* options */) {
-    return `${method} ${url}`;
   },
 
   findAll(store, type, sinceToken, snapshotRecordArray, additionalParams = {}) {
@@ -60,10 +32,12 @@ export default ApplicationAdapter.extend({
     const url = this.urlForFindAll(type.modelName);
 
     if (get(snapshotRecordArray || {}, 'adapterOptions.watch')) {
-      params.index = this.get('watchList').getIndexFor(url);
+      params.index = this.watchList.getIndexFor(url);
     }
 
+    const abortToken = get(snapshotRecordArray || {}, 'adapterOptions.abortToken');
     return this.ajax(url, 'GET', {
+      abortToken,
       data: params,
     });
   },
@@ -73,10 +47,12 @@ export default ApplicationAdapter.extend({
     params = assign(queryString.parse(params) || {}, this.buildQuery(), additionalParams);
 
     if (get(snapshot || {}, 'adapterOptions.watch')) {
-      params.index = this.get('watchList').getIndexFor(url);
+      params.index = this.watchList.getIndexFor(url);
     }
 
+    const abortToken = get(snapshot || {}, 'adapterOptions.abortToken');
     return this.ajax(url, 'GET', {
+      abortToken,
       data: params,
     }).catch(error => {
       if (error instanceof AbortError) {
@@ -86,7 +62,8 @@ export default ApplicationAdapter.extend({
     });
   },
 
-  reloadRelationship(model, relationshipName, watch = false) {
+  reloadRelationship(model, relationshipName, options = { watch: false, abortToken: null }) {
+    const { watch, abortToken } = options;
     const relationship = model.relationshipFor(relationshipName);
     if (relationship.kind !== 'belongsTo' && relationship.kind !== 'hasMany') {
       throw new Error(
@@ -97,7 +74,7 @@ export default ApplicationAdapter.extend({
       let params = {};
 
       if (watch) {
-        params.index = this.get('watchList').getIndexFor(url);
+        params.index = this.watchList.getIndexFor(url);
       }
 
       // Avoid duplicating existing query params by passing them to ajax
@@ -110,10 +87,11 @@ export default ApplicationAdapter.extend({
       }
 
       return this.ajax(url, 'GET', {
+        abortToken,
         data: params,
       }).then(
         json => {
-          const store = this.get('store');
+          const store = this.store;
           const normalizeMethod =
             relationship.kind === 'belongsTo'
               ? 'normalizeFindBelongsToResponse'
@@ -138,44 +116,9 @@ export default ApplicationAdapter.extend({
     // case sensitive.
     const newIndex = headers['x-nomad-index'] || headers['X-Nomad-Index'];
     if (newIndex) {
-      this.get('watchList').setIndexFor(requestData.url, newIndex);
+      this.watchList.setIndexFor(requestData.url, newIndex);
     }
 
     return this._super(...arguments);
-  },
-
-  cancelFindRecord(modelName, id) {
-    if (!modelName || id == null) {
-      return;
-    }
-    const url = this.urlForFindRecord(id, modelName);
-    this.get('xhrs').cancel(`GET ${url}`);
-  },
-
-  cancelFindAll(modelName) {
-    if (!modelName) {
-      return;
-    }
-    let url = this.urlForFindAll(modelName);
-    const params = queryString.stringify(this.buildQuery());
-    if (params) {
-      url = `${url}?${params}`;
-    }
-    this.get('xhrs').cancel(`GET ${url}`);
-  },
-
-  cancelReloadRelationship(model, relationshipName) {
-    if (!model || !relationshipName) {
-      return;
-    }
-    const relationship = model.relationshipFor(relationshipName);
-    if (relationship.kind !== 'belongsTo' && relationship.kind !== 'hasMany') {
-      throw new Error(
-        `${relationship.key} must be a belongsTo or hasMany, instead it was ${relationship.kind}`
-      );
-    } else {
-      const url = model[relationship.kind](relationship.key).link();
-      this.get('xhrs').cancel(`GET ${url}`);
-    }
   },
 });

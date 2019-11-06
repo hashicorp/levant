@@ -1,6 +1,7 @@
 import EmberObject, { computed } from '@ember/object';
 import { task } from 'ember-concurrency';
 import TextDecoder from 'nomad-ui/utils/classes/text-decoder';
+import { decode } from 'nomad-ui/utils/stream-frames';
 import AbstractLogger from './abstract-logger';
 import { fetchFailure } from './log';
 
@@ -12,20 +13,20 @@ export default EmberObject.extend(AbstractLogger, {
   })),
 
   start() {
-    return this.get('poll').perform();
+    return this.poll.perform();
   },
 
   stop() {
-    const reader = this.get('reader');
+    const reader = this.reader;
     if (reader) {
       reader.cancel();
     }
-    return this.get('poll').cancelAll();
+    return this.poll.cancelAll();
   },
 
   poll: task(function*() {
-    const url = this.get('fullUrl');
-    const logFetch = this.get('logFetch');
+    const url = this.fullUrl;
+    const logFetch = this.logFetch;
 
     let streamClosed = false;
     let buffer = '';
@@ -60,13 +61,10 @@ export default EmberObject.extend(AbstractLogger, {
 
           // Assuming the logs endpoint never returns nested JSON (it shouldn't), at this
           // point chunk is a series of valid JSON objects with no delimiter.
-          const lines = chunk.replace(/\}\{/g, '}\n{').split('\n');
-          const frames = lines.map(line => JSON.parse(line)).filter(frame => frame.Data);
-
-          if (frames.length) {
-            frames.forEach(frame => (frame.Data = window.atob(frame.Data)));
-            this.set('endOffset', frames[frames.length - 1].Offset);
-            this.get('write')(frames.mapBy('Data').join(''));
+          const { offset, message } = decode(chunk);
+          if (message) {
+            this.set('endOffset', offset);
+            this.write(message);
           }
         }
       });

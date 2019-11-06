@@ -1,6 +1,10 @@
 /* eslint-env node */
 
-const USE_MIRAGE = true;
+let USE_MIRAGE = true;
+
+if (process.env.USE_MIRAGE) {
+  USE_MIRAGE = process.env.USE_MIRAGE == 'true';
+}
 
 module.exports = function(environment) {
   var ENV = {
@@ -23,7 +27,7 @@ module.exports = function(environment) {
     APP: {
       blockingQueries: true,
       mirageScenario: 'smallCluster',
-      mirageWithNamespaces: false,
+      mirageWithNamespaces: true,
       mirageWithTokens: true,
       mirageWithRegions: true,
     },
@@ -51,6 +55,7 @@ module.exports = function(environment) {
     ENV.APP.LOG_VIEW_LOOKUPS = false;
 
     ENV.APP.rootElement = '#ember-testing';
+    ENV.APP.autoboot = false;
 
     ENV.browserify = {
       tests: true,
@@ -61,8 +66,8 @@ module.exports = function(environment) {
     };
   }
 
-  if (environment === 'production') {
-  }
+  // if (environment === 'production') {
+  // }
 
   return ENV;
 };

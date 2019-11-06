@@ -1,19 +1,22 @@
-import { Factory, faker, trait } from 'ember-cli-mirage';
+import { Factory, trait } from 'ember-cli-mirage';
+import faker from 'nomad-ui/mirage/faker';
 import { provide } from '../utils';
 import { DATACENTERS, HOSTS, generateResources } from '../common';
 import moment from 'moment';
 
 const UUIDS = provide(100, faker.random.uuid.bind(faker.random));
 const NODE_STATUSES = ['initializing', 'ready', 'down'];
+const NODE_CLASSES = provide(7, faker.company.bsBuzz.bind(faker.company));
 const REF_DATE = new Date();
 
 export default Factory.extend({
   id: i => (i / 100 >= 1 ? `${UUIDS[i]}-${i}` : UUIDS[i]),
   name: i => `nomad@${HOSTS[i % HOSTS.length]}`,
 
-  datacenter: faker.list.random(...DATACENTERS),
+  datacenter: () => faker.helpers.randomize(DATACENTERS),
+  nodeClass: () => faker.helpers.randomize(NODE_CLASSES),
   drain: faker.random.boolean,
-  status: faker.list.random(...NODE_STATUSES),
+  status: () => faker.helpers.randomize(NODE_STATUSES),
   tls_enabled: faker.random.boolean,
   schedulingEligibility: () => (faker.random.boolean() ? 'eligible' : 'ineligible'),
 
@@ -106,9 +109,9 @@ export default Factory.extend({
   }),
 
   afterCreate(node, server) {
-    // Each node has a corresponding client stats resource that's queried via node IP.
+    // Each node has a corresponding client stat resource that's queried via node IP.
     // Create that record, even though it's not a relationship.
-    server.create('client-stats', {
+    server.create('client-stat', {
       id: node.httpAddr,
     });
 
@@ -120,7 +123,7 @@ export default Factory.extend({
       eventIds: events.mapBy('id'),
     });
 
-    server.create('client-stats', {
+    server.create('client-stat', {
       id: node.id,
     });
   },
@@ -128,8 +131,8 @@ export default Factory.extend({
 
 function makeDrivers() {
   const generate = name => {
-    const detected = Math.random() > 0.3;
-    const healthy = detected && Math.random() > 0.3;
+    const detected = faker.random.number(10) >= 3;
+    const healthy = detected && faker.random.number(10) >= 3;
     const attributes = {
       [`driver.${name}.version`]: '1.0.0',
       [`driver.${name}.status`]: 'awesome',
@@ -141,7 +144,7 @@ function makeDrivers() {
       Healthy: healthy,
       HealthDescription: healthy ? 'Driver is healthy' : 'Uh oh',
       UpdateTime: faker.date.past(5 / 365, REF_DATE),
-      Attributes: Math.random() > 0.3 && detected ? attributes : null,
+      Attributes: faker.random.number(10) >= 3 && detected ? attributes : null,
     };
   };
 

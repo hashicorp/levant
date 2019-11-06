@@ -26,11 +26,18 @@ task driver documents the configuration available in a [job
 specification](/docs/job-specification/index.html), the environments it can be
 used in, and the resource isolation mechanisms available.
 
-Nomad strives to mask the details of running a task from users and instead
-provides a clean abstraction. It is possible for the same task to be executed
-with different isolation levels depending on the client running the task. The
-goal is to use the strictest isolation available and gracefully degrade
-protections where necessary.
+For details on authoring a task driver plugin, please refer to the [plugin
+authoring guide][plugin_guide].
+
+Task driver resource isolation is intended to provide a degree of separation of
+Nomad client CPU / memory / storage between tasks. Resource isolation
+effectiveness is dependent upon individual task driver implementations and
+underlying client operating systems. Task drivers do include various
+security-related controls, but the Nomad client to task interface should not be
+considered a security boundary. See the [access control guide][acl_guide] for
+more information on how to protect Nomad cluster operations.
 
 [plugin]: /docs/configuration/plugin.html
 [docker_plugin]: /docs/drivers/docker.html#client-requirements
+[plugin_guide]: /docs/internals/plugins/index.html
+[acl_guide]: https://www.nomadproject.io/guides/security/acl.html

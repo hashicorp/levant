@@ -1,7 +1,7 @@
 ---
 layout: "docs"
 page_title: "Drivers: LXC"
-sidebar_current: "docs-external-plugins-lxc"
+sidebar_current: "docs-drivers-community-lxc"
 description: |-
   The LXC task driver is used to run application containers using LXC.
 ---
@@ -141,7 +141,7 @@ isolation is not supported as of now.
 
 [lxc-create]: https://linuxcontainers.org/lxc/manpages/man1/lxc-create.1.html
 [lxc-driver]: https://releases.hashicorp.com/nomad-driver-lxc
-[lxc-guide]: /guides/external/lxc.html
+[lxc-guide]: /guides/operating-a-job/external/lxc.html
 [lxc_man]: https://linuxcontainers.org/lxc/manpages/man5/lxc.container.conf.5.html#lbAM
 [plugin]: /docs/configuration/plugin.html
 [plugin_dir]: /docs/configuration/index.html#plugin_dir

@@ -11,6 +11,9 @@ import (
 	"sync"
 	"time"
 
+	"net/http"
+	"strings"
+
 	hclog "github.com/hashicorp/go-hclog"
 	multierror "github.com/hashicorp/go-multierror"
 	cstructs "github.com/hashicorp/nomad/client/structs"
@@ -57,6 +60,10 @@ var (
 
 	// TaskDirs is the set of directories created in each tasks directory.
 	TaskDirs = map[string]os.FileMode{TmpDirName: os.ModeSticky | 0777}
+
+	// AllocGRPCSocket is the path relative to the task dir root for the
+	// unix socket connected to Consul's gRPC endpoint.
+	AllocGRPCSocket = filepath.Join(SharedAllocName, TmpDirName, "consul_grpc.sock")
 )
 
 // AllocDir allows creating, destroying, and accessing an allocation's
@@ -392,13 +399,39 @@ func (d *AllocDir) Stat(path string) (*cstructs.AllocFileInfo, error) {
 		return nil, err
 	}
 
+	contentType := detectContentType(info, p)
+
 	return &cstructs.AllocFileInfo{
-		Size:     info.Size(),
-		Name:     info.Name(),
-		IsDir:    info.IsDir(),
-		FileMode: info.Mode().String(),
-		ModTime:  info.ModTime(),
+		Size:        info.Size(),
+		Name:        info.Name(),
+		IsDir:       info.IsDir(),
+		FileMode:    info.Mode().String(),
+		ModTime:     info.ModTime(),
+		ContentType: contentType,
 	}, nil
+}
+
+// detectContentType tries to infer the file type by reading the first
+// 512 bytes of the file. Json file extensions are special cased.
+func detectContentType(fileInfo os.FileInfo, path string) string {
+	contentType := "application/octet-stream"
+	if !fileInfo.IsDir() {
+		f, err := os.Open(path)
+		// Best effort content type detection
+		// We ignore errors because this is optional information
+		if err == nil {
+			fileBytes := make([]byte, 512)
+			_, err := f.Read(fileBytes)
+			if err == nil {
+				contentType = http.DetectContentType(fileBytes)
+			}
+		}
+	}
+	// Special case json files
+	if strings.HasSuffix(path, ".json") {
+		contentType = "application/json"
+	}
+	return contentType
 }
 
 // ReadAt returns a reader for a file at the path relative to the alloc dir

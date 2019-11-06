@@ -1,4 +1,4 @@
-import { copy } from '@ember/object/internals';
+import { copy } from 'ember-copy';
 import ApplicationSerializer from './application';
 
 export default ApplicationSerializer.extend({
@@ -9,6 +9,7 @@ export default ApplicationSerializer.extend({
     });
 
     hash.ReservedEphemeralDisk = hash.EphemeralDisk.SizeMB;
+    hash.Services = hash.Services || [];
 
     return this._super(typeHash, hash);
   },

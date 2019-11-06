@@ -190,14 +190,21 @@ type TaskRunner struct {
 	// handlers
 	driverManager drivermanager.Manager
 
-	// runLaunched marks whether the Run goroutine has been started. It should
-	// be accessed via helpers
-	runLaunched     bool
-	runLaunchedLock sync.Mutex
-
 	// maxEvents is the capacity of the TaskEvents on the TaskState.
 	// Defaults to defaultMaxEvents but overrideable for testing.
 	maxEvents int
+
+	// serversContactedCh is passed to TaskRunners so they can detect when
+	// GetClientAllocs has been called in case of a failed restore.
+	serversContactedCh <-chan struct{}
+
+	// waitOnServers defaults to false but will be set true if a restore
+	// fails and the Run method should wait until serversContactedCh is
+	// closed.
+	waitOnServers bool
+
+	networkIsolationLock sync.Mutex
+	networkIsolationSpec *drivers.NetworkIsolationSpec
 }
 
 type Config struct {
@@ -227,6 +234,10 @@ type Config struct {
 	// DriverManager is used to dispense driver plugins and register event
 	// handlers
 	DriverManager drivermanager.Manager
+
+	// ServersContactedCh is closed when the first GetClientAllocs call to
+	// servers succeeds and allocs are synced.
+	ServersContactedCh chan struct{}
 }
 
 func NewTaskRunner(config *Config) (*TaskRunner, error) {
@@ -275,6 +286,7 @@ func NewTaskRunner(config *Config) (*TaskRunner, error) {
 		devicemanager:       config.DeviceManager,
 		driverManager:       config.DriverManager,
 		maxEvents:           defaultMaxEvents,
+		serversContactedCh:  config.ServersContactedCh,
 	}
 
 	// Create the logger based on the allocation ID
@@ -289,7 +301,7 @@ func NewTaskRunner(config *Config) (*TaskRunner, error) {
 		}
 		tr.taskResources = tres
 	} else {
-		// COMPAT(0.10): Upgrade from old resources to new resources
+		// COMPAT(0.11): Upgrade from 0.8 resources to 0.9+ resources
 		// Grab the old task resources
 		oldTr, ok := tr.alloc.TaskResources[tr.taskName]
 		if !ok {
@@ -353,6 +365,10 @@ func (tr *TaskRunner) initLabels() {
 			Name:  "task",
 			Value: tr.taskName,
 		},
+		{
+			Name:  "namespace",
+			Value: tr.alloc.Namespace,
+		},
 	}
 
 	if tr.alloc.Job.ParentID != "" {
@@ -375,20 +391,74 @@ func (tr *TaskRunner) initLabels() {
 	}
 }
 
+// Mark a task as failed and not to run.  Aimed to be invoked when alloc runner
+// prestart hooks failed.
+// Should never be called with Run().
+func (tr *TaskRunner) MarkFailedDead(reason string) {
+	defer close(tr.waitCh)
+
+	tr.stateLock.Lock()
+	if err := tr.stateDB.PutTaskRunnerLocalState(tr.allocID, tr.taskName, tr.localState); err != nil {
+		//TODO Nomad will be unable to restore this task; try to kill
+		//     it now and fail? In general we prefer to leave running
+		//     tasks running even if the agent encounters an error.
+		tr.logger.Warn("error persisting local failed task state; may be unable to restore after a Nomad restart",
+			"error", err)
+	}
+	tr.stateLock.Unlock()
+
+	event := structs.NewTaskEvent(structs.TaskSetupFailure).
+		SetDisplayMessage(reason).
+		SetFailsTask()
+	tr.UpdateState(structs.TaskStateDead, event)
+
+	// Run the stop hooks in case task was a restored task that failed prestart
+	if err := tr.stop(); err != nil {
+		tr.logger.Error("stop failed while marking task dead", "error", err)
+	}
+}
+
 // Run the TaskRunner. Starts the user's task or reattaches to a restored task.
 // Run closes WaitCh when it exits. Should be started in a goroutine.
 func (tr *TaskRunner) Run() {
-	// Mark that the run routine has been launched so that other functions can
-	// decide to use the wait channel or not.
-	tr.setRunLaunched()
-
 	defer close(tr.waitCh)
 	var result *drivers.ExitResult
+
+	tr.stateLock.RLock()
+	dead := tr.state.State == structs.TaskStateDead
+	tr.stateLock.RUnlock()
+
+	// if restoring a dead task, ensure that task is cleared and all post hooks
+	// are called without additional state updates
+	if dead {
+		// do cleanup functions without emitting any additional events/work
+		// to handle cases where we restored a dead task where client terminated
+		// after task finished before completing post-run actions.
+		tr.clearDriverHandle()
+		tr.stateUpdater.TaskStateUpdated()
+		if err := tr.stop(); err != nil {
+			tr.logger.Error("stop failed on terminal task", "error", err)
+		}
+		return
+	}
 
 	// Updates are handled asynchronously with the other hooks but each
 	// triggered update - whether due to alloc updates or a new vault token
 	// - should be handled serially.
 	go tr.handleUpdates()
+
+	// If restore failed wait until servers are contacted before running.
+	// #1795
+	if tr.waitOnServers {
+		tr.logger.Info("task failed to restore; waiting to contact server before restarting")
+		select {
+		case <-tr.killCtx.Done():
+		case <-tr.shutdownCtx.Done():
+			return
+		case <-tr.serversContactedCh:
+			tr.logger.Info("server contacted; unblocking waiting task")
+		}
+	}
 
 MAIN:
 	for !tr.Alloc().TerminalStatus() {
@@ -420,7 +490,6 @@ MAIN:
 		// Run the task
 		if err := tr.runDriver(); err != nil {
 			tr.logger.Error("running driver failed", "error", err)
-			tr.EmitEvent(structs.NewTaskEvent(structs.TaskDriverFailure).SetDriverError(err))
 			tr.restartTracker.SetStartError(err)
 			goto RESTART
 		}
@@ -613,6 +682,7 @@ func (tr *TaskRunner) shouldRestart() (bool, time.Duration) {
 }
 
 // runDriver runs the driver and waits for it to exit
+// runDriver emits an appropriate task event on success/failure
 func (tr *TaskRunner) runDriver() error {
 
 	taskConfig := tr.buildTaskConfig()
@@ -638,13 +708,17 @@ func (tr *TaskRunner) runDriver() error {
 		tr.logger.Warn("some environment variables not available for rendering", "keys", strings.Join(keys, ", "))
 	}
 
-	val, diag := hclutils.ParseHclInterface(tr.task.Config, tr.taskSchema, vars)
+	val, diag, diagErrs := hclutils.ParseHclInterface(tr.task.Config, tr.taskSchema, vars)
 	if diag.HasErrors() {
-		return multierror.Append(errors.New("failed to parse config"), diag.Errs()...)
+		parseErr := multierror.Append(errors.New("failed to parse config: "), diagErrs...)
+		tr.EmitEvent(structs.NewTaskEvent(structs.TaskFailedValidation).SetValidationError(parseErr))
+		return parseErr
 	}
 
 	if err := taskConfig.EncodeDriverConfig(val); err != nil {
-		return fmt.Errorf("failed to encode driver config: %v", err)
+		encodeErr := fmt.Errorf("failed to encode driver config: %v", err)
+		tr.EmitEvent(structs.NewTaskEvent(structs.TaskFailedValidation).SetValidationError(encodeErr))
+		return encodeErr
 	}
 
 	// If there's already a task handle (eg from a Restore) there's nothing
@@ -667,16 +741,21 @@ func (tr *TaskRunner) runDriver() error {
 		if err == bstructs.ErrPluginShutdown {
 			tr.logger.Info("failed to start task because plugin shutdown unexpectedly; attempting to recover")
 			if err := tr.initDriver(); err != nil {
-				return fmt.Errorf("failed to initialize driver after it exited unexpectedly: %v", err)
+				taskErr := fmt.Errorf("failed to initialize driver after it exited unexpectedly: %v", err)
+				tr.EmitEvent(structs.NewTaskEvent(structs.TaskDriverFailure).SetDriverError(taskErr))
+				return taskErr
 			}
 
 			handle, net, err = tr.driver.StartTask(taskConfig)
 			if err != nil {
-				return fmt.Errorf("failed to start task after driver exited unexpectedly: %v", err)
+				taskErr := fmt.Errorf("failed to start task after driver exited unexpectedly: %v", err)
+				tr.EmitEvent(structs.NewTaskEvent(structs.TaskDriverFailure).SetDriverError(taskErr))
+				return taskErr
 			}
 		} else {
-			// Do *NOT* wrap the error here without maintaining
-			// whether or not is Recoverable.
+			// Do *NOT* wrap the error here without maintaining whether or not is Recoverable.
+			// You must emit a task event failure to be considered Recoverable
+			tr.EmitEvent(structs.NewTaskEvent(structs.TaskDriverFailure).SetDriverError(err))
 			return err
 		}
 	}
@@ -819,6 +898,8 @@ func (tr *TaskRunner) buildTaskConfig() *drivers.TaskConfig {
 	invocationid := uuid.Generate()[:8]
 	taskResources := tr.taskResources
 	env := tr.envBuilder.Build()
+	tr.networkIsolationLock.Lock()
+	defer tr.networkIsolationLock.Unlock()
 
 	return &drivers.TaskConfig{
 		ID:            fmt.Sprintf("%s/%s/%s", alloc.ID, task.Name, invocationid),
@@ -833,15 +914,16 @@ func (tr *TaskRunner) buildTaskConfig() *drivers.TaskConfig {
 				PercentTicks:     float64(taskResources.Cpu.CpuShares) / float64(tr.clientConfig.Node.NodeResources.Cpu.CpuShares),
 			},
 		},
-		Devices:    tr.hookResources.getDevices(),
-		Mounts:     tr.hookResources.getMounts(),
-		Env:        env.Map(),
-		DeviceEnv:  env.DeviceEnv(),
-		User:       task.User,
-		AllocDir:   tr.taskDir.AllocDir,
-		StdoutPath: tr.logmonHookConfig.stdoutFifo,
-		StderrPath: tr.logmonHookConfig.stderrFifo,
-		AllocID:    tr.allocID,
+		Devices:          tr.hookResources.getDevices(),
+		Mounts:           tr.hookResources.getMounts(),
+		Env:              env.Map(),
+		DeviceEnv:        env.DeviceEnv(),
+		User:             task.User,
+		AllocDir:         tr.taskDir.AllocDir,
+		StdoutPath:       tr.logmonHookConfig.stdoutFifo,
+		StderrPath:       tr.logmonHookConfig.stderrFifo,
+		AllocID:          tr.allocID,
+		NetworkIsolation: tr.networkIsolationSpec,
 	}
 }
 
@@ -867,8 +949,28 @@ func (tr *TaskRunner) Restore() error {
 	if taskHandle := tr.localState.TaskHandle; taskHandle != nil {
 		//TODO if RecoverTask returned the DriverNetwork we wouldn't
 		//     have to persist it at all!
-		tr.restoreHandle(taskHandle, tr.localState.DriverNetwork)
+		restored := tr.restoreHandle(taskHandle, tr.localState.DriverNetwork)
+
+		// If the handle could not be restored, the alloc is
+		// non-terminal, and the task isn't a system job: wait until
+		// servers have been contacted before running. #1795
+		if restored {
+			return nil
+		}
+
+		alloc := tr.Alloc()
+		if tr.state.State == structs.TaskStateDead || alloc.TerminalStatus() || alloc.Job.Type == structs.JobTypeSystem {
+			return nil
+		}
+
+		tr.logger.Trace("failed to reattach to task; will not run until server is contacted")
+		tr.waitOnServers = true
+
+		ev := structs.NewTaskEvent(structs.TaskRestoreFailed).
+			SetDisplayMessage("failed to restore task; will not run until server is contacted")
+		tr.UpdateState(structs.TaskStatePending, ev)
 	}
+
 	return nil
 }
 
@@ -1085,6 +1187,14 @@ func (tr *TaskRunner) Update(update *structs.Allocation) {
 	}
 }
 
+// SetNetworkIsolation is called by the PreRun allocation hook after configuring
+// the network isolation for the allocation
+func (tr *TaskRunner) SetNetworkIsolation(n *drivers.NetworkIsolationSpec) {
+	tr.networkIsolationLock.Lock()
+	tr.networkIsolationSpec = n
+	tr.networkIsolationLock.Unlock()
+}
+
 // triggerUpdate if there isn't already an update pending. Should be called
 // instead of calling updateHooks directly to serialize runs of update hooks.
 // TaskRunner state should be updated prior to triggering update hooks.
@@ -1141,6 +1251,19 @@ func (tr *TaskRunner) UpdateStats(ru *cstructs.TaskResourceUsage) {
 
 //TODO Remove Backwardscompat or use tr.Alloc()?
 func (tr *TaskRunner) setGaugeForMemory(ru *cstructs.TaskResourceUsage) {
+	alloc := tr.Alloc()
+	var allocatedMem float32
+	if alloc.AllocatedResources != nil {
+		if taskRes := alloc.AllocatedResources.Tasks[tr.taskName]; taskRes != nil {
+			// Convert to bytes to match other memory metrics
+			allocatedMem = float32(taskRes.Memory.MemoryMB) * 1024 * 1024
+		}
+	} else if taskRes := alloc.TaskResources[tr.taskName]; taskRes != nil {
+		// COMPAT(0.11) Remove in 0.11 when TaskResources is removed
+		allocatedMem = float32(taskRes.MemoryMB) * 1024 * 1024
+
+	}
+
 	if !tr.clientConfig.DisableTaggedMetrics {
 		metrics.SetGaugeWithLabels([]string{"client", "allocs", "memory", "rss"},
 			float32(ru.ResourceUsage.MemoryStats.RSS), tr.baseLabels)
@@ -1156,16 +1279,23 @@ func (tr *TaskRunner) setGaugeForMemory(ru *cstructs.TaskResourceUsage) {
 			float32(ru.ResourceUsage.MemoryStats.KernelUsage), tr.baseLabels)
 		metrics.SetGaugeWithLabels([]string{"client", "allocs", "memory", "kernel_max_usage"},
 			float32(ru.ResourceUsage.MemoryStats.KernelMaxUsage), tr.baseLabels)
+		if allocatedMem > 0 {
+			metrics.SetGaugeWithLabels([]string{"client", "allocs", "memory", "allocated"},
+				allocatedMem, tr.baseLabels)
+		}
 	}
 
 	if tr.clientConfig.BackwardsCompatibleMetrics {
-		metrics.SetGauge([]string{"client", "allocs", tr.alloc.Job.Name, tr.alloc.TaskGroup, tr.allocID, tr.taskName, "memory", "rss"}, float32(ru.ResourceUsage.MemoryStats.RSS))
-		metrics.SetGauge([]string{"client", "allocs", tr.alloc.Job.Name, tr.alloc.TaskGroup, tr.allocID, tr.taskName, "memory", "cache"}, float32(ru.ResourceUsage.MemoryStats.Cache))
-		metrics.SetGauge([]string{"client", "allocs", tr.alloc.Job.Name, tr.alloc.TaskGroup, tr.allocID, tr.taskName, "memory", "swap"}, float32(ru.ResourceUsage.MemoryStats.Swap))
-		metrics.SetGauge([]string{"client", "allocs", tr.alloc.Job.Name, tr.alloc.TaskGroup, tr.allocID, tr.taskName, "memory", "usage"}, float32(ru.ResourceUsage.MemoryStats.Usage))
-		metrics.SetGauge([]string{"client", "allocs", tr.alloc.Job.Name, tr.alloc.TaskGroup, tr.allocID, tr.taskName, "memory", "max_usage"}, float32(ru.ResourceUsage.MemoryStats.MaxUsage))
-		metrics.SetGauge([]string{"client", "allocs", tr.alloc.Job.Name, tr.alloc.TaskGroup, tr.allocID, tr.taskName, "memory", "kernel_usage"}, float32(ru.ResourceUsage.MemoryStats.KernelUsage))
-		metrics.SetGauge([]string{"client", "allocs", tr.alloc.Job.Name, tr.alloc.TaskGroup, tr.allocID, tr.taskName, "memory", "kernel_max_usage"}, float32(ru.ResourceUsage.MemoryStats.KernelMaxUsage))
+		metrics.SetGauge([]string{"client", "allocs", alloc.Job.Name, alloc.TaskGroup, tr.allocID, tr.taskName, "memory", "rss"}, float32(ru.ResourceUsage.MemoryStats.RSS))
+		metrics.SetGauge([]string{"client", "allocs", alloc.Job.Name, alloc.TaskGroup, tr.allocID, tr.taskName, "memory", "cache"}, float32(ru.ResourceUsage.MemoryStats.Cache))
+		metrics.SetGauge([]string{"client", "allocs", alloc.Job.Name, alloc.TaskGroup, tr.allocID, tr.taskName, "memory", "swap"}, float32(ru.ResourceUsage.MemoryStats.Swap))
+		metrics.SetGauge([]string{"client", "allocs", alloc.Job.Name, alloc.TaskGroup, tr.allocID, tr.taskName, "memory", "usage"}, float32(ru.ResourceUsage.MemoryStats.Usage))
+		metrics.SetGauge([]string{"client", "allocs", alloc.Job.Name, alloc.TaskGroup, tr.allocID, tr.taskName, "memory", "max_usage"}, float32(ru.ResourceUsage.MemoryStats.MaxUsage))
+		metrics.SetGauge([]string{"client", "allocs", alloc.Job.Name, alloc.TaskGroup, tr.allocID, tr.taskName, "memory", "kernel_usage"}, float32(ru.ResourceUsage.MemoryStats.KernelUsage))
+		metrics.SetGauge([]string{"client", "allocs", alloc.Job.Name, alloc.TaskGroup, tr.allocID, tr.taskName, "memory", "kernel_max_usage"}, float32(ru.ResourceUsage.MemoryStats.KernelMaxUsage))
+		if allocatedMem > 0 {
+			metrics.SetGauge([]string{"client", "allocs", alloc.Job.Name, alloc.TaskGroup, tr.allocID, tr.taskName, "memory", "allocated"}, allocatedMem)
+		}
 	}
 }
 
@@ -1228,4 +1358,17 @@ func appendTaskEvent(state *structs.TaskState, event *structs.TaskEvent, capacit
 	}
 
 	state.Events = append(state.Events, event)
+}
+
+func (tr *TaskRunner) TaskExecHandler() drivermanager.TaskExecHandler {
+	// Check it is running
+	handle := tr.getDriverHandle()
+	if handle == nil {
+		return nil
+	}
+	return handle.ExecStreaming
+}
+
+func (tr *TaskRunner) DriverCapabilities() (*drivers.Capabilities, error) {
+	return tr.driver.Capabilities()
 }

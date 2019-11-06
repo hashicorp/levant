@@ -10,15 +10,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	tomb "gopkg.in/tomb.v2"
+	"gopkg.in/tomb.v2"
 
-	metrics "github.com/armon/go-metrics"
+	"github.com/armon/go-metrics"
 	log "github.com/hashicorp/go-hclog"
-	multierror "github.com/hashicorp/go-multierror"
-	vapi "github.com/hashicorp/vault/api"
-
+	"github.com/hashicorp/go-multierror"
 	"github.com/hashicorp/nomad/nomad/structs"
 	"github.com/hashicorp/nomad/nomad/structs/config"
+	vapi "github.com/hashicorp/vault/api"
 	"github.com/mitchellh/mapstructure"
 
 	"golang.org/x/sync/errgroup"
@@ -132,7 +131,7 @@ type VaultClient interface {
 
 	// EmitStats emits that clients statistics at the given period until stopCh
 	// is called.
-	EmitStats(period time.Duration, stopCh chan struct{})
+	EmitStats(period time.Duration, stopCh <-chan struct{})
 }
 
 // VaultStats returns all the stats about Vault tokens created and managed by
@@ -173,8 +172,17 @@ type vaultClient struct {
 	// limiter is used to rate limit requests to Vault
 	limiter *rate.Limiter
 
-	// client is the Vault API client
+	// client is the Vault API client used for Namespace-relative integrations
+	// with the Vault API (anything except `/v1/sys`). If this server is not
+	// configured to reference a Vault namespace, this will point to the same
+	// client as clientSys
 	client *vapi.Client
+
+	// clientSys is the Vault API client used for non-Namespace-relative integrations
+	// with the Vault API (anything involving `/v1/sys`). This client is never configured
+	// with a Vault namespace, because these endpoints may return errors if a namespace
+	// header is provided
+	clientSys *vapi.Client
 
 	// auth is the Vault token auth API client
 	auth *vapi.TokenAuth
@@ -225,6 +233,9 @@ type vaultClient struct {
 	// l is used to lock the configuration aspects of the client such that
 	// multiple callers can't cause conflicting config updates
 	l sync.Mutex
+
+	// setConfigLock serializes access to the SetConfig method
+	setConfigLock sync.Mutex
 }
 
 // NewVaultClient returns a Vault client from the given config. If the client
@@ -303,8 +314,11 @@ func (v *vaultClient) SetActive(active bool) {
 func (v *vaultClient) flush() {
 	v.l.Lock()
 	defer v.l.Unlock()
+	v.revLock.Lock()
+	defer v.revLock.Unlock()
 
 	v.client = nil
+	v.clientSys = nil
 	v.auth = nil
 	v.connEstablished = false
 	v.connEstablishedErr = nil
@@ -321,6 +335,8 @@ func (v *vaultClient) SetConfig(config *config.VaultConfig) error {
 	if config == nil {
 		return fmt.Errorf("must pass valid VaultConfig")
 	}
+	v.setConfigLock.Lock()
+	defer v.setConfigLock.Unlock()
 
 	v.l.Lock()
 	defer v.l.Unlock()
@@ -332,12 +348,17 @@ func (v *vaultClient) SetConfig(config *config.VaultConfig) error {
 
 	// Kill any background routines
 	if v.running {
-		// Stop accepting any new request
-		v.connEstablished = false
-
-		// Kill any background routine and create a new tomb
+		// Kill any background routine
 		v.tomb.Kill(nil)
+
+		// Locking around tomb.Wait can deadlock with
+		// establishConnection exiting, so we must unlock here.
+		v.l.Unlock()
 		v.tomb.Wait()
+		v.l.Lock()
+
+		// Stop accepting any new requests
+		v.connEstablished = false
 		v.tomb = &tomb.Tomb{}
 		v.running = false
 	}
@@ -400,11 +421,25 @@ func (v *vaultClient) buildClient() error {
 		return err
 	}
 
-	// Set the token and store the client
+	// Store the client, create/assign the /sys client
+	v.client = client
+	if v.config.Namespace != "" {
+		v.logger.Debug("configuring Vault namespace", "namespace", v.config.Namespace)
+		v.clientSys, err = vapi.NewClient(apiConf)
+		if err != nil {
+			v.logger.Error("failed to create Vault sys client and not retrying", "error", err)
+			return err
+		}
+		client.SetNamespace(v.config.Namespace)
+	} else {
+		v.clientSys = client
+	}
+
+	// Set the token
 	v.token = v.config.Token
 	client.SetToken(v.token)
-	v.client = client
 	v.auth = client.Auth().Token()
+
 	return nil
 }
 
@@ -425,7 +460,7 @@ OUTER:
 		case <-retryTimer.C:
 			// Ensure the API is reachable
 			if !initStatus {
-				if _, err := v.client.Sys().InitStatus(); err != nil {
+				if _, err := v.clientSys.Sys().InitStatus(); err != nil {
 					v.logger.Warn("failed to contact Vault API", "retry", v.config.ConnectionRetryIntv, "error", err)
 					retryTimer.Reset(v.config.ConnectionRetryIntv)
 					continue OUTER
@@ -1290,7 +1325,7 @@ func (v *vaultClient) stats() *VaultStats {
 }
 
 // EmitStats is used to export metrics about the blocked eval tracker while enabled
-func (v *vaultClient) EmitStats(period time.Duration, stopCh chan struct{}) {
+func (v *vaultClient) EmitStats(period time.Duration, stopCh <-chan struct{}) {
 	for {
 		select {
 		case <-time.After(period):

@@ -5,6 +5,7 @@ package executor
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path"
@@ -17,9 +18,9 @@ import (
 	"github.com/hashicorp/consul-template/signals"
 	hclog "github.com/hashicorp/go-hclog"
 	multierror "github.com/hashicorp/go-multierror"
+	"github.com/hashicorp/nomad/client/allocdir"
 	"github.com/hashicorp/nomad/client/stats"
 	cstructs "github.com/hashicorp/nomad/client/structs"
-	"github.com/hashicorp/nomad/helper/discover"
 	shelpers "github.com/hashicorp/nomad/helper/stats"
 	"github.com/hashicorp/nomad/helper/uuid"
 	"github.com/hashicorp/nomad/nomad/structs"
@@ -29,6 +30,7 @@ import (
 	cgroupFs "github.com/opencontainers/runc/libcontainer/cgroups/fs"
 	lconfigs "github.com/opencontainers/runc/libcontainer/configs"
 	ldevices "github.com/opencontainers/runc/libcontainer/devices"
+	lutils "github.com/opencontainers/runc/libcontainer/utils"
 	"github.com/syndtr/gocapability/capability"
 	"golang.org/x/sys/unix"
 )
@@ -43,25 +45,7 @@ var (
 
 	// ExecutorCgroupMeasuredCpuStats is the list of CPU stats captures by the executor
 	ExecutorCgroupMeasuredCpuStats = []string{"System Mode", "User Mode", "Throttled Periods", "Throttled Time", "Percent"}
-
-	// allCaps is all linux capabilities which is used to configure libcontainer
-	allCaps []string
 )
-
-// initialize the allCaps var with all capabilities available on the system
-func init() {
-	last := capability.CAP_LAST_CAP
-	// workaround for RHEL6 which has no /proc/sys/kernel/cap_last_cap
-	if last == capability.Cap(63) {
-		last = capability.CAP_BLOCK_SUSPEND
-	}
-	for _, cap := range capability.List() {
-		if cap > last {
-			continue
-		}
-		allCaps = append(allCaps, fmt.Sprintf("CAP_%s", strings.ToUpper(cap.String())))
-	}
-}
 
 // LibcontainerExecutor implements an Executor with the runc/libcontainer api
 type LibcontainerExecutor struct {
@@ -98,12 +82,7 @@ func NewExecutorWithIsolation(logger hclog.Logger) Executor {
 
 // Launch creates a new container in libcontainer and starts a new process with it
 func (l *LibcontainerExecutor) Launch(command *ExecCommand) (*ProcessState, error) {
-	l.logger.Debug("launching command", "command", command.Cmd, "args", strings.Join(command.Args, " "))
-	// Find the nomad executable to launch the executor process with
-	bin, err := discover.NomadExecutable()
-	if err != nil {
-		return nil, fmt.Errorf("unable to find the nomad binary: %v", err)
-	}
+	l.logger.Trace("preparing to launch command", "command", command.Cmd, "args", strings.Join(command.Args, " "))
 
 	if command.Resources == nil {
 		command.Resources = &drivers.Resources{
@@ -126,7 +105,10 @@ func (l *LibcontainerExecutor) Launch(command *ExecCommand) (*ProcessState, erro
 	factory, err := libcontainer.New(
 		path.Join(command.TaskDir, "../alloc/container"),
 		libcontainer.Cgroupfs,
-		libcontainer.InitArgs(bin, "libcontainer-shim"),
+		// note that os.Args[0] refers to the executor shim typically
+		// and first args arguments is ignored now due
+		// until https://github.com/opencontainers/runc/pull/1888 is merged
+		libcontainer.InitArgs(os.Args[0], "libcontainer-shim"),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create factory: %v", err)
@@ -145,7 +127,8 @@ func (l *LibcontainerExecutor) Launch(command *ExecCommand) (*ProcessState, erro
 	l.container = container
 
 	// Look up the binary path and make it executable
-	absPath, err := lookupBin(command.TaskDir, command.Cmd)
+	absPath, err := lookupTaskBin(command)
+
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +139,7 @@ func (l *LibcontainerExecutor) Launch(command *ExecCommand) (*ProcessState, erro
 
 	path := absPath
 
-	// Determine the path to run as it may have to be relative to the chroot.
+	// Ensure that the path is contained in the chroot, and find it relative to the container
 	rel, err := filepath.Rel(command.TaskDir, path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to determine relative path base=%q target=%q: %v", command.TaskDir, path, err)
@@ -178,6 +161,8 @@ func (l *LibcontainerExecutor) Launch(command *ExecCommand) (*ProcessState, erro
 	if err != nil {
 		return nil, err
 	}
+
+	l.logger.Debug("launching", "command", command.Cmd, "args", strings.Join(command.Args, " "))
 
 	// the task process will be started by the container
 	process := &libcontainer.Process{
@@ -507,6 +492,53 @@ func (l *LibcontainerExecutor) Exec(deadline time.Time, cmd string, args []strin
 
 }
 
+func (l *LibcontainerExecutor) newTerminalSocket() (pty func() (*os.File, error), tty *os.File, err error) {
+	parent, child, err := lutils.NewSockPair("socket")
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create terminal: %v", err)
+	}
+
+	return func() (*os.File, error) { return lutils.RecvFd(parent) }, child, err
+
+}
+
+func (l *LibcontainerExecutor) ExecStreaming(ctx context.Context, cmd []string, tty bool,
+	stream drivers.ExecTaskStream) error {
+
+	// the task process will be started by the container
+	process := &libcontainer.Process{
+		Args: cmd,
+		Env:  l.userProc.Env,
+		User: l.userProc.User,
+		Init: false,
+		Cwd:  "/",
+	}
+
+	execHelper := &execHelper{
+		logger: l.logger,
+
+		newTerminal: l.newTerminalSocket,
+		setTTY: func(tty *os.File) error {
+			process.ConsoleSocket = tty
+			return nil
+		},
+		setIO: func(stdin io.Reader, stdout, stderr io.Writer) error {
+			process.Stdin = stdin
+			process.Stdout = stdout
+			process.Stderr = stderr
+			return nil
+		},
+
+		processStart: func() error { return l.container.Run(process) },
+		processWait: func() (*os.ProcessState, error) {
+			return process.Wait()
+		},
+	}
+
+	return execHelper.run(ctx, tty, stream)
+
+}
+
 type waitResult struct {
 	ps  *os.ProcessState
 	err error
@@ -519,15 +551,42 @@ func (l *LibcontainerExecutor) handleExecWait(ch chan *waitResult, process *libc
 
 func configureCapabilities(cfg *lconfigs.Config, command *ExecCommand) error {
 	// TODO: allow better control of these
-	cfg.Capabilities = &lconfigs.Capabilities{
-		Bounding:    allCaps,
-		Permitted:   allCaps,
-		Inheritable: allCaps,
-		Ambient:     allCaps,
-		Effective:   allCaps,
+	// use capabilities list as prior to adopting libcontainer in 0.9
+	allCaps := supportedCaps()
+
+	// match capabilities used in Nomad 0.8
+	if command.User == "root" {
+		cfg.Capabilities = &lconfigs.Capabilities{
+			Bounding:    allCaps,
+			Permitted:   allCaps,
+			Effective:   allCaps,
+			Ambient:     nil,
+			Inheritable: nil,
+		}
+	} else {
+		cfg.Capabilities = &lconfigs.Capabilities{
+			Bounding: allCaps,
+		}
 	}
 
 	return nil
+}
+
+// supportedCaps returns a list of all supported capabilities in kernel
+func supportedCaps() []string {
+	allCaps := []string{}
+	last := capability.CAP_LAST_CAP
+	// workaround for RHEL6 which has no /proc/sys/kernel/cap_last_cap
+	if last == capability.Cap(63) {
+		last = capability.CAP_BLOCK_SUSPEND
+	}
+	for _, cap := range capability.List() {
+		if cap > last {
+			continue
+		}
+		allCaps = append(allCaps, fmt.Sprintf("CAP_%s", strings.ToUpper(cap.String())))
+	}
+	return allCaps
 }
 
 // configureIsolation prepares the isolation primitives of the container.
@@ -546,6 +605,13 @@ func configureIsolation(cfg *lconfigs.Config, command *ExecCommand) error {
 	// launch with mount namespace
 	cfg.Namespaces = lconfigs.Namespaces{
 		{Type: lconfigs.NEWNS},
+	}
+
+	if command.NetworkIsolation != nil {
+		cfg.Namespaces = append(cfg.Namespaces, lconfigs.Namespace{
+			Type: lconfigs.NEWNET,
+			Path: command.NetworkIsolation.Path,
+		})
 	}
 
 	// paths to mask using a bind mount to /dev/null to prevent reading
@@ -625,7 +691,7 @@ func configureCgroups(cfg *lconfigs.Config, command *ExecCommand) error {
 	}
 
 	id := uuid.Generate()
-	cfg.Cgroups.Path = filepath.Join(defaultCgroupParent, id)
+	cfg.Cgroups.Path = filepath.Join("/", defaultCgroupParent, id)
 
 	if command.Resources == nil || command.Resources.NomadResources == nil {
 		return nil
@@ -769,4 +835,58 @@ func cmdMounts(mounts []*drivers.MountConfig) []*lconfigs.Mount {
 	}
 
 	return r
+}
+
+// lookupTaskBin finds the file `bin` in taskDir/local, taskDir in that order, then performs
+// a PATH search inside taskDir. It returns an absolute path. See also executor.lookupBin
+func lookupTaskBin(command *ExecCommand) (string, error) {
+	taskDir := command.TaskDir
+	bin := command.Cmd
+
+	// Check in the local directory
+	localDir := filepath.Join(taskDir, allocdir.TaskLocal)
+	local := filepath.Join(localDir, bin)
+	if _, err := os.Stat(local); err == nil {
+		return local, nil
+	}
+
+	// Check at the root of the task's directory
+	root := filepath.Join(taskDir, bin)
+	if _, err := os.Stat(root); err == nil {
+		return root, nil
+	}
+
+	if strings.Contains(bin, "/") {
+		return "", fmt.Errorf("file %s not found under path %s", bin, taskDir)
+	}
+
+	// Find the PATH
+	path := "/usr/local/bin:/usr/bin:/bin"
+	for _, e := range command.Env {
+		if strings.HasPrefix("PATH=", e) {
+			path = e[5:]
+		}
+	}
+
+	return lookPathIn(path, taskDir, bin)
+}
+
+// lookPathIn looks for a file with PATH inside the directory root. Like exec.LookPath
+func lookPathIn(path string, root string, bin string) (string, error) {
+	// exec.LookPath(file string)
+	for _, dir := range filepath.SplitList(path) {
+		if dir == "" {
+			// match unix shell behavior, empty path element == .
+			dir = "."
+		}
+		path := filepath.Join(root, dir, bin)
+		f, err := os.Stat(path)
+		if err != nil {
+			continue
+		}
+		if m := f.Mode(); !m.IsDir() {
+			return path, nil
+		}
+	}
+	return "", fmt.Errorf("file %s not found under path %s", bin, root)
 }

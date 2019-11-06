@@ -224,10 +224,10 @@ func TestFSM_DeregisterNode(t *testing.T) {
 		t.Fatalf("resp: %v", resp)
 	}
 
-	req2 := structs.NodeDeregisterRequest{
-		NodeID: node.ID,
+	req2 := structs.NodeBatchDeregisterRequest{
+		NodeIDs: []string{node.ID},
 	}
-	buf, err = structs.Encode(structs.NodeDeregisterRequestType, req2)
+	buf, err = structs.Encode(structs.NodeBatchDeregisterRequestType, req2)
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
@@ -2701,47 +2701,6 @@ func TestFSM_SnapshotRestore_SchedulerConfiguration(t *testing.T) {
 
 }
 
-func TestFSM_SnapshotRestore_AddMissingSummary(t *testing.T) {
-	t.Parallel()
-	// Add some state
-	fsm := testFSM(t)
-	state := fsm.State()
-
-	// make an allocation
-	alloc := mock.Alloc()
-	state.UpsertJob(1010, alloc.Job)
-	state.UpsertAllocs(1011, []*structs.Allocation{alloc})
-
-	// Delete the summary
-	state.DeleteJobSummary(1040, alloc.Namespace, alloc.Job.ID)
-
-	// Delete the index
-	if err := state.RemoveIndex("job_summary"); err != nil {
-		t.Fatalf("err: %v", err)
-	}
-
-	fsm2 := testSnapshotRestore(t, fsm)
-	state2 := fsm2.State()
-	latestIndex, _ := state.LatestIndex()
-
-	ws := memdb.NewWatchSet()
-	out, _ := state2.JobSummaryByID(ws, alloc.Namespace, alloc.Job.ID)
-	expected := structs.JobSummary{
-		JobID:     alloc.Job.ID,
-		Namespace: alloc.Job.Namespace,
-		Summary: map[string]structs.TaskGroupSummary{
-			"web": {
-				Starting: 1,
-			},
-		},
-		CreateIndex: 1010,
-		ModifyIndex: latestIndex,
-	}
-	if !reflect.DeepEqual(&expected, out) {
-		t.Fatalf("expected: %#v, actual: %#v", &expected, out)
-	}
-}
-
 func TestFSM_ReconcileSummaries(t *testing.T) {
 	t.Parallel()
 	// Add some state
@@ -2971,11 +2930,12 @@ func TestFSM_SchedulerConfig(t *testing.T) {
 
 	require := require.New(t)
 
-	// Set the autopilot config using a request.
+	// Set the scheduler config using a request.
 	req := structs.SchedulerSetConfigRequest{
 		Config: structs.SchedulerConfiguration{
 			PreemptionConfig: structs.PreemptionConfig{
 				SystemSchedulerEnabled: true,
+				BatchSchedulerEnabled:  true,
 			},
 		},
 	}
@@ -2992,10 +2952,11 @@ func TestFSM_SchedulerConfig(t *testing.T) {
 	require.Nil(err)
 
 	require.Equal(config.PreemptionConfig.SystemSchedulerEnabled, req.Config.PreemptionConfig.SystemSchedulerEnabled)
+	require.Equal(config.PreemptionConfig.BatchSchedulerEnabled, req.Config.PreemptionConfig.BatchSchedulerEnabled)
 
 	// Now use CAS and provide an old index
 	req.CAS = true
-	req.Config.PreemptionConfig = structs.PreemptionConfig{SystemSchedulerEnabled: false}
+	req.Config.PreemptionConfig = structs.PreemptionConfig{SystemSchedulerEnabled: false, BatchSchedulerEnabled: false}
 	req.Config.ModifyIndex = config.ModifyIndex - 1
 	buf, err = structs.Encode(structs.SchedulerConfigRequestType, req)
 	require.Nil(err)
@@ -3009,4 +2970,5 @@ func TestFSM_SchedulerConfig(t *testing.T) {
 	require.Nil(err)
 	// Verify that preemption is still enabled
 	require.True(config.PreemptionConfig.SystemSchedulerEnabled)
+	require.True(config.PreemptionConfig.BatchSchedulerEnabled)
 }

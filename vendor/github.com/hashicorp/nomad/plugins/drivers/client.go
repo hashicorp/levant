@@ -55,6 +55,11 @@ func (d *driverPluginClient) Capabilities() (*Capabilities, error) {
 	if resp.Capabilities != nil {
 		caps.SendSignals = resp.Capabilities.SendSignals
 		caps.Exec = resp.Capabilities.Exec
+		caps.MustInitiateNetwork = resp.Capabilities.MustCreateNetwork
+
+		for _, mode := range resp.Capabilities.NetworkIsolationModes {
+			caps.NetIsolationModes = append(caps.NetIsolationModes, netIsolationModeFromProto(mode))
+		}
 
 		switch resp.Capabilities.FsIsolation {
 		case proto.DriverCapabilities_NONE:
@@ -269,7 +274,7 @@ func (d *driverPluginClient) TaskStats(ctx context.Context, taskID string, inter
 				return nil, structs.NewRecoverableError(err, rec.Recoverable)
 			}
 		}
-		return nil, err
+		return nil, grpcutils.HandleGrpcErr(err, d.doneCtx)
 	}
 
 	ch := make(chan *cstructs.TaskResourceUsage, 1)
@@ -392,5 +397,97 @@ func (d *driverPluginClient) ExecTask(taskID string, cmd []string, timeout time.
 	}
 
 	return result, nil
+}
 
+var _ ExecTaskStreamingRawDriver = (*driverPluginClient)(nil)
+
+func (d *driverPluginClient) ExecTaskStreamingRaw(ctx context.Context,
+	taskID string,
+	command []string,
+	tty bool,
+	execStream ExecTaskStream) error {
+
+	stream, err := d.client.ExecTaskStreaming(ctx)
+	if err != nil {
+		return grpcutils.HandleGrpcErr(err, d.doneCtx)
+	}
+
+	err = stream.Send(&proto.ExecTaskStreamingRequest{
+		Setup: &proto.ExecTaskStreamingRequest_Setup{
+			TaskId:  taskID,
+			Command: command,
+			Tty:     tty,
+		},
+	})
+	if err != nil {
+		return grpcutils.HandleGrpcErr(err, d.doneCtx)
+	}
+
+	errCh := make(chan error, 1)
+
+	go func() {
+		for {
+			m, err := execStream.Recv()
+			if err == io.EOF {
+				return
+			} else if err != nil {
+				errCh <- err
+				return
+			}
+
+			if err := stream.Send(m); err != nil {
+				errCh <- err
+				return
+			}
+
+		}
+	}()
+
+	for {
+		select {
+		case err := <-errCh:
+			return err
+		default:
+		}
+
+		m, err := stream.Recv()
+		if err == io.EOF {
+			// Once we get to the end of stream successfully, we can ignore errCh:
+			// e.g. input write failures after process terminates shouldn't cause method to fail
+			return nil
+		} else if err != nil {
+			return err
+		}
+
+		if err := execStream.Send(m); err != nil {
+			return err
+		}
+	}
+}
+
+func (d *driverPluginClient) CreateNetwork(allocID string) (*NetworkIsolationSpec, bool, error) {
+	req := &proto.CreateNetworkRequest{
+		AllocId: allocID,
+	}
+
+	resp, err := d.client.CreateNetwork(d.doneCtx, req)
+	if err != nil {
+		return nil, false, grpcutils.HandleGrpcErr(err, d.doneCtx)
+	}
+
+	return NetworkIsolationSpecFromProto(resp.IsolationSpec), resp.Created, nil
+}
+
+func (d *driverPluginClient) DestroyNetwork(allocID string, spec *NetworkIsolationSpec) error {
+	req := &proto.DestroyNetworkRequest{
+		AllocId:       allocID,
+		IsolationSpec: NetworkIsolationSpecToProto(spec),
+	}
+
+	_, err := d.client.DestroyNetwork(d.doneCtx, req)
+	if err != nil {
+		return grpcutils.HandleGrpcErr(err, d.doneCtx)
+	}
+
+	return nil
 }

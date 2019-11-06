@@ -8,15 +8,15 @@ CONSULCONFIGDIR=/etc/consul.d
 VAULTCONFIGDIR=/etc/vault.d
 NOMADCONFIGDIR=/etc/nomad.d
 CONSULTEMPLATECONFIGDIR=/etc/consul-template.d
-HADOOP_VERSION=hadoop-2.7.6
+HADOOP_VERSION=hadoop-2.7.7
 HADOOPCONFIGDIR=/usr/local/$HADOOP_VERSION/etc/hadoop
 HOME_DIR=ubuntu
 
 # Wait for network
 sleep 15
 
-# IP_ADDRESS=$(curl http://instance-data/latest/meta-data/local-ipv4)
-IP_ADDRESS="$(/sbin/ifconfig eth0 | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1}')"
+IP_ADDRESS=$(curl http://instance-data/latest/meta-data/local-ipv4)
+# IP_ADDRESS="$(/sbin/ifconfig eth0 | grep 'inet addr:' | cut -d: -f2 | awk '{ print $1}')"
 DOCKER_BRIDGE_IP_ADDRESS=(`ifconfig docker0 2>/dev/null|awk '/inet addr:/ {print $2}'|sed 's/addr://'`)
 CLOUD=$1
 SERVER_COUNT=$2
@@ -30,6 +30,7 @@ sed -i "s/RETRY_JOIN/$RETRY_JOIN/g" $CONFIGDIR/consul.json
 sudo cp $CONFIGDIR/consul.json $CONSULCONFIGDIR
 sudo cp $CONFIGDIR/consul_$CLOUD.service /etc/systemd/system/consul.service
 
+sudo systemctl enable consul.service
 sudo systemctl start consul.service
 sleep 10
 export CONSUL_HTTP_ADDR=$IP_ADDRESS:8500
@@ -40,6 +41,7 @@ sed -i "s/IP_ADDRESS/$IP_ADDRESS/g" $CONFIGDIR/vault.hcl
 sudo cp $CONFIGDIR/vault.hcl $VAULTCONFIGDIR
 sudo cp $CONFIGDIR/vault.service /etc/systemd/system/vault.service
 
+sudo systemctl enable vault.service
 sudo systemctl start vault.service
 
 # Nomad
@@ -56,6 +58,7 @@ sed -i "s/SERVER_COUNT/$SERVER_COUNT/g" $CONFIGDIR/nomad.hcl
 sudo cp $CONFIGDIR/nomad.hcl $NOMADCONFIGDIR
 sudo cp $CONFIGDIR/nomad.service /etc/systemd/system/nomad.service
 
+sudo systemctl enable nomad.service
 sudo systemctl start nomad.service
 sleep 10
 export NOMAD_ADDR=http://$IP_ADDRESS:4646

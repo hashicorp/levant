@@ -29,7 +29,7 @@ The table below shows this endpoint's support for
 ### Parameters
 
 - `prefix` `(string: "")` - Specifies a string to filter jobs on based on
-  an index prefix. This is specified as a querystring parameter.
+  an index prefix. This is specified as a query string parameter.
 
 ### Sample Request
 
@@ -146,6 +146,9 @@ The table below shows this endpoint's support for
                         "global",
                         "cache"
                     ],
+                    "Meta": {
+                      "meta": "for my service"
+                    },
                     "PortLabel": "db",
                     "AddressMode": "",
                     "Checks": [{
@@ -213,7 +216,7 @@ The table below shows this endpoint's support for
 ```text
 $ curl \
     --request POST \
-    --data @my-job.json \
+    --data @payload.json \
     https://localhost:4646/v1/jobs
 ```
 
@@ -269,7 +272,7 @@ The table below shows this endpoint's support for
 ```text
 $ curl \
     --request POST \
-    --data '{"Canonicalize": true, "JobHCL": "job \"my-job\" {}"}' \
+    --data @payload.json \
     https://localhost:4646/v1/jobs/parse
 ```
 
@@ -966,6 +969,10 @@ The table below shows this endpoint's support for
 - `:job_id` `(string: <required>)` - Specifies the ID of the job (as specified in
   the job file during submission). This is specified as part of the path.
 
+- `all` `(bool: false)` - Specifies whether the list of deployments should
+  include deployments from a previously registered job with the same ID. This is
+  possible if the job is deregistered and reregistered.
+
 ### Sample Request
 
 ```text
@@ -1252,7 +1259,7 @@ The table below shows this endpoint's support for
 ```text
 $ curl \
     --request POST \
-    --payload @payload.json \
+    --data @payload.json \
     https://localhost:4646/v1/job/my-job/dispatch
 ```
 
@@ -1295,6 +1302,9 @@ The table below shows this endpoint's support for
   job's version. This is checked and acts as a check-and-set value before
   reverting to the specified job.
 
+- `VaultToken` `(string: "")` - Optional value specifying the [vault token](/docs/commands/job/revert.html)
+  used for Vault [policy authentication checking](/docs/configuration/vault.html#allow_unauthenticated).
+
 ### Sample Payload
 
 ```json
@@ -1309,7 +1319,7 @@ The table below shows this endpoint's support for
 ```text
 $ curl \
     --request POST \
-    --payload @payload.json \
+    --data @payload.json \
     https://localhost:4646/v1/job/my-job/revert
 ```
 
@@ -1365,7 +1375,7 @@ The table below shows this endpoint's support for
 ```text
 $ curl \
     --request POST \
-    --payload @payload.json \
+    --data @payload.json \
     https://localhost:4646/v1/job/my-job/stable
 ```
 
@@ -1485,7 +1495,7 @@ The table below shows this endpoint's support for
 ```text
 $ curl \
     --request POST \
-    --payload @payload.json \
+    --data @payload.json \
     https://localhost:4646/v1/job/my-job/plan
 ```
 
@@ -1719,7 +1729,7 @@ The table below shows this endpoint's support for
 - `:job_id` `(string: <required>)` - Specifies the ID of the job (as specified in
   the job file during submission). This is specified as part of the path.
 
-- `Purge` `(bool: false)` - Specifies that the job should stopped and purged
+- `purge` `(bool: false)` - Specifies that the job should stopped and purged
   immediately. This means the job will not be queryable after being stopped. If
   not set, the job will be purged by the garbage collector.
 

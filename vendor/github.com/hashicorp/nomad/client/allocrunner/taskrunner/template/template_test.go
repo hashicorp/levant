@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/hashicorp/nomad/client/config"
 	"github.com/hashicorp/nomad/client/taskenv"
 	"github.com/hashicorp/nomad/helper"
+	"github.com/hashicorp/nomad/helper/uuid"
 	"github.com/hashicorp/nomad/nomad/mock"
 	"github.com/hashicorp/nomad/nomad/structs"
 	sconfig "github.com/hashicorp/nomad/nomad/structs/config"
@@ -34,8 +36,9 @@ type MockTaskHooks struct {
 	Restarts  int
 	RestartCh chan struct{}
 
-	Signals  []string
-	SignalCh chan struct{}
+	Signals    []string
+	SignalCh   chan struct{}
+	signalLock sync.Mutex
 
 	// SignalError is returned when Signal is called on the mock hook
 	SignalError error
@@ -68,7 +71,9 @@ func (m *MockTaskHooks) Restart(ctx context.Context, event *structs.TaskEvent, f
 }
 
 func (m *MockTaskHooks) Signal(event *structs.TaskEvent, s string) error {
+	m.signalLock.Lock()
 	m.Signals = append(m.Signals, s)
+	m.signalLock.Unlock()
 	select {
 	case m.SignalCh <- struct{}{}:
 	default:
@@ -120,8 +125,13 @@ func newTestHarness(t *testing.T, templates []*structs.Template, consul, vault b
 		mockHooks: NewMockTaskHooks(),
 		templates: templates,
 		node:      mock.Node(),
-		config:    &config.Config{Region: region},
-		emitRate:  DefaultMaxTemplateEventRate,
+		config: &config.Config{
+			Region: region,
+			TemplateConfig: &config.ClientTemplateConfig{
+				FunctionBlacklist: []string{"plugin"},
+				DisableSandbox:    false,
+			}},
+		emitRate: DefaultMaxTemplateEventRate,
 	}
 
 	// Build the task environment
@@ -837,7 +847,10 @@ OUTER:
 		case <-harness.mockHooks.RestartCh:
 			t.Fatalf("Restart with signal policy: %+v", harness.mockHooks)
 		case <-harness.mockHooks.SignalCh:
-			if len(harness.mockHooks.Signals) != 2 {
+			harness.mockHooks.signalLock.Lock()
+			s := harness.mockHooks.Signals
+			harness.mockHooks.signalLock.Unlock()
+			if len(s) != 2 {
 				continue
 			}
 			break OUTER
@@ -1013,6 +1026,52 @@ func TestTaskTemplateManager_Signal_Error(t *testing.T) {
 
 	require.NotNil(harness.mockHooks.KillEvent)
 	require.Contains(harness.mockHooks.KillEvent.DisplayMessage, "failed to send signals")
+}
+
+// TestTaskTemplateManager_FiltersProcessEnvVars asserts that we only render
+// environment variables found in task env-vars and not read the nomad host
+// process environment variables.  nomad host process environment variables
+// are to be treated the same as not found environment variables.
+func TestTaskTemplateManager_FiltersEnvVars(t *testing.T) {
+	t.Parallel()
+
+	defer os.Setenv("NOMAD_TASK_NAME", os.Getenv("NOMAD_TASK_NAME"))
+	os.Setenv("NOMAD_TASK_NAME", "should be overridden by task")
+
+	testenv := "TESTENV_" + strings.ReplaceAll(uuid.Generate(), "-", "")
+	os.Setenv(testenv, "MY_TEST_VALUE")
+	defer os.Unsetenv(testenv)
+
+	// Make a template that will render immediately
+	content := `Hello Nomad Task: {{env "NOMAD_TASK_NAME"}}
+TEST_ENV: {{ env "` + testenv + `" }}
+TEST_ENV_NOT_FOUND: {{env "` + testenv + `_NOTFOUND" }}`
+	expected := fmt.Sprintf("Hello Nomad Task: %s\nTEST_ENV: \nTEST_ENV_NOT_FOUND: ", TestTaskName)
+
+	file := "my.tmpl"
+	template := &structs.Template{
+		EmbeddedTmpl: content,
+		DestPath:     file,
+		ChangeMode:   structs.TemplateChangeModeNoop,
+	}
+
+	harness := newTestHarness(t, []*structs.Template{template}, false, false)
+	harness.start(t)
+	defer harness.stop()
+
+	// Wait for the unblock
+	select {
+	case <-harness.mockHooks.UnblockCh:
+	case <-time.After(time.Duration(5*testutil.TestMultiplier()) * time.Second):
+		require.Fail(t, "Task unblock should have been called")
+	}
+
+	// Check the file is there
+	path := filepath.Join(harness.taskDir, file)
+	raw, err := ioutil.ReadFile(path)
+	require.NoError(t, err)
+
+	require.Equal(t, expected, string(raw))
 }
 
 // TestTaskTemplateManager_Env asserts templates with the env flag set are read
@@ -1324,6 +1383,38 @@ func TestTaskTemplateManager_Config_VaultGrace(t *testing.T) {
 	assert.Nil(err, "Building Runner Config")
 	assert.NotNil(ctconf.Vault.Grace, "Vault Grace Pointer")
 	assert.Equal(10*time.Second, *ctconf.Vault.Grace, "Vault Grace Value")
+}
+
+// TestTaskTemplateManager_Config_VaultNamespace asserts the Vault namespace setting is
+// propagated to consul-template's configuration.
+func TestTaskTemplateManager_Config_VaultNamespace(t *testing.T) {
+	t.Parallel()
+	assert := assert.New(t)
+
+	testNS := "test-namespace"
+	c := config.DefaultConfig()
+	c.Node = mock.Node()
+	c.VaultConfig = &sconfig.VaultConfig{
+		Enabled:       helper.BoolToPtr(true),
+		Addr:          "https://localhost/",
+		TLSServerName: "notlocalhost",
+		Namespace:     testNS,
+	}
+
+	alloc := mock.Alloc()
+	config := &TaskTemplateManagerConfig{
+		ClientConfig: c,
+		VaultToken:   "token",
+		EnvBuilder:   taskenv.NewBuilder(c.Node, alloc, alloc.Job.TaskGroups[0].Tasks[0], c.Region),
+	}
+
+	ctmplMapping, err := parseTemplateConfigs(config)
+	assert.Nil(err, "Parsing Templates")
+
+	ctconf, err := newRunnerConfig(config, ctmplMapping)
+	assert.Nil(err, "Building Runner Config")
+	assert.NotNil(ctconf.Vault.Grace, "Vault Grace Pointer")
+	assert.Equal(testNS, *ctconf.Vault.Namespace, "Vault Namespace Value")
 }
 
 func TestTaskTemplateManager_BlockedEvents(t *testing.T) {
