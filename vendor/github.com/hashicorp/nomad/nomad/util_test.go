@@ -8,6 +8,7 @@ import (
 	version "github.com/hashicorp/go-version"
 	"github.com/hashicorp/nomad/helper/uuid"
 	"github.com/hashicorp/serf/serf"
+	"github.com/stretchr/testify/require"
 )
 
 func TestIsNomadServer(t *testing.T) {
@@ -86,23 +87,8 @@ func TestIsNomadServer(t *testing.T) {
 	}
 }
 
-func TestServersMeetMinimumVersion(t *testing.T) {
+func TestServersMeetMinimumVersionExcludingFailed(t *testing.T) {
 	t.Parallel()
-	makeMember := func(version string) serf.Member {
-		return serf.Member{
-			Name: "foo",
-			Addr: net.IP([]byte{127, 0, 0, 1}),
-			Tags: map[string]string{
-				"role":   "nomad",
-				"region": "aws",
-				"dc":     "east-aws",
-				"port":   "10000",
-				"build":  version,
-				"vsn":    "1",
-			},
-			Status: serf.StatusAlive,
-		}
-	}
 
 	cases := []struct {
 		members  []serf.Member
@@ -112,7 +98,7 @@ func TestServersMeetMinimumVersion(t *testing.T) {
 		// One server, meets reqs
 		{
 			members: []serf.Member{
-				makeMember("0.7.5"),
+				makeMember("0.7.5", serf.StatusAlive),
 			},
 			ver:      version.Must(version.NewVersion("0.7.5")),
 			expected: true,
@@ -120,7 +106,7 @@ func TestServersMeetMinimumVersion(t *testing.T) {
 		// One server in dev, meets reqs
 		{
 			members: []serf.Member{
-				makeMember("0.8.5-dev"),
+				makeMember("0.8.5-dev", serf.StatusAlive),
 			},
 			ver:      version.Must(version.NewVersion("0.7.5")),
 			expected: true,
@@ -128,7 +114,7 @@ func TestServersMeetMinimumVersion(t *testing.T) {
 		// One server with meta, meets reqs
 		{
 			members: []serf.Member{
-				makeMember("0.7.5+ent"),
+				makeMember("0.7.5+ent", serf.StatusAlive),
 			},
 			ver:      version.Must(version.NewVersion("0.7.5")),
 			expected: true,
@@ -136,16 +122,17 @@ func TestServersMeetMinimumVersion(t *testing.T) {
 		// One server, doesn't meet reqs
 		{
 			members: []serf.Member{
-				makeMember("0.7.5"),
+				makeMember("0.7.5", serf.StatusAlive),
 			},
 			ver:      version.Must(version.NewVersion("0.8.0")),
 			expected: false,
 		},
-		// Multiple servers, meets req version
+		// Multiple servers, meets req version, includes failed that doesn't meet req
 		{
 			members: []serf.Member{
-				makeMember("0.7.5"),
-				makeMember("0.8.0"),
+				makeMember("0.7.5", serf.StatusAlive),
+				makeMember("0.8.0", serf.StatusAlive),
+				makeMember("0.7.0", serf.StatusFailed),
 			},
 			ver:      version.Must(version.NewVersion("0.7.5")),
 			expected: true,
@@ -153,8 +140,8 @@ func TestServersMeetMinimumVersion(t *testing.T) {
 		// Multiple servers, doesn't meet req version
 		{
 			members: []serf.Member{
-				makeMember("0.7.5"),
-				makeMember("0.8.0"),
+				makeMember("0.7.5", serf.StatusAlive),
+				makeMember("0.8.0", serf.StatusAlive),
 			},
 			ver:      version.Must(version.NewVersion("0.8.0")),
 			expected: false,
@@ -162,10 +149,64 @@ func TestServersMeetMinimumVersion(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		result := ServersMeetMinimumVersion(tc.members, tc.ver)
+		result := ServersMeetMinimumVersion(tc.members, tc.ver, false)
 		if result != tc.expected {
 			t.Fatalf("bad: %v, %v, %v", result, tc.ver.String(), tc)
 		}
+	}
+}
+
+func TestServersMeetMinimumVersionIncludingFailed(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		members  []serf.Member
+		ver      *version.Version
+		expected bool
+	}{
+		// Multiple servers, meets req version
+		{
+			members: []serf.Member{
+				makeMember("0.7.5", serf.StatusAlive),
+				makeMember("0.8.0", serf.StatusAlive),
+				makeMember("0.7.5", serf.StatusFailed),
+			},
+			ver:      version.Must(version.NewVersion("0.7.5")),
+			expected: true,
+		},
+		// Multiple servers, doesn't meet req version
+		{
+			members: []serf.Member{
+				makeMember("0.7.5", serf.StatusAlive),
+				makeMember("0.8.0", serf.StatusAlive),
+				makeMember("0.7.0", serf.StatusFailed),
+			},
+			ver:      version.Must(version.NewVersion("0.7.5")),
+			expected: false,
+		},
+	}
+
+	for _, tc := range cases {
+		result := ServersMeetMinimumVersion(tc.members, tc.ver, true)
+		if result != tc.expected {
+			t.Fatalf("bad: %v, %v, %v", result, tc.ver.String(), tc)
+		}
+	}
+}
+
+func makeMember(version string, status serf.MemberStatus) serf.Member {
+	return serf.Member{
+		Name: "foo",
+		Addr: net.IP([]byte{127, 0, 0, 1}),
+		Tags: map[string]string{
+			"role":   "nomad",
+			"region": "aws",
+			"dc":     "east-aws",
+			"port":   "10000",
+			"build":  version,
+			"vsn":    "1",
+		},
+		Status: status,
 	}
 }
 
@@ -188,6 +229,21 @@ func TestShuffleStrings(t *testing.T) {
 	if reflect.DeepEqual(inp, orig) {
 		t.Fatalf("shuffle failed")
 	}
+}
+
+func Test_partitionAll(t *testing.T) {
+	xs := []string{"a", "b", "c", "d", "e", "f"}
+	// evenly divisible
+	require.Equal(t, [][]string{{"a", "b"}, {"c", "d"}, {"e", "f"}}, partitionAll(2, xs))
+	require.Equal(t, [][]string{{"a", "b", "c"}, {"d", "e", "f"}}, partitionAll(3, xs))
+	// whole thing fits int the last part
+	require.Equal(t, [][]string{{"a", "b", "c", "d", "e", "f"}}, partitionAll(7, xs))
+	// odd remainder
+	require.Equal(t, [][]string{{"a", "b", "c", "d"}, {"e", "f"}}, partitionAll(4, xs))
+	// zero size
+	require.Equal(t, [][]string{{"a", "b", "c", "d", "e", "f"}}, partitionAll(0, xs))
+	// one size
+	require.Equal(t, [][]string{{"a"}, {"b"}, {"c"}, {"d"}, {"e"}, {"f"}}, partitionAll(1, xs))
 }
 
 func TestMaxUint64(t *testing.T) {

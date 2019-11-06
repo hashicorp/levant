@@ -14,7 +14,7 @@ or server functionality, including exposing interfaces for client consumption
 and running jobs.
 
 Due to the power and flexibility of this command, the Nomad agent is documented
-in its own section. See the [Nomad Agent](/guides/operations/agent/index.html) 
+in its own section. See the [Nomad Agent](/guides/install/production/nomad-agent.html) 
 guide and the [Configuration](/docs/configuration/index.html) documentation section for
 more information on how to use this command and the options it has.
 
@@ -101,6 +101,9 @@ via CLI arguments. The `agent` command accepts the following arguments:
   integration.
 * `vault-cert-file=<path>`: The path to the certificate for Vault communication.
 * `vault-key-file=<path>`: The path to the private key for Vault communication.
+* `vault-namespace=<namespace>`: The Vault namespace used for the integration.
+  Required for servers and clients. Overrides the Vault namespace read from the 
+  VAULT_NAMESPACE environment variable.  
 * `vault-tls-skip-verify`: A boolean that determines whether to skip SSL
   certificate verification.
 * `vault-tls-server-name=<name>`: Used to set the SNI host when connecting to

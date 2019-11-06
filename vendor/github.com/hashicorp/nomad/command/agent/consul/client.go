@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -28,6 +29,10 @@ const (
 	// nomadTaskPrefix is the prefix that scopes Nomad registered services
 	// for tasks.
 	nomadTaskPrefix = nomadServicePrefix + "-task-"
+
+	// nomadCheckPrefix is the prefix that scopes Nomad registered checks for
+	// services.
+	nomadCheckPrefix = nomadServicePrefix + "-check-"
 
 	// defaultRetryInterval is how quickly to retry syncing services and
 	// checks to Consul when an error occurs. Will backoff up to a max.
@@ -63,6 +68,11 @@ const (
 
 	// ServiceTagSerf is the tag assigned to Serf services
 	ServiceTagSerf = "serf"
+
+	// deregisterProbationPeriod is the initialization period where
+	// services registered in Consul but not in Nomad don't get deregistered,
+	// to allow for nomad restoring tasks
+	deregisterProbationPeriod = time.Minute
 )
 
 // CatalogAPI is the consul/api.Catalog API used by Nomad.
@@ -81,6 +91,15 @@ type AgentAPI interface {
 	ServiceRegister(service *api.AgentServiceRegistration) error
 	ServiceDeregister(serviceID string) error
 	UpdateTTL(id, output, status string) error
+}
+
+func agentServiceUpdateRequired(reg *api.AgentServiceRegistration, svc *api.AgentService) bool {
+	return !(reg.Kind == svc.Kind &&
+		reg.ID == svc.ID &&
+		reg.Port == svc.Port &&
+		reg.Address == svc.Address &&
+		reg.Name == svc.Service &&
+		reflect.DeepEqual(reg.Tags, svc.Tags))
 }
 
 // operations are submitted to the main loop via commit() for synchronizing
@@ -216,6 +235,9 @@ type ServiceClient struct {
 	scripts        map[string]*scriptCheck
 	runningScripts map[string]*scriptHandle
 
+	explicitlyDeregisteredServices map[string]bool
+	explicitlyDeregisteredChecks   map[string]bool
+
 	// allocRegistrations stores the services and checks that are registered
 	// with Consul by allocation ID.
 	allocRegistrations     map[string]*AllocRegistration
@@ -230,6 +252,11 @@ type ServiceClient struct {
 	// seen is 1 if Consul has ever been seen; otherwise 0. Accessed with
 	// atomics.
 	seen int32
+
+	// deregisterProbationExpiry is the time before which consul sync shouldn't deregister
+	// unknown services.
+	// Used to mitigate risk of deleting restored services upon client restart.
+	deregisterProbationExpiry time.Time
 
 	// checkWatcher restarts checks that are unhealthy.
 	checkWatcher *checkWatcher
@@ -246,24 +273,27 @@ type ServiceClient struct {
 func NewServiceClient(consulClient AgentAPI, logger log.Logger, isNomadClient bool) *ServiceClient {
 	logger = logger.ResetNamed("consul.sync")
 	return &ServiceClient{
-		client:             consulClient,
-		logger:             logger,
-		retryInterval:      defaultRetryInterval,
-		maxRetryInterval:   defaultMaxRetryInterval,
-		periodicInterval:   defaultPeriodicInterval,
-		exitCh:             make(chan struct{}),
-		shutdownCh:         make(chan struct{}),
-		shutdownWait:       defaultShutdownWait,
-		opCh:               make(chan *operations, 8),
-		services:           make(map[string]*api.AgentServiceRegistration),
-		checks:             make(map[string]*api.AgentCheckRegistration),
-		scripts:            make(map[string]*scriptCheck),
-		runningScripts:     make(map[string]*scriptHandle),
-		allocRegistrations: make(map[string]*AllocRegistration),
-		agentServices:      make(map[string]struct{}),
-		agentChecks:        make(map[string]struct{}),
-		checkWatcher:       newCheckWatcher(logger, consulClient),
-		isClientAgent:      isNomadClient,
+		client:                         consulClient,
+		logger:                         logger,
+		retryInterval:                  defaultRetryInterval,
+		maxRetryInterval:               defaultMaxRetryInterval,
+		periodicInterval:               defaultPeriodicInterval,
+		exitCh:                         make(chan struct{}),
+		shutdownCh:                     make(chan struct{}),
+		shutdownWait:                   defaultShutdownWait,
+		opCh:                           make(chan *operations, 8),
+		services:                       make(map[string]*api.AgentServiceRegistration),
+		checks:                         make(map[string]*api.AgentCheckRegistration),
+		scripts:                        make(map[string]*scriptCheck),
+		runningScripts:                 make(map[string]*scriptHandle),
+		explicitlyDeregisteredServices: make(map[string]bool),
+		explicitlyDeregisteredChecks:   make(map[string]bool),
+		allocRegistrations:             make(map[string]*AllocRegistration),
+		agentServices:                  make(map[string]struct{}),
+		agentChecks:                    make(map[string]struct{}),
+		checkWatcher:                   newCheckWatcher(logger, consulClient),
+		isClientAgent:                  isNomadClient,
+		deregisterProbationExpiry:      time.Now().Add(deregisterProbationPeriod),
 	}
 }
 
@@ -358,6 +388,9 @@ INIT:
 				failures = 0
 			}
 
+			// on successful sync, clear deregistered consul entities
+			c.clearExplicitlyDeregistered()
+
 			// Reset timer to periodic interval to periodically
 			// reconile with Consul
 			if !retryTimer.Stop() {
@@ -393,6 +426,11 @@ func (c *ServiceClient) commit(ops *operations) {
 	}
 }
 
+func (c *ServiceClient) clearExplicitlyDeregistered() {
+	c.explicitlyDeregisteredServices = map[string]bool{}
+	c.explicitlyDeregisteredChecks = map[string]bool{}
+}
+
 // merge registrations into state map prior to sync'ing with Consul
 func (c *ServiceClient) merge(ops *operations) {
 	for _, s := range ops.regServices {
@@ -406,6 +444,7 @@ func (c *ServiceClient) merge(ops *operations) {
 	}
 	for _, sid := range ops.deregServices {
 		delete(c.services, sid)
+		c.explicitlyDeregisteredServices[sid] = true
 	}
 	for _, cid := range ops.deregChecks {
 		if script, ok := c.runningScripts[cid]; ok {
@@ -414,6 +453,7 @@ func (c *ServiceClient) merge(ops *operations) {
 			delete(c.runningScripts, cid)
 		}
 		delete(c.checks, cid)
+		c.explicitlyDeregisteredChecks[cid] = true
 	}
 	metrics.SetGauge([]string{"client", "consul", "services"}, float32(len(c.services)))
 	metrics.SetGauge([]string{"client", "consul", "checks"}, float32(len(c.checks)))
@@ -436,6 +476,8 @@ func (c *ServiceClient) sync() error {
 		return fmt.Errorf("error querying Consul checks: %v", err)
 	}
 
+	inProbation := time.Now().Before(c.deregisterProbationExpiry)
+
 	// Remove Nomad services in Consul but unknown locally
 	for id := range consulServices {
 		if _, ok := c.services[id]; ok {
@@ -449,6 +491,11 @@ func (c *ServiceClient) sync() error {
 		// registered by client agents
 		if !isNomadService(id) || !c.isClientAgent {
 			// Not managed by Nomad, skip
+			continue
+		}
+
+		// Ignore unknown services during probation
+		if inProbation && !c.explicitlyDeregisteredServices[id] {
 			continue
 		}
 
@@ -466,16 +513,26 @@ func (c *ServiceClient) sync() error {
 		metrics.IncrCounter([]string{"client", "consul", "service_deregistrations"}, 1)
 	}
 
-	// Add Nomad services missing from Consul
+	// Add Nomad services missing from Consul, or where the service has been updated.
 	for id, locals := range c.services {
-		if _, ok := consulServices[id]; !ok {
-			if err = c.client.ServiceRegister(locals); err != nil {
-				metrics.IncrCounter([]string{"client", "consul", "sync_failure"}, 1)
-				return err
+		existingSvc, ok := consulServices[id]
+
+		if ok {
+			// There is an existing registration of this service in Consul, so here
+			// we validate to see if the service has been invalidated to see if it
+			// should be updated.
+			if !agentServiceUpdateRequired(locals, existingSvc) {
+				// No Need to update services that have not changed
+				continue
 			}
-			sreg++
-			metrics.IncrCounter([]string{"client", "consul", "service_registrations"}, 1)
 		}
+
+		if err = c.client.ServiceRegister(locals); err != nil {
+			metrics.IncrCounter([]string{"client", "consul", "sync_failure"}, 1)
+			return err
+		}
+		sreg++
+		metrics.IncrCounter([]string{"client", "consul", "service_registrations"}, 1)
 	}
 
 	// Remove Nomad checks in Consul but unknown locally
@@ -489,8 +546,13 @@ func (c *ServiceClient) sync() error {
 		// Nomad managed checks if this is not a client agent.
 		// This is to prevent server agents from removing checks
 		// registered by client agents
-		if !isNomadService(check.ServiceID) || !c.isClientAgent {
+		if !isNomadService(check.ServiceID) || !c.isClientAgent || !isNomadCheck(check.CheckID) {
 			// Service not managed by Nomad, skip
+			continue
+		}
+
+		// Ignore unknown services during probation
+		if inProbation && !c.explicitlyDeregisteredChecks[id] {
 			continue
 		}
 
@@ -809,10 +871,10 @@ func (c *ServiceClient) UpdateTask(old, newTask *TaskServices) error {
 		newIDs[makeTaskServiceID(newTask.AllocID, newTask.Name, s, newTask.Canary)] = s
 	}
 
-	// Loop over existing Service IDs to see if they have been removed or
-	// updated.
+	// Loop over existing Service IDs to see if they have been removed
 	for existingID, existingSvc := range existingIDs {
 		newSvc, ok := newIDs[existingID]
+
 		if !ok {
 			// Existing service entry removed
 			ops.deregServices = append(ops.deregServices, existingID)
@@ -828,8 +890,12 @@ func (c *ServiceClient) UpdateTask(old, newTask *TaskServices) error {
 			continue
 		}
 
-		// Service exists and hasn't changed, don't re-add it later
-		delete(newIDs, existingID)
+		oldHash := existingSvc.Hash(old.AllocID, old.Name, old.Canary)
+		newHash := newSvc.Hash(newTask.AllocID, newTask.Name, newTask.Canary)
+		if oldHash == newHash {
+			// Service exists and hasn't changed, don't re-add it later
+			delete(newIDs, existingID)
+		}
 
 		// Service still exists so add it to the task's registration
 		sreg := &ServiceRegistration{
@@ -848,7 +914,8 @@ func (c *ServiceClient) UpdateTask(old, newTask *TaskServices) error {
 		for _, check := range newSvc.Checks {
 			checkID := makeCheckID(existingID, check)
 			if _, exists := existingChecks[checkID]; exists {
-				// Check exists, so don't remove it
+				// Check is still required. Remove it from the map so it doesn't get
+				// deleted later.
 				delete(existingChecks, checkID)
 				sreg.checkIDs[checkID] = struct{}{}
 			}
@@ -861,7 +928,6 @@ func (c *ServiceClient) UpdateTask(old, newTask *TaskServices) error {
 
 			for _, checkID := range newCheckIDs {
 				sreg.checkIDs[checkID] = struct{}{}
-
 			}
 
 			// Update all watched checks as CheckRestart fields aren't part of ID
@@ -1079,17 +1145,18 @@ func makeAgentServiceID(role string, service *structs.Service) string {
 }
 
 // makeTaskServiceID creates a unique ID for identifying a task service in
-// Consul. All structs.Service fields are included in the ID's hash except
-// Checks. This allows updates to merely compare IDs.
+// Consul.
 //
-//	Example Service ID: _nomad-task-TNM333JKJPM5AK4FAS3VXQLXFDWOF4VH
+//	Example Service ID: _nomad-task-b4e61df9-b095-d64e-f241-23860da1375f-redis-http-http
 func makeTaskServiceID(allocID, taskName string, service *structs.Service, canary bool) string {
-	return nomadTaskPrefix + service.Hash(allocID, taskName, canary)
+	return fmt.Sprintf("%s%s-%s-%s-%s", nomadTaskPrefix, allocID, taskName, service.Name, service.PortLabel)
 }
 
 // makeCheckID creates a unique ID for a check.
+//
+//  Example Check ID: _nomad-check-434ae42f9a57c5705344974ac38de2aee0ee089d
 func makeCheckID(serviceID string, check *structs.ServiceCheck) string {
-	return check.Hash(serviceID)
+	return fmt.Sprintf("%s%s", nomadCheckPrefix, check.Hash(serviceID))
 }
 
 // createCheckReg creates a Check that can be registered with Consul.
@@ -1152,6 +1219,12 @@ func createCheckReg(serviceID, checkID string, check *structs.ServiceCheck, host
 		return nil, fmt.Errorf("check type %+q not valid", check.Type)
 	}
 	return &chkReg, nil
+}
+
+// isNomadCheck returns true if the ID matches the pattern of a Nomad managed
+// check.
+func isNomadCheck(id string) bool {
+	return strings.HasPrefix(id, nomadCheckPrefix)
 }
 
 // isNomadService returns true if the ID matches the pattern of a Nomad managed

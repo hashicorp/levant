@@ -384,7 +384,7 @@ The `Task` object supports the following keys:
   Consul for service discovery. A `Service` object represents a routable and
   discoverable service on the network. Nomad automatically registers when a task
   is started and de-registers it when the task transitions to the dead state.
-  [Click here](/guides/operations/consul-integration/index.html#service-discovery) to learn more about
+  [Click here](/guides/integrations/consul-integration/index.html#service-discovery) to learn more about
   services. Below is the fields in the `Service` object:
 
      - `Name`: An explicit name for the Service. Nomad will replace `${JOB}`,
@@ -691,6 +691,9 @@ determined. The potential values are:
   they can be promoted which unblocks a rolling update of the remaining
   allocations at a rate of `max_parallel`.
 
+- `AutoPromote` - Specifies if the job should automatically promote to
+  the new deployment if all canaries become healthy.
+
 - `Stagger` - Specifies the delay between migrating allocations off nodes marked
   for draining.
 
@@ -704,6 +707,7 @@ An example `Update` block:
         "MinHealthyTime": 15000000000,
         "HealthyDeadline": 180000000000,
         "AutoRevert": false,
+        "AutoPromote": false,
         "Canary": 1
   }
 }
@@ -883,7 +887,7 @@ Path based style:
 {
   "Artifacts": [
     {
-      "GetterSource": "https://s3-us-west-2.amazonaws.com/my-bucket-example/my_app.tar.gz",
+      "GetterSource": "https://my-bucket-example.s3-us-west-2.amazonaws.com/my_app.tar.gz",
     }
   ]
 }
@@ -895,7 +899,7 @@ or to override automatic detection in the URL, use the S3-specific syntax
 {
   "Artifacts": [
     {
-      "GetterSource": "s3::https://s3-eu-west-1.amazonaws.com/my-bucket-example/my_app.tar.gz",
+      "GetterSource": "s3::https://my-bucket-example.s3-eu-west-1.amazonaws.com/my_app.tar.gz",
     }
   ]
 }

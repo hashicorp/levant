@@ -46,7 +46,7 @@ task "docs" {
   }
 
   # Environment variables are interpreted and can contain both runtime and
-  # node attributes. There environment variables are passed into the task.
+  # node attributes. These environment variables are passed into the task.
   env {
     "DC"      = "Running on datacenter ${node.datacenter}"
     "VERSION" = "Version ${NOMAD_META_VERSION}"
@@ -216,7 +216,7 @@ env {
 ```
 
 The environment variable `invalid...name` cannot be interpolated using the
-standard `"${invalid...name}"` syntax. The dots wil be interpreted as object
+standard `"${invalid...name}"` syntax. The dots will be interpreted as object
 notation so multiple consecutive dots are invalid.
 
 To continue supporting all user environment variables Nomad 0.9 added a new

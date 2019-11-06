@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -44,10 +45,12 @@ func testExecutorCommandWithChroot(t *testing.T) *testExecCmd {
 		"/etc/ld.so.cache":  "/etc/ld.so.cache",
 		"/etc/ld.so.conf":   "/etc/ld.so.conf",
 		"/etc/ld.so.conf.d": "/etc/ld.so.conf.d",
+		"/etc/passwd":       "/etc/passwd",
 		"/lib":              "/lib",
 		"/lib64":            "/lib64",
 		"/usr/lib":          "/usr/lib",
 		"/bin/ls":           "/bin/ls",
+		"/bin/cat":          "/bin/cat",
 		"/bin/echo":         "/bin/echo",
 		"/bin/bash":         "/bin/bash",
 		"/bin/sleep":        "/bin/sleep",
@@ -149,7 +152,8 @@ usr/
 /etc/:
 ld.so.cache
 ld.so.conf
-ld.so.conf.d/`
+ld.so.conf.d/
+passwd`
 	tu.WaitForResult(func() (bool, error) {
 		output := testExecCmd.stdout.String()
 		act := strings.TrimSpace(string(output))
@@ -158,6 +162,217 @@ ld.so.conf.d/`
 		}
 		return true, nil
 	}, func(err error) { t.Error(err) })
+}
+
+// TestExecutor_CgroupPaths asserts that process starts with independent cgroups
+// hierarchy created for this process
+func TestExecutor_CgroupPaths(t *testing.T) {
+	t.Parallel()
+	require := require.New(t)
+	testutil.ExecCompatible(t)
+
+	testExecCmd := testExecutorCommandWithChroot(t)
+	execCmd, allocDir := testExecCmd.command, testExecCmd.allocDir
+	execCmd.Cmd = "/bin/bash"
+	execCmd.Args = []string{"-c", "sleep 0.2; cat /proc/self/cgroup"}
+	defer allocDir.Destroy()
+
+	execCmd.ResourceLimits = true
+
+	executor := NewExecutorWithIsolation(testlog.HCLogger(t))
+	defer executor.Shutdown("SIGKILL", 0)
+
+	ps, err := executor.Launch(execCmd)
+	require.NoError(err)
+	require.NotZero(ps.Pid)
+
+	state, err := executor.Wait(context.Background())
+	require.NoError(err)
+	require.Zero(state.ExitCode)
+
+	tu.WaitForResult(func() (bool, error) {
+		output := strings.TrimSpace(testExecCmd.stdout.String())
+		// sanity check that we got some cgroups
+		if !strings.Contains(output, ":devices:") {
+			return false, fmt.Errorf("was expected cgroup files but found:\n%v", output)
+		}
+		lines := strings.Split(output, "\n")
+		for _, line := range lines {
+			// Every cgroup entry should be /nomad/$ALLOC_ID
+			if line == "" {
+				continue
+			}
+
+			// Skip rdma subsystem; rdma was added in most recent kernels and libcontainer/docker
+			// don't isolate it by default.
+			if strings.Contains(line, ":rdma:") {
+				continue
+			}
+
+			if !strings.Contains(line, ":/nomad/") {
+				return false, fmt.Errorf("Not a member of the alloc's cgroup: expected=...:/nomad/... -- found=%q", line)
+			}
+		}
+		return true, nil
+	}, func(err error) { t.Error(err) })
+}
+
+func TestUniversalExecutor_LookupTaskBin(t *testing.T) {
+	t.Parallel()
+	require := require.New(t)
+
+	// Create a temp dir
+	tmpDir, err := ioutil.TempDir("", "")
+	require.Nil(err)
+	defer os.Remove(tmpDir)
+
+	// Create the command
+	cmd := &ExecCommand{Env: []string{"PATH=/bin"}, TaskDir: tmpDir}
+
+	// Make a foo subdir
+	os.MkdirAll(filepath.Join(tmpDir, "foo"), 0700)
+
+	// Write a file under foo
+	filePath := filepath.Join(tmpDir, "foo", "tmp.txt")
+	err = ioutil.WriteFile(filePath, []byte{1, 2}, os.ModeAppend)
+	require.NoError(err)
+
+	// Lookout with an absolute path to the binary
+	cmd.Cmd = "/foo/tmp.txt"
+	_, err = lookupTaskBin(cmd)
+	require.NoError(err)
+
+	// Write a file under local subdir
+	os.MkdirAll(filepath.Join(tmpDir, "local"), 0700)
+	filePath2 := filepath.Join(tmpDir, "local", "tmp.txt")
+	ioutil.WriteFile(filePath2, []byte{1, 2}, os.ModeAppend)
+
+	// Lookup with file name, should find the one we wrote above
+	cmd.Cmd = "tmp.txt"
+	_, err = lookupTaskBin(cmd)
+	require.NoError(err)
+
+	// Lookup a host absolute path
+	cmd.Cmd = "/bin/sh"
+	_, err = lookupTaskBin(cmd)
+	require.Error(err)
+}
+
+// Exec Launch looks for the binary only inside the chroot
+func TestExecutor_EscapeContainer(t *testing.T) {
+	t.Parallel()
+	require := require.New(t)
+	testutil.ExecCompatible(t)
+
+	testExecCmd := testExecutorCommandWithChroot(t)
+	execCmd, allocDir := testExecCmd.command, testExecCmd.allocDir
+	execCmd.Cmd = "/bin/kill" // missing from the chroot container
+	defer allocDir.Destroy()
+
+	execCmd.ResourceLimits = true
+
+	executor := NewExecutorWithIsolation(testlog.HCLogger(t))
+	defer executor.Shutdown("SIGKILL", 0)
+
+	_, err := executor.Launch(execCmd)
+	require.Error(err)
+	require.Regexp("^file /bin/kill not found under path", err)
+
+	// Bare files are looked up using the system path, inside the container
+	allocDir.Destroy()
+	testExecCmd = testExecutorCommandWithChroot(t)
+	execCmd, allocDir = testExecCmd.command, testExecCmd.allocDir
+	execCmd.Cmd = "kill"
+	_, err = executor.Launch(execCmd)
+	require.Error(err)
+	require.Regexp("^file kill not found under path", err)
+
+	allocDir.Destroy()
+	testExecCmd = testExecutorCommandWithChroot(t)
+	execCmd, allocDir = testExecCmd.command, testExecCmd.allocDir
+	execCmd.Cmd = "echo"
+	_, err = executor.Launch(execCmd)
+	require.NoError(err)
+}
+
+func TestExecutor_Capabilities(t *testing.T) {
+	t.Parallel()
+	testutil.ExecCompatible(t)
+
+	cases := []struct {
+		user string
+		caps string
+	}{
+		{
+			user: "nobody",
+			caps: `
+CapInh: 0000000000000000
+CapPrm: 0000000000000000
+CapEff: 0000000000000000
+CapBnd: 0000003fffffffff
+CapAmb: 0000000000000000`,
+		},
+		{
+			user: "root",
+			caps: `
+CapInh: 0000000000000000
+CapPrm: 0000003fffffffff
+CapEff: 0000003fffffffff
+CapBnd: 0000003fffffffff
+CapAmb: 0000000000000000`,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.user, func(t *testing.T) {
+			require := require.New(t)
+
+			testExecCmd := testExecutorCommandWithChroot(t)
+			execCmd, allocDir := testExecCmd.command, testExecCmd.allocDir
+			defer allocDir.Destroy()
+
+			execCmd.User = c.user
+			execCmd.ResourceLimits = true
+			execCmd.Cmd = "/bin/bash"
+			execCmd.Args = []string{"-c", "cat /proc/$$/status"}
+
+			executor := NewExecutorWithIsolation(testlog.HCLogger(t))
+			defer executor.Shutdown("SIGKILL", 0)
+
+			_, err := executor.Launch(execCmd)
+			require.NoError(err)
+
+			ch := make(chan interface{})
+			go func() {
+				executor.Wait(context.Background())
+				close(ch)
+			}()
+
+			select {
+			case <-ch:
+				// all good
+			case <-time.After(5 * time.Second):
+				require.Fail("timeout waiting for exec to shutdown")
+			}
+
+			canonical := func(s string) string {
+				s = strings.TrimSpace(s)
+				s = regexp.MustCompile("[ \t]+").ReplaceAllString(s, " ")
+				s = regexp.MustCompile("[\n\r]+").ReplaceAllString(s, "\n")
+				return s
+			}
+
+			expected := canonical(c.caps)
+			tu.WaitForResult(func() (bool, error) {
+				output := canonical(testExecCmd.stdout.String())
+				if !strings.Contains(output, expected) {
+					return false, fmt.Errorf("capabilities didn't match: want\n%v\n; got:\n%v\n", expected, output)
+				}
+				return true, nil
+			}, func(err error) { require.NoError(err) })
+		})
+	}
+
 }
 
 func TestExecutor_ClientCleanup(t *testing.T) {

@@ -268,45 +268,39 @@ resources {
 }
 ```
 
-### Check with Bash-isms
+### Script Checks with Shells
 
-This example shows a common mistake and correct behavior for custom checks.
-Suppose a health check like this:
-
-```shell
-$ test -f /tmp/file.txt
-```
-
-In this example `test` is not actually a command (binary) on the system; it is a
-built-in shell function to bash. Thus, the following **would not work**:
-
-```hcl
-service {
-  check {
-    type    = "script"
-    command = "test -f /tmp/file.txt" # THIS IS NOT CORRECT
-  }
-}
-```
-
-Nomad will attempt to find an executable named `test` on your system, but it
-does not exist. It is actually just a function of bash. Additionally, it is not
-possible to specify the arguments in a single string. Here is the correct
-solution:
+This example shows a service with a script check that is evaluated and interpolated in a shell; it
+tests whether a file is present at `${HEALTH_CHECK_FILE}` environment variable:
 
 ```hcl
 service {
   check {
     type    = "script"
     command = "/bin/bash"
-    args    = ["-c", "test -f /tmp/file.txt"]
+    args    = ["-c", "test -f ${HEALTH_CHECK_FILE}"]
   }
 }
 ```
 
-The `command` is actually `/bin/bash`, since that is the actual process we are
-running. The arguments to that command are the script itself, which each
-argument provided as a value to the `args` array.
+Using `/bin/bash` (or another shell) is required here to interpolate the `${HEALTH_CHECK_FILE}` value.
+
+The following examples of `command` fields **will not work**:
+
+```hcl
+# invalid because command is not a path
+check {
+  type    = "script"
+  command = "test -f /tmp/file.txt"
+}
+
+# invalid because path will not be interpolated
+check {
+  type    = "script"
+  command = "/bin/test"
+  args    = ["-f", "${HEALTH_CHECK_FILE}"]
+}
+```
 
 ### HTTP Health Check
 
@@ -513,7 +507,7 @@ directly since Nomad isn't managing any port assignments.
 ### IPv6 Docker containers
 
 The [Docker](/docs/drivers/docker.html#advertise_ipv6_address) driver supports the
-`advertise_ipv6_address` parameter in it's configuration.
+`advertise_ipv6_address` parameter in its configuration.
 
 Services will automatically advertise the IPv6 address when `advertise_ipv6_address` 
 is used.
@@ -622,7 +616,7 @@ system of a task for that driver.</small>
 
 [check_restart_stanza]: /docs/job-specification/check_restart.html "check_restart stanza"
 [consul_grpc]: https://www.consul.io/api/agent/check.html#grpc
-[service-discovery]: /guides/operations/consul-integration/index.html#service-discovery/index.html "Nomad Service Discovery"
+[service-discovery]: /guides/integrations/consul-integration/index.html#service-discovery/index.html "Nomad Service Discovery"
 [interpolation]: /docs/runtime/interpolation.html "Nomad Runtime Interpolation"
 [network]: /docs/job-specification/network.html "Nomad network Job Specification"
 [qemu]: /docs/drivers/qemu.html "Nomad qemu Driver"

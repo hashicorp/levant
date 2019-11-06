@@ -8,6 +8,7 @@ import (
 	"time"
 
 	log "github.com/hashicorp/go-hclog"
+	multierror "github.com/hashicorp/go-multierror"
 	"github.com/hashicorp/nomad/client/allocdir"
 	"github.com/hashicorp/nomad/client/allocrunner/interfaces"
 	"github.com/hashicorp/nomad/client/allocrunner/state"
@@ -135,6 +136,11 @@ type allocRunner struct {
 	// driverManager is responsible for dispensing driver plugins and registering
 	// event handlers
 	driverManager drivermanager.Manager
+
+	// serversContactedCh is passed to TaskRunners so they can detect when
+	// servers have been contacted for the first time in case of a failed
+	// restore.
+	serversContactedCh chan struct{}
 }
 
 // NewAllocRunner returns a new allocation runner.
@@ -166,6 +172,7 @@ func NewAllocRunner(config *Config) (*allocRunner, error) {
 		prevAllocMigrator:        config.PrevAllocMigrator,
 		devicemanager:            config.DeviceManager,
 		driverManager:            config.DriverManager,
+		serversContactedCh:       config.ServersContactedCh,
 	}
 
 	// Create the logger based on the allocation ID
@@ -204,6 +211,7 @@ func (ar *allocRunner) initTaskRunners(tasks []*structs.Task) error {
 			DeviceStatsReporter: ar.deviceStatsReporter,
 			DeviceManager:       ar.devicemanager,
 			DriverManager:       ar.driverManager,
+			ServersContactedCh:  ar.serversContactedCh,
 		}
 
 		// Create, but do not Run, the task runner
@@ -240,10 +248,18 @@ func (ar *allocRunner) Run() {
 	default:
 	}
 
+	// When handling (potentially restored) terminal alloc, ensure tasks and post-run hooks are run
+	// to perform any cleanup that's necessary, potentially not done prior to earlier termination
+
 	// Run the prestart hooks if non-terminal
 	if ar.shouldRun() {
 		if err := ar.prerun(); err != nil {
 			ar.logger.Error("prerun failed", "error", err)
+
+			for _, tr := range ar.tasks {
+				tr.MarkFailedDead(fmt.Sprintf("failed to setup runner: %v", err))
+			}
+
 			goto POST
 		}
 	}
@@ -483,7 +499,9 @@ func (ar *allocRunner) killTasks() map[string]*structs.TaskState {
 			continue
 		}
 
-		err := tr.Kill(context.TODO(), structs.NewTaskEvent(structs.TaskKilling))
+		taskEvent := structs.NewTaskEvent(structs.TaskKilling)
+		taskEvent.SetKillTimeout(tr.Task().KillTimeout)
+		err := tr.Kill(context.TODO(), taskEvent)
 		if err != nil && err != taskrunner.ErrTaskNotRunning {
 			ar.logger.Warn("error stopping leader task", "error", err, "task_name", name)
 		}
@@ -503,7 +521,9 @@ func (ar *allocRunner) killTasks() map[string]*structs.TaskState {
 		wg.Add(1)
 		go func(name string, tr *taskrunner.TaskRunner) {
 			defer wg.Done()
-			err := tr.Kill(context.TODO(), structs.NewTaskEvent(structs.TaskKilling))
+			taskEvent := structs.NewTaskEvent(structs.TaskKilling)
+			taskEvent.SetKillTimeout(tr.Task().KillTimeout)
+			err := tr.Kill(context.TODO(), taskEvent)
 			if err != nil && err != taskrunner.ErrTaskNotRunning {
 				ar.logger.Warn("error stopping task", "error", err, "task_name", name)
 			}
@@ -550,10 +570,11 @@ func (ar *allocRunner) clientAlloc(taskStates map[string]*structs.TaskState) *st
 	if a.ClientTerminalStatus() {
 		alloc := ar.Alloc()
 
-		// If we are part of a deployment and the task has failed, mark the
+		// If we are part of a deployment and the alloc has failed, mark the
 		// alloc as unhealthy. This guards against the watcher not be started.
+		// If the health status is already set then terminal allocations should not
 		if a.ClientStatus == structs.AllocClientStatusFailed &&
-			alloc.DeploymentID != "" && !a.DeploymentStatus.IsUnhealthy() {
+			alloc.DeploymentID != "" && !a.DeploymentStatus.HasHealth() {
 			a.DeploymentStatus = &structs.AllocDeploymentStatus{
 				Healthy: helper.BoolToPtr(false),
 			}
@@ -562,11 +583,11 @@ func (ar *allocRunner) clientAlloc(taskStates map[string]*structs.TaskState) *st
 		// Make sure we have marked the finished at for every task. This is used
 		// to calculate the reschedule time for failed allocations.
 		now := time.Now()
-		for _, task := range alloc.Job.LookupTaskGroup(alloc.TaskGroup).Tasks {
-			ts, ok := a.TaskStates[task.Name]
+		for taskName := range ar.tasks {
+			ts, ok := a.TaskStates[taskName]
 			if !ok {
 				ts = &structs.TaskState{}
-				a.TaskStates[task.Name] = ts
+				a.TaskStates[taskName] = ts
 			}
 			if ts.FinishedAt.IsZero() {
 				ts.FinishedAt = now
@@ -742,13 +763,14 @@ func (ar *allocRunner) destroyImpl() {
 	// state if Run() ran at all.
 	<-ar.taskStateUpdateHandlerCh
 
-	// Cleanup state db
+	// Mark alloc as destroyed
+	ar.destroyedLock.Lock()
+
+	// Cleanup state db; while holding the lock to avoid
+	// a race periodic PersistState that may resurrect the alloc
 	if err := ar.stateDB.DeleteAllocationBucket(ar.id); err != nil {
 		ar.logger.Warn("failed to delete allocation state", "error", err)
 	}
-
-	// Mark alloc as destroyed
-	ar.destroyedLock.Lock()
 
 	if !ar.shutdown {
 		ar.shutdown = true
@@ -759,6 +781,24 @@ func (ar *allocRunner) destroyImpl() {
 	close(ar.destroyCh)
 
 	ar.destroyedLock.Unlock()
+}
+
+func (ar *allocRunner) PersistState() error {
+	ar.destroyedLock.Lock()
+	defer ar.destroyedLock.Unlock()
+
+	if ar.destroyed {
+		err := ar.stateDB.DeleteAllocationBucket(ar.id)
+		if err != nil {
+			ar.logger.Warn("failed to delete allocation bucket", "error", err)
+		}
+		return nil
+	}
+
+	// TODO: consider persisting deployment state along with task status.
+	// While we study why only the alloc is persisted, I opted to maintain current
+	// behavior and not risk adding yet more IO calls unnecessarily.
+	return ar.stateDB.PutAllocation(ar.Alloc())
 }
 
 // Destroy the alloc runner by stopping it if it is still running and cleaning
@@ -935,4 +975,74 @@ func (ar *allocRunner) GetTaskEventHandler(taskName string) drivermanager.EventH
 		}
 	}
 	return nil
+}
+
+// RestartTask signalls the task runner for the  provided task to restart.
+func (ar *allocRunner) RestartTask(taskName string, taskEvent *structs.TaskEvent) error {
+	tr, ok := ar.tasks[taskName]
+	if !ok {
+		return fmt.Errorf("Could not find task runner for task: %s", taskName)
+	}
+
+	return tr.Restart(context.TODO(), taskEvent, false)
+}
+
+// RestartAll signalls all task runners in the allocation to restart and passes
+// a copy of the task event to each restart event.
+// Returns any errors in a concatenated form.
+func (ar *allocRunner) RestartAll(taskEvent *structs.TaskEvent) error {
+	var err *multierror.Error
+
+	for tn := range ar.tasks {
+		rerr := ar.RestartTask(tn, taskEvent.Copy())
+		if rerr != nil {
+			err = multierror.Append(err, rerr)
+		}
+	}
+
+	return err.ErrorOrNil()
+}
+
+// Signal sends a signal request to task runners inside an allocation. If the
+// taskName is empty, then it is sent to all tasks.
+func (ar *allocRunner) Signal(taskName, signal string) error {
+	event := structs.NewTaskEvent(structs.TaskSignaling).SetSignalText(signal)
+
+	if taskName != "" {
+		tr, ok := ar.tasks[taskName]
+		if !ok {
+			return fmt.Errorf("Task not found")
+		}
+
+		return tr.Signal(event, signal)
+	}
+
+	var err *multierror.Error
+
+	for tn, tr := range ar.tasks {
+		rerr := tr.Signal(event.Copy(), signal)
+		if rerr != nil {
+			err = multierror.Append(err, fmt.Errorf("Failed to signal task: %s, err: %v", tn, rerr))
+		}
+	}
+
+	return err.ErrorOrNil()
+}
+
+func (ar *allocRunner) GetTaskExecHandler(taskName string) drivermanager.TaskExecHandler {
+	tr, ok := ar.tasks[taskName]
+	if !ok {
+		return nil
+	}
+
+	return tr.TaskExecHandler()
+}
+
+func (ar *allocRunner) GetTaskDriverCapabilities(taskName string) (*drivers.Capabilities, error) {
+	tr, ok := ar.tasks[taskName]
+	if !ok {
+		return nil, fmt.Errorf("task not found")
+	}
+
+	return tr.DriverCapabilities()
 }

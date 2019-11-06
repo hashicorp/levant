@@ -107,7 +107,11 @@ func (t *testFakeCtx) syncOnce() error {
 	select {
 	case ops := <-t.ServiceClient.opCh:
 		t.ServiceClient.merge(ops)
-		return t.ServiceClient.sync()
+		err := t.ServiceClient.sync()
+		if err == nil {
+			t.ServiceClient.clearExplicitlyDeregistered()
+		}
+		return err
 	default:
 		return errNoOps
 	}
@@ -118,8 +122,13 @@ func (t *testFakeCtx) syncOnce() error {
 func setupFake(t *testing.T) *testFakeCtx {
 	fc := NewMockAgent()
 	tt := testTask()
+
+	// by default start fake client being out of probation
+	sc := NewServiceClient(fc, testlog.HCLogger(t), true)
+	sc.deregisterProbationExpiry = time.Now().Add(-1 * time.Minute)
+
 	return &testFakeCtx{
-		ServiceClient: NewServiceClient(fc, testlog.HCLogger(t), true),
+		ServiceClient: sc,
 		FakeConsul:    fc,
 		Task:          tt,
 		MockExec:      tt.DriverExec.(*mockExec),
@@ -128,97 +137,38 @@ func setupFake(t *testing.T) *testFakeCtx {
 
 func TestConsul_ChangeTags(t *testing.T) {
 	ctx := setupFake(t)
+	require := require.New(t)
 
-	if err := ctx.ServiceClient.RegisterTask(ctx.Task); err != nil {
-		t.Fatalf("unexpected error registering task: %v", err)
-	}
+	require.NoError(ctx.ServiceClient.RegisterTask(ctx.Task))
+	require.NoError(ctx.syncOnce())
+	require.Equal(1, len(ctx.FakeConsul.services), "Expected 1 service to be registered with Consul")
 
-	if err := ctx.syncOnce(); err != nil {
-		t.Fatalf("unexpected error syncing task: %v", err)
-	}
-
-	if n := len(ctx.FakeConsul.services); n != 1 {
-		t.Fatalf("expected 1 service but found %d:\n%#v", n, ctx.FakeConsul.services)
-	}
-
-	// Query the allocs registrations and then again when we update. The IDs
-	// should change
+	// Validate the alloc registration
 	reg1, err := ctx.ServiceClient.AllocRegistrations(ctx.Task.AllocID)
-	if err != nil {
-		t.Fatalf("Looking up alloc registration failed: %v", err)
-	}
-	if reg1 == nil {
-		t.Fatalf("Nil alloc registrations: %v", err)
-	}
-	if num := reg1.NumServices(); num != 1 {
-		t.Fatalf("Wrong number of services: got %d; want 1", num)
-	}
-	if num := reg1.NumChecks(); num != 0 {
-		t.Fatalf("Wrong number of checks: got %d; want 0", num)
+	require.NoError(err)
+	require.NotNil(reg1, "Unexpected nil alloc registration")
+	require.Equal(1, reg1.NumServices())
+	require.Equal(0, reg1.NumChecks())
+
+	for _, v := range ctx.FakeConsul.services {
+		require.Equal(v.Name, ctx.Task.Services[0].Name)
+		require.Equal(v.Tags, ctx.Task.Services[0].Tags)
 	}
 
-	origKey := ""
-	for k, v := range ctx.FakeConsul.services {
-		origKey = k
-		if v.Name != ctx.Task.Services[0].Name {
-			t.Errorf("expected Name=%q != %q", ctx.Task.Services[0].Name, v.Name)
-		}
-		if !reflect.DeepEqual(v.Tags, ctx.Task.Services[0].Tags) {
-			t.Errorf("expected Tags=%v != %v", ctx.Task.Services[0].Tags, v.Tags)
-		}
-	}
-
+	// Update the task definition
 	origTask := ctx.Task.Copy()
 	ctx.Task.Services[0].Tags[0] = "newtag"
-	if err := ctx.ServiceClient.UpdateTask(origTask, ctx.Task); err != nil {
-		t.Fatalf("unexpected error registering task: %v", err)
-	}
-	if err := ctx.syncOnce(); err != nil {
-		t.Fatalf("unexpected error syncing task: %v", err)
-	}
 
-	if n := len(ctx.FakeConsul.services); n != 1 {
-		t.Fatalf("expected 1 service but found %d:\n%#v", n, ctx.FakeConsul.services)
-	}
+	// Register and sync the update
+	require.NoError(ctx.ServiceClient.UpdateTask(origTask, ctx.Task))
+	require.NoError(ctx.syncOnce())
+	require.Equal(1, len(ctx.FakeConsul.services), "Expected 1 service to be registered with Consul")
 
-	for k, v := range ctx.FakeConsul.services {
-		if k == origKey {
-			t.Errorf("expected key to change but found %q", k)
-		}
-		if v.Name != ctx.Task.Services[0].Name {
-			t.Errorf("expected Name=%q != %q", ctx.Task.Services[0].Name, v.Name)
-		}
-		if !reflect.DeepEqual(v.Tags, ctx.Task.Services[0].Tags) {
-			t.Errorf("expected Tags=%v != %v", ctx.Task.Services[0].Tags, v.Tags)
-		}
-	}
-
-	// Check again and ensure the IDs changed
-	reg2, err := ctx.ServiceClient.AllocRegistrations(ctx.Task.AllocID)
-	if err != nil {
-		t.Fatalf("Looking up alloc registration failed: %v", err)
-	}
-	if reg2 == nil {
-		t.Fatalf("Nil alloc registrations: %v", err)
-	}
-	if num := reg2.NumServices(); num != 1 {
-		t.Fatalf("Wrong number of services: got %d; want 1", num)
-	}
-	if num := reg2.NumChecks(); num != 0 {
-		t.Fatalf("Wrong number of checks: got %d; want 0", num)
-	}
-
-	for task, treg := range reg1.Tasks {
-		otherTaskReg, ok := reg2.Tasks[task]
-		if !ok {
-			t.Fatalf("Task %q not in second reg", task)
-		}
-
-		for sID := range treg.Services {
-			if _, ok := otherTaskReg.Services[sID]; ok {
-				t.Fatalf("service ID didn't change")
-			}
-		}
+	// Validate the metadata changed
+	for _, v := range ctx.FakeConsul.services {
+		require.Equal(v.Name, ctx.Task.Services[0].Name)
+		require.Equal(v.Tags, ctx.Task.Services[0].Tags)
+		require.Equal("newtag", v.Tags[0])
 	}
 }
 
@@ -227,6 +177,8 @@ func TestConsul_ChangeTags(t *testing.T) {
 // slightly different code path than changing tags.
 func TestConsul_ChangePorts(t *testing.T) {
 	ctx := setupFake(t)
+	require := require.New(t)
+
 	ctx.Task.Services[0].Checks = []*structs.ServiceCheck{
 		{
 			Name:      "c1",
@@ -252,35 +204,17 @@ func TestConsul_ChangePorts(t *testing.T) {
 		},
 	}
 
-	if err := ctx.ServiceClient.RegisterTask(ctx.Task); err != nil {
-		t.Fatalf("unexpected error registering task: %v", err)
+	require.NoError(ctx.ServiceClient.RegisterTask(ctx.Task))
+	require.NoError(ctx.syncOnce())
+	require.Equal(1, len(ctx.FakeConsul.services), "Expected 1 service to be registered with Consul")
+
+	for _, v := range ctx.FakeConsul.services {
+		require.Equal(ctx.Task.Services[0].Name, v.Name)
+		require.Equal(ctx.Task.Services[0].Tags, v.Tags)
+		require.Equal(xPort, v.Port)
 	}
 
-	if err := ctx.syncOnce(); err != nil {
-		t.Fatalf("unexpected error syncing task: %v", err)
-	}
-
-	if n := len(ctx.FakeConsul.services); n != 1 {
-		t.Fatalf("expected 1 service but found %d:\n%#v", n, ctx.FakeConsul.services)
-	}
-
-	origServiceKey := ""
-	for k, v := range ctx.FakeConsul.services {
-		origServiceKey = k
-		if v.Name != ctx.Task.Services[0].Name {
-			t.Errorf("expected Name=%q != %q", ctx.Task.Services[0].Name, v.Name)
-		}
-		if !reflect.DeepEqual(v.Tags, ctx.Task.Services[0].Tags) {
-			t.Errorf("expected Tags=%v != %v", ctx.Task.Services[0].Tags, v.Tags)
-		}
-		if v.Port != xPort {
-			t.Errorf("expected Port x=%v but found: %v", xPort, v.Port)
-		}
-	}
-
-	if n := len(ctx.FakeConsul.checks); n != 3 {
-		t.Fatalf("expected 3 checks but found %d:\n%#v", n, ctx.FakeConsul.checks)
-	}
+	require.Len(ctx.FakeConsul.checks, 3)
 
 	origTCPKey := ""
 	origScriptKey := ""
@@ -289,28 +223,27 @@ func TestConsul_ChangePorts(t *testing.T) {
 		switch v.Name {
 		case "c1":
 			origTCPKey = k
-			if expected := fmt.Sprintf(":%d", xPort); v.TCP != expected {
-				t.Errorf("expected Port x=%v but found: %v", expected, v.TCP)
-			}
+			require.Equal(fmt.Sprintf(":%d", xPort), v.TCP)
 		case "c2":
 			origScriptKey = k
 			select {
 			case <-ctx.MockExec.execs:
-				if n := len(ctx.MockExec.execs); n > 0 {
-					t.Errorf("expected 1 exec but found: %d", n+1)
-				}
+				// Here we validate there is nothing left on the channel
+				require.Equal(0, len(ctx.MockExec.execs))
 			case <-time.After(3 * time.Second):
-				t.Errorf("script not called in time")
+				t.Fatalf("script not called in time")
 			}
 		case "c3":
 			origHTTPKey = k
-			if expected := fmt.Sprintf("http://:%d/", yPort); v.HTTP != expected {
-				t.Errorf("expected Port y=%v but found: %v", expected, v.HTTP)
-			}
+			require.Equal(fmt.Sprintf("http://:%d/", yPort), v.HTTP)
 		default:
 			t.Fatalf("unexpected check: %q", v.Name)
 		}
 	}
+
+	require.NotEmpty(origTCPKey)
+	require.NotEmpty(origScriptKey)
+	require.NotEmpty(origHTTPKey)
 
 	// Now update the PortLabel on the Service and Check c3
 	origTask := ctx.Task.Copy()
@@ -339,64 +272,31 @@ func TestConsul_ChangePorts(t *testing.T) {
 			// Removed PortLabel; should default to service's (y)
 		},
 	}
-	if err := ctx.ServiceClient.UpdateTask(origTask, ctx.Task); err != nil {
-		t.Fatalf("unexpected error registering task: %v", err)
-	}
-	if err := ctx.syncOnce(); err != nil {
-		t.Fatalf("unexpected error syncing task: %v", err)
+
+	require.NoError(ctx.ServiceClient.UpdateTask(origTask, ctx.Task))
+	require.NoError(ctx.syncOnce())
+	require.Equal(1, len(ctx.FakeConsul.services), "Expected 1 service to be registered with Consul")
+
+	for _, v := range ctx.FakeConsul.services {
+		require.Equal(ctx.Task.Services[0].Name, v.Name)
+		require.Equal(ctx.Task.Services[0].Tags, v.Tags)
+		require.Equal(yPort, v.Port)
 	}
 
-	if n := len(ctx.FakeConsul.services); n != 1 {
-		t.Fatalf("expected 1 service but found %d:\n%#v", n, ctx.FakeConsul.services)
-	}
-
-	for k, v := range ctx.FakeConsul.services {
-		if k == origServiceKey {
-			t.Errorf("expected key change; still: %q", k)
-		}
-		if v.Name != ctx.Task.Services[0].Name {
-			t.Errorf("expected Name=%q != %q", ctx.Task.Services[0].Name, v.Name)
-		}
-		if !reflect.DeepEqual(v.Tags, ctx.Task.Services[0].Tags) {
-			t.Errorf("expected Tags=%v != %v", ctx.Task.Services[0].Tags, v.Tags)
-		}
-		if v.Port != yPort {
-			t.Errorf("expected Port y=%v but found: %v", yPort, v.Port)
-		}
-	}
-
-	if n := len(ctx.FakeConsul.checks); n != 3 {
-		t.Fatalf("expected 3 check but found %d:\n%#v", n, ctx.FakeConsul.checks)
-	}
+	require.Equal(3, len(ctx.FakeConsul.checks))
 
 	for k, v := range ctx.FakeConsul.checks {
 		switch v.Name {
 		case "c1":
-			if k == origTCPKey {
-				t.Errorf("expected key change for %s from %q", v.Name, origTCPKey)
-			}
-			if expected := fmt.Sprintf(":%d", xPort); v.TCP != expected {
-				t.Errorf("expected Port x=%v but found: %v", expected, v.TCP)
-			}
+			// C1 is changed because the service was re-registered
+			require.NotEqual(origTCPKey, k)
+			require.Equal(fmt.Sprintf(":%d", xPort), v.TCP)
 		case "c2":
-			if k == origScriptKey {
-				t.Errorf("expected key change for %s from %q", v.Name, origScriptKey)
-			}
-			select {
-			case <-ctx.MockExec.execs:
-				if n := len(ctx.MockExec.execs); n > 0 {
-					t.Errorf("expected 1 exec but found: %d", n+1)
-				}
-			case <-time.After(3 * time.Second):
-				t.Errorf("script not called in time")
-			}
+			// C2 is changed because the service was re-registered
+			require.NotEqual(origScriptKey, k)
 		case "c3":
-			if k == origHTTPKey {
-				t.Errorf("expected %s key to change from %q", v.Name, k)
-			}
-			if expected := fmt.Sprintf("http://:%d/", yPort); v.HTTP != expected {
-				t.Errorf("expected Port y=%v but found: %v", expected, v.HTTP)
-			}
+			require.NotEqual(origHTTPKey, k)
+			require.Equal(fmt.Sprintf("http://:%d/", yPort), v.HTTP)
 		default:
 			t.Errorf("Unknown check: %q", k)
 		}
@@ -886,9 +786,10 @@ func TestConsul_ShutdownSlow(t *testing.T) {
 		t.Errorf("unexpected error shutting down client: %v", err)
 	}
 
-	// Shutdown time should have taken: 1s <= shutdown <= 3s
+	// Shutdown time should have taken: ~1s <= shutdown <= 3s
+	// actual timing might be less than 1s, to account for shutdown invocation overhead
 	shutdownTime := time.Now().Sub(preShutdown)
-	if shutdownTime < time.Second || shutdownTime > ctx.ServiceClient.shutdownWait {
+	if shutdownTime < 900*time.Millisecond || shutdownTime > ctx.ServiceClient.shutdownWait {
 		t.Errorf("expected shutdown to take >1s and <%s but took: %s", ctx.ServiceClient.shutdownWait, shutdownTime)
 	}
 
@@ -1722,4 +1623,297 @@ func TestGetAddress(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestConsul_ServiceName_Duplicates(t *testing.T) {
+	t.Parallel()
+	ctx := setupFake(t)
+	require := require.New(t)
+
+	ctx.Task.Services = []*structs.Service{
+		{
+			Name:      "best-service",
+			PortLabel: "x",
+			Tags: []string{
+				"foo",
+			},
+			Checks: []*structs.ServiceCheck{
+				{
+					Name:     "check-a",
+					Type:     "tcp",
+					Interval: time.Second,
+					Timeout:  time.Second,
+				},
+			},
+		},
+		{
+			Name:      "best-service",
+			PortLabel: "y",
+			Tags: []string{
+				"bar",
+			},
+			Checks: []*structs.ServiceCheck{
+				{
+					Name:     "checky-mccheckface",
+					Type:     "tcp",
+					Interval: time.Second,
+					Timeout:  time.Second,
+				},
+			},
+		},
+		{
+			Name:      "worst-service",
+			PortLabel: "y",
+		},
+	}
+
+	require.NoError(ctx.ServiceClient.RegisterTask(ctx.Task))
+
+	require.NoError(ctx.syncOnce())
+
+	require.Len(ctx.FakeConsul.services, 3)
+
+	for _, v := range ctx.FakeConsul.services {
+		if v.Name == ctx.Task.Services[0].Name && v.Port == xPort {
+			require.ElementsMatch(v.Tags, ctx.Task.Services[0].Tags)
+			require.Len(v.Checks, 1)
+		} else if v.Name == ctx.Task.Services[1].Name && v.Port == yPort {
+			require.ElementsMatch(v.Tags, ctx.Task.Services[1].Tags)
+			require.Len(v.Checks, 1)
+		} else if v.Name == ctx.Task.Services[2].Name {
+			require.Len(v.Checks, 0)
+		}
+	}
+}
+
+// TestConsul_ServiceDeregistration_OutOfProbation asserts that during in steady
+// state we remove any services we don't reconize locally
+func TestConsul_ServiceDeregistration_OutProbation(t *testing.T) {
+	t.Parallel()
+	ctx := setupFake(t)
+	require := require.New(t)
+
+	ctx.ServiceClient.deregisterProbationExpiry = time.Now().Add(-1 * time.Hour)
+
+	remainingTask := testTask()
+	remainingTask.Services = []*structs.Service{
+		{
+			Name:      "remaining-service",
+			PortLabel: "x",
+			Checks: []*structs.ServiceCheck{
+				{
+					Name:     "check",
+					Type:     "tcp",
+					Interval: time.Second,
+					Timeout:  time.Second,
+				},
+			},
+		},
+	}
+	remainingTaskServiceID := makeTaskServiceID(remainingTask.AllocID,
+		remainingTask.Name, remainingTask.Services[0], false)
+
+	require.NoError(ctx.ServiceClient.RegisterTask(remainingTask))
+	require.NoError(ctx.syncOnce())
+	require.Len(ctx.FakeConsul.services, 1)
+	require.Len(ctx.FakeConsul.checks, 1)
+
+	explicitlyRemovedTask := testTask()
+	explicitlyRemovedTask.Services = []*structs.Service{
+		{
+			Name:      "explicitly-removed-service",
+			PortLabel: "y",
+			Checks: []*structs.ServiceCheck{
+				{
+					Name:     "check",
+					Type:     "tcp",
+					Interval: time.Second,
+					Timeout:  time.Second,
+				},
+			},
+		},
+	}
+	explicitlyRemovedTaskServiceID := makeTaskServiceID(explicitlyRemovedTask.AllocID,
+		explicitlyRemovedTask.Name, explicitlyRemovedTask.Services[0], false)
+
+	require.NoError(ctx.ServiceClient.RegisterTask(explicitlyRemovedTask))
+
+	require.NoError(ctx.syncOnce())
+	require.Len(ctx.FakeConsul.services, 2)
+	require.Len(ctx.FakeConsul.checks, 2)
+
+	// we register a task through nomad API then remove it out of band
+	outofbandTask := testTask()
+	outofbandTask.Services = []*structs.Service{
+		{
+			Name:      "unknown-service",
+			PortLabel: "x",
+			Checks: []*structs.ServiceCheck{
+				{
+					Name:     "check",
+					Type:     "tcp",
+					Interval: time.Second,
+					Timeout:  time.Second,
+				},
+			},
+		},
+	}
+	outofbandTaskServiceID := makeTaskServiceID(outofbandTask.AllocID,
+		outofbandTask.Name, outofbandTask.Services[0], false)
+
+	require.NoError(ctx.ServiceClient.RegisterTask(outofbandTask))
+	require.NoError(ctx.syncOnce())
+
+	require.Len(ctx.FakeConsul.services, 3)
+
+	// remove outofbandTask from local services so it appears unknown to client
+	require.Len(ctx.ServiceClient.services, 3)
+	require.Len(ctx.ServiceClient.checks, 3)
+
+	delete(ctx.ServiceClient.services, outofbandTaskServiceID)
+	delete(ctx.ServiceClient.checks, makeCheckID(outofbandTaskServiceID, outofbandTask.Services[0].Checks[0]))
+
+	require.Len(ctx.ServiceClient.services, 2)
+	require.Len(ctx.ServiceClient.checks, 2)
+
+	// Sync and ensure that explicitly removed service as well as outofbandTask were removed
+
+	ctx.ServiceClient.RemoveTask(explicitlyRemovedTask)
+	require.NoError(ctx.syncOnce())
+	require.NoError(ctx.ServiceClient.sync())
+	require.Len(ctx.FakeConsul.services, 1)
+	require.Len(ctx.FakeConsul.checks, 1)
+
+	require.Contains(ctx.FakeConsul.services, remainingTaskServiceID)
+	require.NotContains(ctx.FakeConsul.services, outofbandTaskServiceID)
+	require.NotContains(ctx.FakeConsul.services, explicitlyRemovedTaskServiceID)
+
+	require.Contains(ctx.FakeConsul.checks, makeCheckID(remainingTaskServiceID, remainingTask.Services[0].Checks[0]))
+	require.NotContains(ctx.FakeConsul.checks, makeCheckID(outofbandTaskServiceID, outofbandTask.Services[0].Checks[0]))
+	require.NotContains(ctx.FakeConsul.checks, makeCheckID(explicitlyRemovedTaskServiceID, explicitlyRemovedTask.Services[0].Checks[0]))
+}
+
+// TestConsul_ServiceDeregistration_InProbation asserts that during initialization
+// we only deregister services that were explicitly removed and leave unknown
+// services untouched.  This adds a grace period for restoring recovered tasks
+// before deregistering them
+func TestConsul_ServiceDeregistration_InProbation(t *testing.T) {
+	t.Parallel()
+	ctx := setupFake(t)
+	require := require.New(t)
+
+	ctx.ServiceClient.deregisterProbationExpiry = time.Now().Add(1 * time.Hour)
+
+	remainingTask := testTask()
+	remainingTask.Services = []*structs.Service{
+		{
+			Name:      "remaining-service",
+			PortLabel: "x",
+			Checks: []*structs.ServiceCheck{
+				{
+					Name:     "check",
+					Type:     "tcp",
+					Interval: time.Second,
+					Timeout:  time.Second,
+				},
+			},
+		},
+	}
+	remainingTaskServiceID := makeTaskServiceID(remainingTask.AllocID,
+		remainingTask.Name, remainingTask.Services[0], false)
+
+	require.NoError(ctx.ServiceClient.RegisterTask(remainingTask))
+	require.NoError(ctx.syncOnce())
+	require.Len(ctx.FakeConsul.services, 1)
+	require.Len(ctx.FakeConsul.checks, 1)
+
+	explicitlyRemovedTask := testTask()
+	explicitlyRemovedTask.Services = []*structs.Service{
+		{
+			Name:      "explicitly-removed-service",
+			PortLabel: "y",
+			Checks: []*structs.ServiceCheck{
+				{
+					Name:     "check",
+					Type:     "tcp",
+					Interval: time.Second,
+					Timeout:  time.Second,
+				},
+			},
+		},
+	}
+	explicitlyRemovedTaskServiceID := makeTaskServiceID(explicitlyRemovedTask.AllocID,
+		explicitlyRemovedTask.Name, explicitlyRemovedTask.Services[0], false)
+
+	require.NoError(ctx.ServiceClient.RegisterTask(explicitlyRemovedTask))
+
+	require.NoError(ctx.syncOnce())
+	require.Len(ctx.FakeConsul.services, 2)
+	require.Len(ctx.FakeConsul.checks, 2)
+
+	// we register a task through nomad API then remove it out of band
+	outofbandTask := testTask()
+	outofbandTask.Services = []*structs.Service{
+		{
+			Name:      "unknown-service",
+			PortLabel: "x",
+			Checks: []*structs.ServiceCheck{
+				{
+					Name:     "check",
+					Type:     "tcp",
+					Interval: time.Second,
+					Timeout:  time.Second,
+				},
+			},
+		},
+	}
+	outofbandTaskServiceID := makeTaskServiceID(outofbandTask.AllocID,
+		outofbandTask.Name, outofbandTask.Services[0], false)
+
+	require.NoError(ctx.ServiceClient.RegisterTask(outofbandTask))
+	require.NoError(ctx.syncOnce())
+
+	require.Len(ctx.FakeConsul.services, 3)
+
+	// remove outofbandTask from local services so it appears unknown to client
+	require.Len(ctx.ServiceClient.services, 3)
+	require.Len(ctx.ServiceClient.checks, 3)
+
+	delete(ctx.ServiceClient.services, outofbandTaskServiceID)
+	delete(ctx.ServiceClient.checks, makeCheckID(outofbandTaskServiceID, outofbandTask.Services[0].Checks[0]))
+
+	require.Len(ctx.ServiceClient.services, 2)
+	require.Len(ctx.ServiceClient.checks, 2)
+
+	// Sync and ensure that explicitly removed service was removed, but outofbandTask remains
+
+	ctx.ServiceClient.RemoveTask(explicitlyRemovedTask)
+	require.NoError(ctx.syncOnce())
+	require.NoError(ctx.ServiceClient.sync())
+	require.Len(ctx.FakeConsul.services, 2)
+	require.Len(ctx.FakeConsul.checks, 2)
+
+	require.Contains(ctx.FakeConsul.services, remainingTaskServiceID)
+	require.Contains(ctx.FakeConsul.services, outofbandTaskServiceID)
+	require.NotContains(ctx.FakeConsul.services, explicitlyRemovedTaskServiceID)
+
+	require.Contains(ctx.FakeConsul.checks, makeCheckID(remainingTaskServiceID, remainingTask.Services[0].Checks[0]))
+	require.Contains(ctx.FakeConsul.checks, makeCheckID(outofbandTaskServiceID, outofbandTask.Services[0].Checks[0]))
+	require.NotContains(ctx.FakeConsul.checks, makeCheckID(explicitlyRemovedTaskServiceID, explicitlyRemovedTask.Services[0].Checks[0]))
+
+	// after probation, outofband services and checks are removed
+	ctx.ServiceClient.deregisterProbationExpiry = time.Now().Add(-1 * time.Hour)
+
+	require.NoError(ctx.ServiceClient.sync())
+	require.Len(ctx.FakeConsul.services, 1)
+	require.Len(ctx.FakeConsul.checks, 1)
+
+	require.Contains(ctx.FakeConsul.services, remainingTaskServiceID)
+	require.NotContains(ctx.FakeConsul.services, outofbandTaskServiceID)
+	require.NotContains(ctx.FakeConsul.services, explicitlyRemovedTaskServiceID)
+
+	require.Contains(ctx.FakeConsul.checks, makeCheckID(remainingTaskServiceID, remainingTask.Services[0].Checks[0]))
+	require.NotContains(ctx.FakeConsul.checks, makeCheckID(outofbandTaskServiceID, outofbandTask.Services[0].Checks[0]))
+	require.NotContains(ctx.FakeConsul.checks, makeCheckID(explicitlyRemovedTaskServiceID, explicitlyRemovedTask.Services[0].Checks[0]))
+
 }

@@ -4,8 +4,7 @@ import { HOSTS } from './common';
 import { logFrames, logEncode } from './data/logs';
 import { generateDiff } from './factories/job-version';
 import { generateTaskGroupFailures } from './factories/evaluation';
-
-const { copy } = Ember;
+import { copy } from 'ember-copy';
 
 export function findLeader(schema) {
   const agent = schema.agents.first();
@@ -47,11 +46,10 @@ export default function() {
       const json = this.serialize(jobs.all());
       const namespace = queryParams.namespace || 'default';
       return json
-        .filter(
-          job =>
-            namespace === 'default'
-              ? !job.NamespaceID || job.NamespaceID === namespace
-              : job.NamespaceID === namespace
+        .filter(job =>
+          namespace === 'default'
+            ? !job.NamespaceID || job.NamespaceID === namespace
+            : job.NamespaceID === namespace
         )
         .map(job => filterKeys(job, 'TaskGroups', 'NamespaceID'));
     })
@@ -202,6 +200,10 @@ export default function() {
 
   this.get('/allocation/:id');
 
+  this.post('/allocation/:id/stop', function() {
+    return new Response(204, {}, '');
+  });
+
   this.get('/namespaces', function({ namespaces }) {
     const records = namespaces.all();
 
@@ -303,6 +305,10 @@ export default function() {
   };
 
   // Client requests are available on the server and the client
+  this.put('/client/allocation/:id/restart', function() {
+    return new Response(204, {}, '');
+  });
+
   this.get('/client/allocation/:id/stats', clientAllocationStatsHandler);
   this.get('/client/fs/logs/:allocation_id', clientAllocationLog);
 

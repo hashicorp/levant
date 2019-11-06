@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/armon/go-metrics"
 	"github.com/hashicorp/consul/agent/consul/autopilot"
 	consulapi "github.com/hashicorp/consul/api"
 	"github.com/hashicorp/consul/lib"
@@ -221,8 +222,11 @@ type Server struct {
 
 	left         bool
 	shutdown     bool
-	shutdownCh   chan struct{}
 	shutdownLock sync.Mutex
+
+	shutdownCtx    context.Context
+	shutdownCancel context.CancelFunc
+	shutdownCh     <-chan struct{}
 }
 
 // Holds the RPC endpoints
@@ -303,8 +307,10 @@ func NewServer(config *Config, consulCatalog consul.CatalogAPI) (*Server, error)
 		blockedEvals:  NewBlockedEvals(evalBroker, logger),
 		rpcTLS:        incomingTLS,
 		aclCache:      aclCache,
-		shutdownCh:    make(chan struct{}),
 	}
+
+	s.shutdownCtx, s.shutdownCancel = context.WithCancel(context.Background())
+	s.shutdownCh = s.shutdownCtx.Done()
 
 	// Create the RPC handler
 	s.rpcHandler = newRpcHandler(s)
@@ -404,6 +410,9 @@ func NewServer(config *Config, consulCatalog consul.CatalogAPI) (*Server, error)
 
 	// Emit metrics
 	go s.heartbeatStats()
+
+	// Emit raft and state store metrics
+	go s.EmitRaftStats(10*time.Second, s.shutdownCh)
 
 	// Start enterprise background workers
 	s.startEnterpriseBackground()
@@ -530,7 +539,7 @@ func (s *Server) Shutdown() error {
 	}
 
 	s.shutdown = true
-	close(s.shutdownCh)
+	s.shutdownCancel()
 
 	if s.serf != nil {
 		s.serf.Shutdown()
@@ -1027,6 +1036,7 @@ func (s *Server) setupRpcServer(server *rpc.Server, ctx *RPCContext) {
 		// Client endpoints
 		s.staticEndpoints.ClientStats = &ClientStats{srv: s, logger: s.logger.Named("client_stats")}
 		s.staticEndpoints.ClientAllocations = &ClientAllocations{srv: s, logger: s.logger.Named("client_allocs")}
+		s.staticEndpoints.ClientAllocations.register()
 
 		// Streaming endpoints
 		s.staticEndpoints.FileSystem = &FileSystem{srv: s, logger: s.logger.Named("client_fs")}
@@ -1169,7 +1179,12 @@ func (s *Server) setupRaft() error {
 			}
 		} else if _, err := os.Stat(peersFile); err == nil {
 			s.logger.Info("found peers.json file, recovering Raft configuration...")
-			configuration, err := raft.ReadPeersJSON(peersFile)
+			var configuration raft.Configuration
+			if s.config.RaftConfig.ProtocolVersion < 3 {
+				configuration, err = raft.ReadPeersJSON(peersFile)
+			} else {
+				configuration, err = raft.ReadConfigJSON(peersFile)
+			}
 			if err != nil {
 				return fmt.Errorf("recovery failed to parse peers.json: %v", err)
 			}
@@ -1439,6 +1454,27 @@ func (s *Server) Stats() map[string]map[string]string {
 	return stats
 }
 
+// EmitRaftStats is used to export metrics about raft indexes and state store snapshot index
+func (s *Server) EmitRaftStats(period time.Duration, stopCh <-chan struct{}) {
+	for {
+		select {
+		case <-time.After(period):
+			lastIndex := s.raft.LastIndex()
+			metrics.SetGauge([]string{"raft", "lastIndex"}, float32(lastIndex))
+			appliedIndex := s.raft.AppliedIndex()
+			metrics.SetGauge([]string{"raft", "appliedIndex"}, float32(appliedIndex))
+			stateStoreSnapshotIndex, err := s.State().LatestIndex()
+			if err != nil {
+				s.logger.Warn("Unable to read snapshot index from statestore, metric will not be emitted", "error", err)
+			} else {
+				metrics.SetGauge([]string{"state", "snapshotIndex"}, float32(stateStoreSnapshotIndex))
+			}
+		case <-stopCh:
+			return
+		}
+	}
+}
+
 // Region returns the region of the server
 func (s *Server) Region() string {
 	return s.config.Region
@@ -1465,10 +1501,47 @@ func (s *Server) ReplicationToken() string {
 // location.
 const peersInfoContent = `
 As of Nomad 0.5.5, the peers.json file is only used for recovery
-after an outage. It should be formatted as a JSON array containing the address
-and port (RPC) of each Nomad server in the cluster, like this:
-
-["10.1.0.1:4647","10.1.0.2:4647","10.1.0.3:4647"]
+after an outage. The format of this file depends on what the server has
+configured for its Raft protocol version. Please see the agent configuration
+page at https://www.consul.io/docs/agent/options.html#_raft_protocol for more
+details about this parameter.
+For Raft protocol version 2 and earlier, this should be formatted as a JSON
+array containing the address and port of each Consul server in the cluster, like
+this:
+[
+  "10.1.0.1:8300",
+  "10.1.0.2:8300",
+  "10.1.0.3:8300"
+]
+For Raft protocol version 3 and later, this should be formatted as a JSON
+array containing the node ID, address:port, and suffrage information of each
+Consul server in the cluster, like this:
+[
+  {
+    "id": "adf4238a-882b-9ddc-4a9d-5b6758e4159e",
+    "address": "10.1.0.1:8300",
+    "non_voter": false
+  },
+  {
+    "id": "8b6dda82-3103-11e7-93ae-92361f002671",
+    "address": "10.1.0.2:8300",
+    "non_voter": false
+  },
+  {
+    "id": "97e17742-3103-11e7-93ae-92361f002671",
+    "address": "10.1.0.3:8300",
+    "non_voter": false
+  }
+]
+The "id" field is the node ID of the server. This can be found in the logs when
+the server starts up, or in the "node-id" file inside the server's data
+directory.
+The "address" field is the address and port of the server.
+The "non_voter" field controls whether the server is a non-voter, which is used
+in some advanced Autopilot configurations, please see
+https://www.nomadproject.io/guides/operations/outage.html for more information. If
+"non_voter" is omitted it will default to false, which is typical for most
+clusters.
 
 Under normal operation, the peers.json file will not be present.
 
