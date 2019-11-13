@@ -505,7 +505,7 @@ func (l *levantDeployment) dynamicGroupCountUpdater() error {
 	return nil
 }
 
-// Checks that all task groups have a count bigger than zero.
+// isJobZeroCount checks that all task groups have a count bigger than zero.
 func (l *levantDeployment) isJobZeroCount() bool {
 	for _, tg := range l.config.Template.Job.TaskGroups {
 		if tg.Count == nil {
