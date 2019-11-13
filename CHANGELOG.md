@@ -3,6 +3,9 @@
 IMPROVEMENTS:
  * Update vendoered version of Nomad to 0.9.6 [GH-313](https://github.com/jrasell/levant/pull/313)
 
+BUG FIXES:
+ * Use info level logs when no changes are detected [GH-303](https://github.com/jrasell/levant/pull/303)
+
 ## 0.2.8 (14 September 2019)
 
 IMPROVEMENTS:
