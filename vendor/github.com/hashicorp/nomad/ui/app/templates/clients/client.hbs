@@ -1,8 +1,12 @@
+{{title "Client " (or model.name model.shortId)}}
 <section class="section">
   <h1 data-test-title class="title">
     <span data-test-node-status="{{model.compositeStatus}}" class="node-status-light {{model.compositeStatus}}"></span>
     {{or model.name model.shortId}}
-    <span class="tag is-hollow is-small no-text-transform">{{model.id}}</span>
+    <span class="tag is-hollow is-small no-text-transform">
+      {{model.id}}
+      {{copy-button clipboardText=model.id}}
+    </span>
   </h1>
 
   <div class="boxed-section is-small">
@@ -95,7 +99,17 @@
 
   <div class="boxed-section">
     <div class="boxed-section-head">
-      <div>Allocations <span class="badge is-white">{{model.allocations.length}}</span></div>
+      <div>
+        Allocations
+        <button role="button" class="badge is-white" onclick={{action "setPreemptionFilter" false}} data-test-filter-all>
+          {{model.allocations.length}}
+        </button>
+        {{#if preemptions.length}}
+          <button role="button" class="badge is-warning" onclick={{action "setPreemptionFilter" true}} data-test-filter-preemptions>
+            {{preemptions.length}} {{pluralize "preemption" preemptions.length}}
+          </button>
+        {{/if}}
+      </div>
       {{search-box
         searchTerm=(mut searchTerm)
         onChange=(action resetPagination)

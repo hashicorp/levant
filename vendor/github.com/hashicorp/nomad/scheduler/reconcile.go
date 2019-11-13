@@ -128,6 +128,8 @@ type delayedRescheduleInfo struct {
 	// allocID is the ID of the allocation eligible to be rescheduled
 	allocID string
 
+	alloc *structs.Allocation
+
 	// rescheduleTime is the time to use in the delayed evaluation
 	rescheduleTime time.Time
 }
@@ -218,7 +220,11 @@ func (a *allocReconciler) Compute() *reconcileResults {
 	// Set the description of a created deployment
 	if d := a.result.deployment; d != nil {
 		if d.RequiresPromotion() {
-			d.StatusDescription = structs.DeploymentStatusDescriptionRunningNeedsPromotion
+			if d.HasAutoPromote() {
+				d.StatusDescription = structs.DeploymentStatusDescriptionRunningAutoPromotion
+			} else {
+				d.StatusDescription = structs.DeploymentStatusDescriptionRunningNeedsPromotion
+			}
 		}
 	}
 
@@ -327,6 +333,7 @@ func (a *allocReconciler) computeGroup(group string, all allocSet) bool {
 		dstate = &structs.DeploymentState{}
 		if tg.Update != nil {
 			dstate.AutoRevert = tg.Update.AutoRevert
+			dstate.AutoPromote = tg.Update.AutoPromote
 			dstate.ProgressDeadline = tg.Update.ProgressDeadline
 		}
 	}
@@ -420,6 +427,8 @@ func (a *allocReconciler) computeGroup(group string, all allocSet) bool {
 		for _, p := range place {
 			a.result.place = append(a.result.place, p)
 		}
+		a.markStop(rescheduleNow, "", allocRescheduled)
+		desiredChanges.Stop += uint64(len(rescheduleNow))
 
 		min := helper.IntMin(len(place), limit)
 		limit -= min
@@ -444,6 +453,12 @@ func (a *allocReconciler) computeGroup(group string, all allocSet) bool {
 				if p.IsRescheduling() && !(a.deploymentFailed && prev != nil && a.deployment.ID == prev.DeploymentID) {
 					a.result.place = append(a.result.place, p)
 					desiredChanges.Place++
+
+					a.result.stop = append(a.result.stop, allocStopResult{
+						alloc:             prev,
+						statusDescription: allocRescheduled,
+					})
+					desiredChanges.Stop++
 				}
 			}
 		}

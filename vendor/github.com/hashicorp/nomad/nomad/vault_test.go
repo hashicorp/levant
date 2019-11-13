@@ -24,6 +24,7 @@ import (
 	"github.com/hashicorp/nomad/nomad/structs/config"
 	"github.com/hashicorp/nomad/testutil"
 	vapi "github.com/hashicorp/vault/api"
+	vaultconsts "github.com/hashicorp/vault/helper/consts"
 )
 
 const (
@@ -173,6 +174,57 @@ func TestVaultClient_BadConfig(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "address must be set") {
 		t.Fatalf("Expected address unset error: %v", err)
 	}
+}
+
+// TestVaultClient_WithNamespaceSupport tests that the Vault namespace config, if present, will result in the
+// namespace header being set on the created Vault client.
+func TestVaultClient_WithNamespaceSupport(t *testing.T) {
+	t.Parallel()
+	require := require.New(t)
+	tr := true
+	testNs := "test-namespace"
+	conf := &config.VaultConfig{
+		Addr:      "https://vault.service.consul:8200",
+		Enabled:   &tr,
+		Token:     "testvaulttoken",
+		Namespace: testNs,
+	}
+	logger := testlog.HCLogger(t)
+
+	// Should be no error since Vault is not enabled
+	c, err := NewVaultClient(conf, logger, nil)
+	if err != nil {
+		t.Fatalf("failed to build vault client: %v", err)
+	}
+
+	require.Equal(testNs, c.client.Headers().Get(vaultconsts.NamespaceHeaderName))
+	require.Equal("", c.clientSys.Headers().Get(vaultconsts.NamespaceHeaderName))
+	require.NotEqual(c.clientSys, c.client)
+}
+
+// TestVaultClient_WithoutNamespaceSupport tests that the Vault namespace config, if present, will result in the
+// namespace header being set on the created Vault client.
+func TestVaultClient_WithoutNamespaceSupport(t *testing.T) {
+	t.Parallel()
+	require := require.New(t)
+	tr := true
+	conf := &config.VaultConfig{
+		Addr:      "https://vault.service.consul:8200",
+		Enabled:   &tr,
+		Token:     "testvaulttoken",
+		Namespace: "",
+	}
+	logger := testlog.HCLogger(t)
+
+	// Should be no error since Vault is not enabled
+	c, err := NewVaultClient(conf, logger, nil)
+	if err != nil {
+		t.Fatalf("failed to build vault client: %v", err)
+	}
+
+	require.Equal("", c.client.Headers().Get(vaultconsts.NamespaceHeaderName))
+	require.Equal("", c.clientSys.Headers().Get(vaultconsts.NamespaceHeaderName))
+	require.Equal(c.clientSys, c.client)
 }
 
 // started separately.
@@ -464,6 +516,38 @@ func TestVaultClient_SetConfig(t *testing.T) {
 		t.Fatalf("Tomb shouldn't have exited")
 	case <-time.After(1 * time.Second):
 		return
+	}
+}
+
+// TestVaultClient_SetConfig_Deadlock asserts that calling SetConfig
+// concurrently with establishConnection does not deadlock.
+func TestVaultClient_SetConfig_Deadlock(t *testing.T) {
+	t.Parallel()
+	v := testutil.NewTestVault(t)
+	defer v.Stop()
+
+	v2 := testutil.NewTestVault(t)
+	defer v2.Stop()
+
+	// Set the configs token in a new test role
+	v2.Config.Token = defaultTestVaultWhitelistRoleAndToken(v2, t, 20)
+
+	logger := testlog.HCLogger(t)
+	client, err := NewVaultClient(v.Config, logger, nil)
+	if err != nil {
+		t.Fatalf("failed to build vault client: %v", err)
+	}
+	defer client.Stop()
+
+	for i := 0; i < 100; i++ {
+		// Alternate configs to cause updates
+		conf := v.Config
+		if i%2 == 0 {
+			conf = v2.Config
+		}
+		if err := client.SetConfig(conf); err != nil {
+			t.Fatalf("SetConfig failed: %v", err)
+		}
 	}
 }
 

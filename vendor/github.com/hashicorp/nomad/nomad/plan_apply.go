@@ -1,6 +1,7 @@
 package nomad
 
 import (
+	"context"
 	"fmt"
 	"runtime"
 	"time"
@@ -15,7 +16,7 @@ import (
 	"github.com/hashicorp/raft"
 )
 
-// planner is used to mange the submitted allocation plans that are waiting
+// planner is used to manage the submitted allocation plans that are waiting
 // to be accessed by the leader
 type planner struct {
 	*Server
@@ -68,10 +69,21 @@ func newPlanner(s *Server) (*planner, error) {
 // but there are many of those and only a single plan verifier.
 //
 func (p *planner) planApply() {
-	// waitCh is used to track an outstanding application while snap
-	// holds an optimistic state which includes that plan application.
-	var waitCh chan struct{}
+	// planIndexCh is used to track an outstanding application and receive
+	// its committed index while snap holds an optimistic state which
+	// includes that plan application.
+	var planIndexCh chan uint64
 	var snap *state.StateSnapshot
+
+	// prevPlanResultIndex is the index when the last PlanResult was
+	// committed. Since only the last plan is optimistically applied to the
+	// snapshot, it's possible the current snapshot's and plan's indexes
+	// are less than the index the previous plan result was committed at.
+	// prevPlanResultIndex also guards against the previous plan committing
+	// during Dequeue, thus causing the snapshot containing the optimistic
+	// commit to be discarded and potentially evaluating the current plan
+	// against an index older than the previous plan was committed at.
+	var prevPlanResultIndex uint64
 
 	// Setup a worker pool with half the cores, with at least 1
 	poolSize := runtime.NumCPU() / 2
@@ -88,18 +100,35 @@ func (p *planner) planApply() {
 			return
 		}
 
-		// Check if out last plan has completed
+		// If last plan has completed get a new snapshot
 		select {
-		case <-waitCh:
-			waitCh = nil
+		case idx := <-planIndexCh:
+			// Previous plan committed. Discard snapshot and ensure
+			// future snapshots include this plan. idx may be 0 if
+			// plan failed to apply, so use max(prev, idx)
+			prevPlanResultIndex = max(prevPlanResultIndex, idx)
+			planIndexCh = nil
 			snap = nil
 		default:
 		}
 
+		if snap != nil {
+			// If snapshot doesn't contain the previous plan
+			// result's index and the current plan's snapshot it,
+			// discard it and get a new one below.
+			minIndex := max(prevPlanResultIndex, pending.plan.SnapshotIndex)
+			if idx, err := snap.LatestIndex(); err != nil || idx < minIndex {
+				snap = nil
+			}
+		}
+
 		// Snapshot the state so that we have a consistent view of the world
-		// if no snapshot is available
-		if waitCh == nil || snap == nil {
-			snap, err = p.fsm.State().Snapshot()
+		// if no snapshot is available.
+		//  - planIndexCh will be nil if the previous plan result applied
+		//    during Dequeue
+		//  - snap will be nil if its index < max(prevIndex, curIndex)
+		if planIndexCh == nil || snap == nil {
+			snap, err = p.snapshotMinIndex(prevPlanResultIndex, pending.plan.SnapshotIndex)
 			if err != nil {
 				p.logger.Error("failed to snapshot state", "error", err)
 				pending.respond(nil, err)
@@ -123,11 +152,12 @@ func (p *planner) planApply() {
 
 		// Ensure any parallel apply is complete before starting the next one.
 		// This also limits how out of date our snapshot can be.
-		if waitCh != nil {
-			<-waitCh
-			snap, err = p.fsm.State().Snapshot()
+		if planIndexCh != nil {
+			idx := <-planIndexCh
+			prevPlanResultIndex = max(prevPlanResultIndex, idx)
+			snap, err = p.snapshotMinIndex(prevPlanResultIndex, pending.plan.SnapshotIndex)
 			if err != nil {
-				p.logger.Error("failed to snapshot state", "error", err)
+				p.logger.Error("failed to update snapshot state", "error", err)
 				pending.respond(nil, err)
 				continue
 			}
@@ -141,60 +171,113 @@ func (p *planner) planApply() {
 			continue
 		}
 
-		// Respond to the plan in async
-		waitCh = make(chan struct{})
-		go p.asyncPlanWait(waitCh, future, result, pending)
+		// Respond to the plan in async; receive plan's committed index via chan
+		planIndexCh = make(chan uint64, 1)
+		go p.asyncPlanWait(planIndexCh, future, result, pending)
 	}
+}
+
+// snapshotMinIndex wraps SnapshotAfter with a 5s timeout and converts timeout
+// errors to a more descriptive error message. The snapshot is guaranteed to
+// include both the previous plan and all objects referenced by the plan or
+// return an error.
+func (p *planner) snapshotMinIndex(prevPlanResultIndex, planSnapshotIndex uint64) (*state.StateSnapshot, error) {
+	defer metrics.MeasureSince([]string{"nomad", "plan", "wait_for_index"}, time.Now())
+
+	// Minimum index the snapshot must include is the max of the previous
+	// plan result's and current plan's snapshot index.
+	minIndex := max(prevPlanResultIndex, planSnapshotIndex)
+
+	const timeout = 5 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	snap, err := p.fsm.State().SnapshotMinIndex(ctx, minIndex)
+	cancel()
+	if err == context.DeadlineExceeded {
+		return nil, fmt.Errorf("timed out after %s waiting for index=%d (previous plan result index=%d; plan snapshot index=%d)",
+			timeout, minIndex, prevPlanResultIndex, planSnapshotIndex)
+	}
+
+	return snap, err
 }
 
 // applyPlan is used to apply the plan result and to return the alloc index
 func (p *planner) applyPlan(plan *structs.Plan, result *structs.PlanResult, snap *state.StateSnapshot) (raft.ApplyFuture, error) {
-	// Determine the minimum number of updates, could be more if there
-	// are multiple updates per node
-	minUpdates := len(result.NodeUpdate)
-	minUpdates += len(result.NodeAllocation)
-
 	// Setup the update request
 	req := structs.ApplyPlanResultsRequest{
 		AllocUpdateRequest: structs.AllocUpdateRequest{
-			Job:   plan.Job,
-			Alloc: make([]*structs.Allocation, 0, minUpdates),
+			Job: plan.Job,
 		},
 		Deployment:        result.Deployment,
 		DeploymentUpdates: result.DeploymentUpdates,
 		EvalID:            plan.EvalID,
-		NodePreemptions:   make([]*structs.Allocation, 0, len(result.NodePreemptions)),
-	}
-	for _, updateList := range result.NodeUpdate {
-		req.Alloc = append(req.Alloc, updateList...)
-	}
-	for _, allocList := range result.NodeAllocation {
-		req.Alloc = append(req.Alloc, allocList...)
 	}
 
-	for _, preemptions := range result.NodePreemptions {
-		req.NodePreemptions = append(req.NodePreemptions, preemptions...)
-	}
-
-	// Set the time the alloc was applied for the first time. This can be used
-	// to approximate the scheduling time.
-	now := time.Now().UTC().UnixNano()
-	for _, alloc := range req.Alloc {
-		if alloc.CreateTime == 0 {
-			alloc.CreateTime = now
-		}
-		alloc.ModifyTime = now
-	}
-
-	// Set modify time for preempted allocs if any
-	// Also gather jobids to create follow up evals
 	preemptedJobIDs := make(map[structs.NamespacedID]struct{})
-	for _, alloc := range req.NodePreemptions {
-		alloc.ModifyTime = now
-		id := structs.NamespacedID{Namespace: alloc.Namespace, ID: alloc.JobID}
-		_, ok := preemptedJobIDs[id]
-		if !ok {
-			preemptedJobIDs[id] = struct{}{}
+	now := time.Now().UTC().UnixNano()
+
+	if ServersMeetMinimumVersion(p.Members(), MinVersionPlanNormalization, true) {
+		// Initialize the allocs request using the new optimized log entry format.
+		// Determine the minimum number of updates, could be more if there
+		// are multiple updates per node
+		req.AllocsStopped = make([]*structs.AllocationDiff, 0, len(result.NodeUpdate))
+		req.AllocsUpdated = make([]*structs.Allocation, 0, len(result.NodeAllocation))
+		req.AllocsPreempted = make([]*structs.AllocationDiff, 0, len(result.NodePreemptions))
+
+		for _, updateList := range result.NodeUpdate {
+			for _, stoppedAlloc := range updateList {
+				req.AllocsStopped = append(req.AllocsStopped, normalizeStoppedAlloc(stoppedAlloc, now))
+			}
+		}
+
+		for _, allocList := range result.NodeAllocation {
+			req.AllocsUpdated = append(req.AllocsUpdated, allocList...)
+		}
+
+		// Set the time the alloc was applied for the first time. This can be used
+		// to approximate the scheduling time.
+		updateAllocTimestamps(req.AllocsUpdated, now)
+
+		for _, preemptions := range result.NodePreemptions {
+			for _, preemptedAlloc := range preemptions {
+				req.AllocsPreempted = append(req.AllocsPreempted, normalizePreemptedAlloc(preemptedAlloc, now))
+
+				// Gather jobids to create follow up evals
+				appendNamespacedJobID(preemptedJobIDs, preemptedAlloc)
+			}
+		}
+	} else {
+		// COMPAT 0.11: This branch is deprecated and will only be used to support
+		// application of older log entries. Expected to be removed in a future version.
+
+		// Determine the minimum number of updates, could be more if there
+		// are multiple updates per node
+		minUpdates := len(result.NodeUpdate)
+		minUpdates += len(result.NodeAllocation)
+
+		// Initialize using the older log entry format for Alloc and NodePreemptions
+		req.Alloc = make([]*structs.Allocation, 0, minUpdates)
+		req.NodePreemptions = make([]*structs.Allocation, 0, len(result.NodePreemptions))
+
+		for _, updateList := range result.NodeUpdate {
+			req.Alloc = append(req.Alloc, updateList...)
+		}
+		for _, allocList := range result.NodeAllocation {
+			req.Alloc = append(req.Alloc, allocList...)
+		}
+
+		for _, preemptions := range result.NodePreemptions {
+			req.NodePreemptions = append(req.NodePreemptions, preemptions...)
+		}
+
+		// Set the time the alloc was applied for the first time. This can be used
+		// to approximate the scheduling time.
+		updateAllocTimestamps(req.Alloc, now)
+
+		// Set modify time for preempted allocs if any
+		// Also gather jobids to create follow up evals
+		for _, alloc := range req.NodePreemptions {
+			alloc.ModifyTime = now
+			appendNamespacedJobID(preemptedJobIDs, alloc)
 		}
 	}
 
@@ -210,6 +293,8 @@ func (p *planner) applyPlan(plan *structs.Plan, result *structs.PlanResult, snap
 				Type:        job.Type,
 				Priority:    job.Priority,
 				Status:      structs.EvalStatusPending,
+				CreateTime:  now,
+				ModifyTime:  now,
 			}
 			evals = append(evals, eval)
 		}
@@ -232,21 +317,70 @@ func (p *planner) applyPlan(plan *structs.Plan, result *structs.PlanResult, snap
 	return future, nil
 }
 
-// asyncPlanWait is used to apply and respond to a plan async
-func (p *planner) asyncPlanWait(waitCh chan struct{}, future raft.ApplyFuture,
+// normalizePreemptedAlloc removes redundant fields from a preempted allocation and
+// returns AllocationDiff. Since a preempted allocation is always an existing allocation,
+// the struct returned by this method contains only the differential, which can be
+// applied to an existing allocation, to yield the updated struct
+func normalizePreemptedAlloc(preemptedAlloc *structs.Allocation, now int64) *structs.AllocationDiff {
+	return &structs.AllocationDiff{
+		ID:                    preemptedAlloc.ID,
+		PreemptedByAllocation: preemptedAlloc.PreemptedByAllocation,
+		ModifyTime:            now,
+	}
+}
+
+// normalizeStoppedAlloc removes redundant fields from a stopped allocation and
+// returns AllocationDiff. Since a stopped allocation is always an existing allocation,
+// the struct returned by this method contains only the differential, which can be
+// applied to an existing allocation, to yield the updated struct
+func normalizeStoppedAlloc(stoppedAlloc *structs.Allocation, now int64) *structs.AllocationDiff {
+	return &structs.AllocationDiff{
+		ID:                 stoppedAlloc.ID,
+		DesiredDescription: stoppedAlloc.DesiredDescription,
+		ClientStatus:       stoppedAlloc.ClientStatus,
+		ModifyTime:         now,
+	}
+}
+
+// appendNamespacedJobID appends the namespaced Job ID for the alloc to the jobIDs set
+func appendNamespacedJobID(jobIDs map[structs.NamespacedID]struct{}, alloc *structs.Allocation) {
+	id := structs.NamespacedID{Namespace: alloc.Namespace, ID: alloc.JobID}
+	if _, ok := jobIDs[id]; !ok {
+		jobIDs[id] = struct{}{}
+	}
+}
+
+// updateAllocTimestamps sets the CreateTime and ModifyTime for the allocations
+// to the timestamp provided
+func updateAllocTimestamps(allocations []*structs.Allocation, timestamp int64) {
+	for _, alloc := range allocations {
+		if alloc.CreateTime == 0 {
+			alloc.CreateTime = timestamp
+		}
+		alloc.ModifyTime = timestamp
+	}
+}
+
+// asyncPlanWait is used to apply and respond to a plan async. On successful
+// commit the plan's index will be sent on the chan. On error the chan will be
+// closed.
+func (p *planner) asyncPlanWait(indexCh chan<- uint64, future raft.ApplyFuture,
 	result *structs.PlanResult, pending *pendingPlan) {
 	defer metrics.MeasureSince([]string{"nomad", "plan", "apply"}, time.Now())
-	defer close(waitCh)
 
 	// Wait for the plan to apply
 	if err := future.Error(); err != nil {
 		p.logger.Error("failed to apply plan", "error", err)
 		pending.respond(nil, err)
+
+		// Close indexCh on error
+		close(indexCh)
 		return
 	}
 
 	// Respond to the plan
-	result.AllocIndex = future.Index()
+	index := future.Index()
+	result.AllocIndex = index
 
 	// If this is a partial plan application, we need to ensure the scheduler
 	// at least has visibility into any placements it made to avoid double placement.
@@ -256,6 +390,7 @@ func (p *planner) asyncPlanWait(waitCh chan struct{}, future raft.ApplyFuture,
 		result.RefreshIndex = maxUint64(result.RefreshIndex, result.AllocIndex)
 	}
 	pending.respond(result, nil)
+	indexCh <- index
 }
 
 // evaluatePlan is used to determine what portions of a plan
@@ -263,6 +398,17 @@ func (p *planner) asyncPlanWait(waitCh chan struct{}, future raft.ApplyFuture,
 // which may be partial or if there was an error
 func evaluatePlan(pool *EvaluatePool, snap *state.StateSnapshot, plan *structs.Plan, logger log.Logger) (*structs.PlanResult, error) {
 	defer metrics.MeasureSince([]string{"nomad", "plan", "evaluate"}, time.Now())
+
+	// Denormalize without the job
+	err := snap.DenormalizeAllocationsMap(plan.NodeUpdate)
+	if err != nil {
+		return nil, err
+	}
+	// Denormalize without the job
+	err = snap.DenormalizeAllocationsMap(plan.NodePreemptions)
+	if err != nil {
+		return nil, err
+	}
 
 	// Check if the plan exceeds quota
 	overQuota, err := evaluatePlanQuota(snap, plan)
@@ -521,15 +667,11 @@ func evaluateNodePlan(snap *state.StateSnapshot, plan *structs.Plan, nodeID stri
 
 	// Remove any preempted allocs
 	if preempted := plan.NodePreemptions[nodeID]; len(preempted) > 0 {
-		for _, allocs := range preempted {
-			remove = append(remove, allocs)
-		}
+		remove = append(remove, preempted...)
 	}
 
 	if updated := plan.NodeAllocation[nodeID]; len(updated) > 0 {
-		for _, alloc := range updated {
-			remove = append(remove, alloc)
-		}
+		remove = append(remove, updated...)
 	}
 	proposed := structs.RemoveAllocs(existingAlloc, remove)
 	proposed = append(proposed, plan.NodeAllocation[nodeID]...)
@@ -537,4 +679,11 @@ func evaluateNodePlan(snap *state.StateSnapshot, plan *structs.Plan, nodeID stri
 	// Check if these allocations fit
 	fit, reason, _, err := structs.AllocsFit(node, proposed, nil, true)
 	return fit, reason, err
+}
+
+func max(a, b uint64) uint64 {
+	if a > b {
+		return a
+	}
+	return b
 }

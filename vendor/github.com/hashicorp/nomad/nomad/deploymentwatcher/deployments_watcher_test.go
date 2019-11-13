@@ -66,16 +66,16 @@ func TestWatcher_WatchDeployments(t *testing.T) {
 	}()
 
 	w.SetEnabled(true, m.state)
-	testutil.WaitForResult(func() (bool, error) { return 1 == len(w.watchers), nil },
-		func(err error) { require.Equal(1, len(w.watchers), "1 deployment returned") })
+	testutil.WaitForResult(func() (bool, error) { return 1 == watchersCount(w), nil },
+		func(err error) { require.Equal(1, watchersCount(w), "1 deployment returned") })
 
 	close(block1)
-	testutil.WaitForResult(func() (bool, error) { return 3 == len(w.watchers), nil },
-		func(err error) { require.Equal(3, len(w.watchers), "3 deployment returned") })
+	testutil.WaitForResult(func() (bool, error) { return 3 == watchersCount(w), nil },
+		func(err error) { require.Equal(3, watchersCount(w), "3 deployment returned") })
 
 	close(block2)
-	testutil.WaitForResult(func() (bool, error) { return 2 == len(w.watchers), nil },
-		func(err error) { require.Equal(3, len(w.watchers), "3 deployment returned - 1 terminal") })
+	testutil.WaitForResult(func() (bool, error) { return 2 == watchersCount(w), nil },
+		func(err error) { require.Equal(3, watchersCount(w), "3 deployment returned - 1 terminal") })
 }
 
 // Tests that calls against an unknown deployment fail
@@ -156,8 +156,8 @@ func TestWatcher_SetAllocHealth_Unknown(t *testing.T) {
 	m.On("UpdateDeploymentAllocHealth", mocker.MatchedBy(matcher)).Return(nil)
 
 	w.SetEnabled(true, m.state)
-	testutil.WaitForResult(func() (bool, error) { return 1 == len(w.watchers), nil },
-		func(err error) { require.Equal(1, len(w.watchers), "Should have 1 deployment") })
+	testutil.WaitForResult(func() (bool, error) { return 1 == watchersCount(w), nil },
+		func(err error) { require.Equal(1, watchersCount(w), "Should have 1 deployment") })
 
 	// Call SetAllocHealth
 	req := &structs.DeploymentAllocHealthRequest{
@@ -169,7 +169,7 @@ func TestWatcher_SetAllocHealth_Unknown(t *testing.T) {
 	if assert.NotNil(err, "Set health of unknown allocation") {
 		require.Contains(err.Error(), "unknown")
 	}
-	require.Equal(1, len(w.watchers), "Deployment should still be active")
+	require.Equal(1, watchersCount(w), "Deployment should still be active")
 }
 
 // Test setting allocation health
@@ -198,8 +198,8 @@ func TestWatcher_SetAllocHealth_Healthy(t *testing.T) {
 	m.On("UpdateDeploymentAllocHealth", mocker.MatchedBy(matcher)).Return(nil)
 
 	w.SetEnabled(true, m.state)
-	testutil.WaitForResult(func() (bool, error) { return 1 == len(w.watchers), nil },
-		func(err error) { require.Equal(1, len(w.watchers), "Should have 1 deployment") })
+	testutil.WaitForResult(func() (bool, error) { return 1 == watchersCount(w), nil },
+		func(err error) { require.Equal(1, watchersCount(w), "Should have 1 deployment") })
 
 	// Call SetAllocHealth
 	req := &structs.DeploymentAllocHealthRequest{
@@ -209,7 +209,7 @@ func TestWatcher_SetAllocHealth_Healthy(t *testing.T) {
 	var resp structs.DeploymentUpdateResponse
 	err := w.SetAllocHealth(req, &resp)
 	require.Nil(err, "SetAllocHealth")
-	require.Equal(1, len(w.watchers), "Deployment should still be active")
+	require.Equal(1, watchersCount(w), "Deployment should still be active")
 	m.AssertCalled(t, "UpdateDeploymentAllocHealth", mocker.MatchedBy(matcher))
 }
 
@@ -244,8 +244,8 @@ func TestWatcher_SetAllocHealth_Unhealthy(t *testing.T) {
 	m.On("UpdateDeploymentAllocHealth", mocker.MatchedBy(matcher)).Return(nil)
 
 	w.SetEnabled(true, m.state)
-	testutil.WaitForResult(func() (bool, error) { return 1 == len(w.watchers), nil },
-		func(err error) { require.Equal(1, len(w.watchers), "Should have 1 deployment") })
+	testutil.WaitForResult(func() (bool, error) { return 1 == watchersCount(w), nil },
+		func(err error) { require.Equal(1, watchersCount(w), "Should have 1 deployment") })
 
 	// Call SetAllocHealth
 	req := &structs.DeploymentAllocHealthRequest{
@@ -256,8 +256,8 @@ func TestWatcher_SetAllocHealth_Unhealthy(t *testing.T) {
 	err := w.SetAllocHealth(req, &resp)
 	require.Nil(err, "SetAllocHealth")
 
-	testutil.WaitForResult(func() (bool, error) { return 0 == len(w.watchers), nil },
-		func(err error) { require.Equal(0, len(w.watchers), "Should have no deployment") })
+	testutil.WaitForResult(func() (bool, error) { return 0 == watchersCount(w), nil },
+		func(err error) { require.Equal(0, watchersCount(w), "Should have no deployment") })
 	m.AssertNumberOfCalls(t, "UpdateDeploymentAllocHealth", 1)
 }
 
@@ -307,8 +307,8 @@ func TestWatcher_SetAllocHealth_Unhealthy_Rollback(t *testing.T) {
 	m.On("UpdateDeploymentAllocHealth", mocker.MatchedBy(matcher)).Return(nil)
 
 	w.SetEnabled(true, m.state)
-	testutil.WaitForResult(func() (bool, error) { return 1 == len(w.watchers), nil },
-		func(err error) { require.Equal(1, len(w.watchers), "Should have 1 deployment") })
+	testutil.WaitForResult(func() (bool, error) { return 1 == watchersCount(w), nil },
+		func(err error) { require.Equal(1, watchersCount(w), "Should have 1 deployment") })
 
 	// Call SetAllocHealth
 	req := &structs.DeploymentAllocHealthRequest{
@@ -319,8 +319,8 @@ func TestWatcher_SetAllocHealth_Unhealthy_Rollback(t *testing.T) {
 	err := w.SetAllocHealth(req, &resp)
 	require.Nil(err, "SetAllocHealth")
 
-	testutil.WaitForResult(func() (bool, error) { return 0 == len(w.watchers), nil },
-		func(err error) { require.Equal(0, len(w.watchers), "Should have no deployment") })
+	testutil.WaitForResult(func() (bool, error) { return 0 == watchersCount(w), nil },
+		func(err error) { require.Equal(0, watchersCount(w), "Should have no deployment") })
 	m.AssertNumberOfCalls(t, "UpdateDeploymentAllocHealth", 1)
 }
 
@@ -368,8 +368,8 @@ func TestWatcher_SetAllocHealth_Unhealthy_NoRollback(t *testing.T) {
 	m.On("UpdateDeploymentAllocHealth", mocker.MatchedBy(matcher)).Return(nil)
 
 	w.SetEnabled(true, m.state)
-	testutil.WaitForResult(func() (bool, error) { return 1 == len(w.watchers), nil },
-		func(err error) { require.Equal(1, len(w.watchers), "Should have 1 deployment") })
+	testutil.WaitForResult(func() (bool, error) { return 1 == watchersCount(w), nil },
+		func(err error) { require.Equal(1, watchersCount(w), "Should have 1 deployment") })
 
 	// Call SetAllocHealth
 	req := &structs.DeploymentAllocHealthRequest{
@@ -380,8 +380,8 @@ func TestWatcher_SetAllocHealth_Unhealthy_NoRollback(t *testing.T) {
 	err := w.SetAllocHealth(req, &resp)
 	require.Nil(err, "SetAllocHealth")
 
-	testutil.WaitForResult(func() (bool, error) { return 0 == len(w.watchers), nil },
-		func(err error) { require.Equal(0, len(w.watchers), "Should have no deployment") })
+	testutil.WaitForResult(func() (bool, error) { return 0 == watchersCount(w), nil },
+		func(err error) { require.Equal(0, watchersCount(w), "Should have no deployment") })
 	m.AssertNumberOfCalls(t, "UpdateDeploymentAllocHealth", 1)
 }
 
@@ -426,8 +426,8 @@ func TestWatcher_PromoteDeployment_HealthyCanaries(t *testing.T) {
 	m.On("UpdateAllocDesiredTransition", mocker.MatchedBy(m1)).Return(nil).Once()
 
 	w.SetEnabled(true, m.state)
-	testutil.WaitForResult(func() (bool, error) { return 1 == len(w.watchers), nil },
-		func(err error) { require.Equal(1, len(w.watchers), "Should have 1 deployment") })
+	testutil.WaitForResult(func() (bool, error) { return 1 == watchersCount(w), nil },
+		func(err error) { require.Equal(1, watchersCount(w), "Should have 1 deployment") })
 
 	// Call PromoteDeployment
 	req := &structs.DeploymentPromoteRequest{
@@ -437,7 +437,7 @@ func TestWatcher_PromoteDeployment_HealthyCanaries(t *testing.T) {
 	var resp structs.DeploymentUpdateResponse
 	err := w.PromoteDeployment(req, &resp)
 	require.Nil(err, "PromoteDeployment")
-	require.Equal(1, len(w.watchers), "Deployment should still be active")
+	require.Equal(1, watchersCount(w), "Deployment should still be active")
 	m.AssertCalled(t, "UpdateDeploymentPromotion", mocker.MatchedBy(matcher))
 }
 
@@ -475,8 +475,8 @@ func TestWatcher_PromoteDeployment_UnhealthyCanaries(t *testing.T) {
 	m.On("UpdateDeploymentPromotion", mocker.MatchedBy(matcher)).Return(nil)
 
 	w.SetEnabled(true, m.state)
-	testutil.WaitForResult(func() (bool, error) { return 1 == len(w.watchers), nil },
-		func(err error) { require.Equal(1, len(w.watchers), "Should have 1 deployment") })
+	testutil.WaitForResult(func() (bool, error) { return 1 == watchersCount(w), nil },
+		func(err error) { require.Equal(1, watchersCount(w), "Should have 1 deployment") })
 
 	// Call SetAllocHealth
 	req := &structs.DeploymentPromoteRequest{
@@ -486,11 +486,132 @@ func TestWatcher_PromoteDeployment_UnhealthyCanaries(t *testing.T) {
 	var resp structs.DeploymentUpdateResponse
 	err := w.PromoteDeployment(req, &resp)
 	if assert.NotNil(t, err, "PromoteDeployment") {
+		// 0/2 because the old version has been stopped but the canary isn't marked healthy yet
 		require.Contains(err.Error(), `Task group "web" has 0/2 healthy allocations`, "Should error because canary isn't marked healthy")
 	}
 
-	require.Equal(1, len(w.watchers), "Deployment should still be active")
+	require.Equal(1, watchersCount(w), "Deployment should still be active")
 	m.AssertCalled(t, "UpdateDeploymentPromotion", mocker.MatchedBy(matcher))
+}
+
+func TestWatcher_AutoPromoteDeployment(t *testing.T) {
+	t.Parallel()
+	w, m := defaultTestDeploymentWatcher(t)
+	now := time.Now()
+
+	// Create 1 UpdateStrategy, 1 job (1 TaskGroup), 2 canaries, and 1 deployment
+	upd := structs.DefaultUpdateStrategy.Copy()
+	upd.AutoPromote = true
+	upd.MaxParallel = 2
+	upd.Canary = 2
+	upd.ProgressDeadline = 5 * time.Second
+
+	j := mock.Job()
+	j.TaskGroups[0].Update = upd
+
+	d := mock.Deployment()
+	d.JobID = j.ID
+	// This is created in scheduler.computeGroup at runtime, where properties from the
+	// UpdateStrategy are copied in
+	d.TaskGroups = map[string]*structs.DeploymentState{
+		"web": {
+			AutoPromote:      upd.AutoPromote,
+			AutoRevert:       upd.AutoRevert,
+			ProgressDeadline: upd.ProgressDeadline,
+			DesiredTotal:     2,
+		},
+	}
+
+	alloc := func() *structs.Allocation {
+		a := mock.Alloc()
+		a.DeploymentID = d.ID
+		a.CreateTime = now.UnixNano()
+		a.ModifyTime = now.UnixNano()
+		a.DeploymentStatus = &structs.AllocDeploymentStatus{
+			Canary: true,
+		}
+		return a
+	}
+
+	a := alloc()
+	b := alloc()
+
+	d.TaskGroups[a.TaskGroup].PlacedCanaries = []string{a.ID, b.ID}
+	d.TaskGroups[a.TaskGroup].DesiredCanaries = 2
+	require.NoError(t, m.state.UpsertJob(m.nextIndex(), j), "UpsertJob")
+	require.NoError(t, m.state.UpsertDeployment(m.nextIndex(), d), "UpsertDeployment")
+	require.NoError(t, m.state.UpsertAllocs(m.nextIndex(), []*structs.Allocation{a, b}), "UpsertAllocs")
+
+	// =============================================================
+	// Support method calls
+	matchConfig0 := &matchDeploymentStatusUpdateConfig{
+		DeploymentID:      d.ID,
+		Status:            structs.DeploymentStatusFailed,
+		StatusDescription: structs.DeploymentStatusDescriptionProgressDeadline,
+		Eval:              true,
+	}
+	matcher0 := matchDeploymentStatusUpdateRequest(matchConfig0)
+	m.On("UpdateDeploymentStatus", mocker.MatchedBy(matcher0)).Return(nil)
+
+	matchConfig1 := &matchDeploymentAllocHealthRequestConfig{
+		DeploymentID: d.ID,
+		Healthy:      []string{a.ID, b.ID},
+		Eval:         true,
+	}
+	matcher1 := matchDeploymentAllocHealthRequest(matchConfig1)
+	m.On("UpdateDeploymentAllocHealth", mocker.MatchedBy(matcher1)).Return(nil)
+
+	matchConfig2 := &matchDeploymentPromoteRequestConfig{
+		Promotion: &structs.DeploymentPromoteRequest{
+			DeploymentID: d.ID,
+			All:          true,
+		},
+		Eval: true,
+	}
+	matcher2 := matchDeploymentPromoteRequest(matchConfig2)
+	m.On("UpdateDeploymentPromotion", mocker.MatchedBy(matcher2)).Return(nil)
+	// =============================================================
+
+	// Start the deployment
+	w.SetEnabled(true, m.state)
+	testutil.WaitForResult(func() (bool, error) { return 1 == len(w.watchers), nil },
+		func(err error) { require.Equal(t, 1, len(w.watchers), "Should have 1 deployment") })
+
+	// Mark the canaries healthy
+	req := &structs.DeploymentAllocHealthRequest{
+		DeploymentID:         d.ID,
+		HealthyAllocationIDs: []string{a.ID, b.ID},
+	}
+	var resp structs.DeploymentUpdateResponse
+	// Calls w.raft.UpdateDeploymentAllocHealth, which is implemented by StateStore in
+	// state.UpdateDeploymentAllocHealth via a raft shim?
+	err := w.SetAllocHealth(req, &resp)
+	require.NoError(t, err)
+
+	ws := memdb.NewWatchSet()
+
+	testutil.WaitForResult(
+		func() (bool, error) {
+			ds, _ := m.state.DeploymentsByJobID(ws, j.Namespace, j.ID, true)
+			d = ds[0]
+			return 2 == d.TaskGroups["web"].HealthyAllocs, nil
+		},
+		func(err error) { require.NoError(t, err) },
+	)
+
+	require.Equal(t, 1, len(w.watchers), "Deployment should still be active")
+	m.AssertCalled(t, "UpdateDeploymentPromotion", mocker.MatchedBy(matcher2))
+
+	require.Equal(t, "running", d.Status)
+	require.True(t, d.TaskGroups["web"].Promoted)
+
+	a1, _ := m.state.AllocByID(ws, a.ID)
+	require.False(t, a1.DeploymentStatus.Canary)
+	require.Equal(t, "pending", a1.ClientStatus)
+	require.Equal(t, "run", a1.DesiredStatus)
+
+	b1, _ := m.state.AllocByID(ws, b.ID)
+	require.False(t, b1.DeploymentStatus.Canary)
 }
 
 // Test pausing a deployment that is running
@@ -516,8 +637,8 @@ func TestWatcher_PauseDeployment_Pause_Running(t *testing.T) {
 	m.On("UpdateDeploymentStatus", mocker.MatchedBy(matcher)).Return(nil)
 
 	w.SetEnabled(true, m.state)
-	testutil.WaitForResult(func() (bool, error) { return 1 == len(w.watchers), nil },
-		func(err error) { require.Equal(1, len(w.watchers), "Should have 1 deployment") })
+	testutil.WaitForResult(func() (bool, error) { return 1 == watchersCount(w), nil },
+		func(err error) { require.Equal(1, watchersCount(w), "Should have 1 deployment") })
 
 	// Call PauseDeployment
 	req := &structs.DeploymentPauseRequest{
@@ -528,7 +649,7 @@ func TestWatcher_PauseDeployment_Pause_Running(t *testing.T) {
 	err := w.PauseDeployment(req, &resp)
 	require.Nil(err, "PauseDeployment")
 
-	require.Equal(1, len(w.watchers), "Deployment should still be active")
+	require.Equal(1, watchersCount(w), "Deployment should still be active")
 	m.AssertCalled(t, "UpdateDeploymentStatus", mocker.MatchedBy(matcher))
 }
 
@@ -556,8 +677,8 @@ func TestWatcher_PauseDeployment_Pause_Paused(t *testing.T) {
 	m.On("UpdateDeploymentStatus", mocker.MatchedBy(matcher)).Return(nil)
 
 	w.SetEnabled(true, m.state)
-	testutil.WaitForResult(func() (bool, error) { return 1 == len(w.watchers), nil },
-		func(err error) { require.Equal(1, len(w.watchers), "Should have 1 deployment") })
+	testutil.WaitForResult(func() (bool, error) { return 1 == watchersCount(w), nil },
+		func(err error) { require.Equal(1, watchersCount(w), "Should have 1 deployment") })
 
 	// Call PauseDeployment
 	req := &structs.DeploymentPauseRequest{
@@ -568,7 +689,7 @@ func TestWatcher_PauseDeployment_Pause_Paused(t *testing.T) {
 	err := w.PauseDeployment(req, &resp)
 	require.Nil(err, "PauseDeployment")
 
-	require.Equal(1, len(w.watchers), "Deployment should still be active")
+	require.Equal(1, watchersCount(w), "Deployment should still be active")
 	m.AssertCalled(t, "UpdateDeploymentStatus", mocker.MatchedBy(matcher))
 }
 
@@ -597,8 +718,8 @@ func TestWatcher_PauseDeployment_Unpause_Paused(t *testing.T) {
 	m.On("UpdateDeploymentStatus", mocker.MatchedBy(matcher)).Return(nil)
 
 	w.SetEnabled(true, m.state)
-	testutil.WaitForResult(func() (bool, error) { return 1 == len(w.watchers), nil },
-		func(err error) { require.Equal(1, len(w.watchers), "Should have 1 deployment") })
+	testutil.WaitForResult(func() (bool, error) { return 1 == watchersCount(w), nil },
+		func(err error) { require.Equal(1, watchersCount(w), "Should have 1 deployment") })
 
 	// Call PauseDeployment
 	req := &structs.DeploymentPauseRequest{
@@ -609,7 +730,7 @@ func TestWatcher_PauseDeployment_Unpause_Paused(t *testing.T) {
 	err := w.PauseDeployment(req, &resp)
 	require.Nil(err, "PauseDeployment")
 
-	require.Equal(1, len(w.watchers), "Deployment should still be active")
+	require.Equal(1, watchersCount(w), "Deployment should still be active")
 	m.AssertCalled(t, "UpdateDeploymentStatus", mocker.MatchedBy(matcher))
 }
 
@@ -637,8 +758,8 @@ func TestWatcher_PauseDeployment_Unpause_Running(t *testing.T) {
 	m.On("UpdateDeploymentStatus", mocker.MatchedBy(matcher)).Return(nil)
 
 	w.SetEnabled(true, m.state)
-	testutil.WaitForResult(func() (bool, error) { return 1 == len(w.watchers), nil },
-		func(err error) { require.Equal(1, len(w.watchers), "Should have 1 deployment") })
+	testutil.WaitForResult(func() (bool, error) { return 1 == watchersCount(w), nil },
+		func(err error) { require.Equal(1, watchersCount(w), "Should have 1 deployment") })
 
 	// Call PauseDeployment
 	req := &structs.DeploymentPauseRequest{
@@ -649,7 +770,7 @@ func TestWatcher_PauseDeployment_Unpause_Running(t *testing.T) {
 	err := w.PauseDeployment(req, &resp)
 	require.Nil(err, "PauseDeployment")
 
-	require.Equal(1, len(w.watchers), "Deployment should still be active")
+	require.Equal(1, watchersCount(w), "Deployment should still be active")
 	m.AssertCalled(t, "UpdateDeploymentStatus", mocker.MatchedBy(matcher))
 }
 
@@ -677,8 +798,8 @@ func TestWatcher_FailDeployment_Running(t *testing.T) {
 	m.On("UpdateDeploymentStatus", mocker.MatchedBy(matcher)).Return(nil)
 
 	w.SetEnabled(true, m.state)
-	testutil.WaitForResult(func() (bool, error) { return 1 == len(w.watchers), nil },
-		func(err error) { require.Equal(1, len(w.watchers), "Should have 1 deployment") })
+	testutil.WaitForResult(func() (bool, error) { return 1 == watchersCount(w), nil },
+		func(err error) { require.Equal(1, watchersCount(w), "Should have 1 deployment") })
 
 	// Call PauseDeployment
 	req := &structs.DeploymentFailRequest{
@@ -688,7 +809,7 @@ func TestWatcher_FailDeployment_Running(t *testing.T) {
 	err := w.FailDeployment(req, &resp)
 	require.Nil(err, "FailDeployment")
 
-	require.Equal(1, len(w.watchers), "Deployment should still be active")
+	require.Equal(1, watchersCount(w), "Deployment should still be active")
 	m.AssertCalled(t, "UpdateDeploymentStatus", mocker.MatchedBy(matcher))
 }
 
@@ -739,8 +860,8 @@ func TestDeploymentWatcher_Watch_NoProgressDeadline(t *testing.T) {
 	m.On("UpdateDeploymentStatus", mocker.MatchedBy(m2)).Return(nil)
 
 	w.SetEnabled(true, m.state)
-	testutil.WaitForResult(func() (bool, error) { return 1 == len(w.watchers), nil },
-		func(err error) { require.Equal(1, len(w.watchers), "Should have 1 deployment") })
+	testutil.WaitForResult(func() (bool, error) { return 1 == watchersCount(w), nil },
+		func(err error) { require.Equal(1, watchersCount(w), "Should have 1 deployment") })
 
 	// Update the allocs health to healthy which should create an evaluation
 	for i := 0; i < 5; i++ {
@@ -810,8 +931,8 @@ func TestDeploymentWatcher_Watch_NoProgressDeadline(t *testing.T) {
 	}
 	m3 := matchDeploymentStatusUpdateRequest(c2)
 	m.AssertCalled(t, "UpdateDeploymentStatus", mocker.MatchedBy(m3))
-	testutil.WaitForResult(func() (bool, error) { return 0 == len(w.watchers), nil },
-		func(err error) { require.Equal(0, len(w.watchers), "Should have no deployment") })
+	testutil.WaitForResult(func() (bool, error) { return 0 == watchersCount(w), nil },
+		func(err error) { require.Equal(0, watchersCount(w), "Should have no deployment") })
 }
 
 func TestDeploymentWatcher_Watch_ProgressDeadline(t *testing.T) {
@@ -848,8 +969,8 @@ func TestDeploymentWatcher_Watch_ProgressDeadline(t *testing.T) {
 	m.On("UpdateDeploymentStatus", mocker.MatchedBy(m2)).Return(nil)
 
 	w.SetEnabled(true, m.state)
-	testutil.WaitForResult(func() (bool, error) { return 1 == len(w.watchers), nil },
-		func(err error) { require.Equal(1, len(w.watchers), "Should have 1 deployment") })
+	testutil.WaitForResult(func() (bool, error) { return 1 == watchersCount(w), nil },
+		func(err error) { require.Equal(1, watchersCount(w), "Should have 1 deployment") })
 
 	// Update the alloc to be unhealthy and require that nothing happens.
 	a2 := a.Copy()
@@ -933,8 +1054,8 @@ func TestDeploymentWatcher_ProgressCutoff(t *testing.T) {
 	m.On("UpdateAllocDesiredTransition", mocker.MatchedBy(m1)).Return(nil).Once()
 
 	w.SetEnabled(true, m.state)
-	testutil.WaitForResult(func() (bool, error) { return 1 == len(w.watchers), nil },
-		func(err error) { require.Equal(1, len(w.watchers), "Should have 1 deployment") })
+	testutil.WaitForResult(func() (bool, error) { return 1 == watchersCount(w), nil },
+		func(err error) { require.Equal(1, watchersCount(w), "Should have 1 deployment") })
 
 	watcher, err := w.getOrCreateWatcher(d.ID)
 	require.NoError(err)
@@ -1024,8 +1145,8 @@ func TestDeploymentWatcher_Watch_ProgressDeadline_Canaries(t *testing.T) {
 	m.On("UpdateAllocDesiredTransition", mocker.MatchedBy(m1)).Return(nil).Once()
 
 	w.SetEnabled(true, m.state)
-	testutil.WaitForResult(func() (bool, error) { return 1 == len(w.watchers), nil },
-		func(err error) { require.Equal(1, len(w.watchers), "Should have 1 deployment") })
+	testutil.WaitForResult(func() (bool, error) { return 1 == watchersCount(w), nil },
+		func(err error) { require.Equal(1, watchersCount(w), "Should have 1 deployment") })
 
 	// Update the alloc to be unhealthy and require that nothing happens.
 	a2 := a.Copy()
@@ -1107,8 +1228,8 @@ func TestDeploymentWatcher_PromotedCanary_UpdatedAllocs(t *testing.T) {
 	require.Nil(m.state.UpsertAllocs(m.nextIndex(), []*structs.Allocation{a}), "UpsertAllocs")
 
 	w.SetEnabled(true, m.state)
-	testutil.WaitForResult(func() (bool, error) { return 1 == len(w.watchers), nil },
-		func(err error) { require.Equal(1, len(w.watchers), "Should have 1 deployment") })
+	testutil.WaitForResult(func() (bool, error) { return 1 == watchersCount(w), nil },
+		func(err error) { require.Equal(1, watchersCount(w), "Should have 1 deployment") })
 
 	m1 := matchUpdateAllocDesiredTransitions([]string{d.ID})
 	m.On("UpdateAllocDesiredTransition", mocker.MatchedBy(m1)).Return(nil).Twice()
@@ -1189,8 +1310,8 @@ func TestDeploymentWatcher_Watch_StartWithoutProgressDeadline(t *testing.T) {
 	m.On("UpdateAllocDesiredTransition", mocker.MatchedBy(m1)).Return(nil).Once()
 
 	w.SetEnabled(true, m.state)
-	testutil.WaitForResult(func() (bool, error) { return 1 == len(w.watchers), nil },
-		func(err error) { require.Equal(1, len(w.watchers), "Should have 1 deployment") })
+	testutil.WaitForResult(func() (bool, error) { return 1 == watchersCount(w), nil },
+		func(err error) { require.Equal(1, watchersCount(w), "Should have 1 deployment") })
 
 	// Update the alloc to be unhealthy
 	a2 := a.Copy()
@@ -1259,8 +1380,8 @@ func TestDeploymentWatcher_RollbackFailed(t *testing.T) {
 	m.On("UpdateDeploymentStatus", mocker.MatchedBy(m2)).Return(nil)
 
 	w.SetEnabled(true, m.state)
-	testutil.WaitForResult(func() (bool, error) { return 1 == len(w.watchers), nil },
-		func(err error) { require.Equal(1, len(w.watchers), "Should have 1 deployment") })
+	testutil.WaitForResult(func() (bool, error) { return 1 == watchersCount(w), nil },
+		func(err error) { require.Equal(1, watchersCount(w), "Should have 1 deployment") })
 
 	// Update the allocs health to healthy which should create an evaluation
 	for i := 0; i < 5; i++ {
@@ -1365,8 +1486,8 @@ func TestWatcher_BatchAllocUpdates(t *testing.T) {
 	m.On("UpdateAllocDesiredTransition", mocker.MatchedBy(m1)).Return(nil).Once()
 
 	w.SetEnabled(true, m.state)
-	testutil.WaitForResult(func() (bool, error) { return 2 == len(w.watchers), nil },
-		func(err error) { require.Equal(2, len(w.watchers), "Should have 2 deployment") })
+	testutil.WaitForResult(func() (bool, error) { return 2 == watchersCount(w), nil },
+		func(err error) { require.Equal(2, watchersCount(w), "Should have 2 deployment") })
 
 	// Update the allocs health to healthy which should create an evaluation
 	req := &structs.ApplyDeploymentAllocHealthRequest{
@@ -1412,6 +1533,13 @@ func TestWatcher_BatchAllocUpdates(t *testing.T) {
 	})
 
 	m.AssertCalled(t, "UpdateAllocDesiredTransition", mocker.MatchedBy(m1))
-	testutil.WaitForResult(func() (bool, error) { return 2 == len(w.watchers), nil },
-		func(err error) { require.Equal(2, len(w.watchers), "Should have 2 deployment") })
+	testutil.WaitForResult(func() (bool, error) { return 2 == watchersCount(w), nil },
+		func(err error) { require.Equal(2, watchersCount(w), "Should have 2 deployment") })
+}
+
+func watchersCount(w *Watcher) int {
+	w.l.Lock()
+	defer w.l.Unlock()
+
+	return len(w.watchers)
 }

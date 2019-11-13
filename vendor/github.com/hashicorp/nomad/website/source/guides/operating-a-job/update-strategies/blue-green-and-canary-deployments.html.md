@@ -45,6 +45,7 @@ job "docs" {
       min_healthy_time = "30s"
       healthy_deadline = "10m"
       auto_revert      = true
+      auto_promote     = false
     }
 
     task "api-server" {
@@ -125,7 +126,7 @@ api         0       0         10       0       0         0
 Latest Deployment
 ID          = 32a080c1
 Status      = running
-Description = Deployment is running but requires promotion
+Description = Deployment is running but requires manual promotion
 
 Deployed
 Task Group  Auto Revert  Promoted  Desired  Canaries  Placed  Healthy  Unhealthy
@@ -305,6 +306,7 @@ job "docs" {
       min_healthy_time = "30s"
       healthy_deadline = "10m"
       auto_revert      = true
+      auto_promote     = false
     }
 
     task "api-server" {
@@ -383,7 +385,7 @@ api         0       0         6        0       0         0
 Latest Deployment
 ID          = 32a080c1
 Status      = running
-Description = Deployment is running but requires promotion
+Description = Deployment is running but requires manual promotion
 
 Deployed
 Task Group  Auto Revert  Promoted  Desired  Canaries  Placed  Healthy  Unhealthy

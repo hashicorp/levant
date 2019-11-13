@@ -48,9 +48,6 @@ type Server struct {
 	Addr net.Addr
 	addr string
 	sync.Mutex
-
-	// DC is the datacenter of the server
-	DC string
 }
 
 func (s *Server) Copy() *Server {
@@ -60,7 +57,6 @@ func (s *Server) Copy() *Server {
 	return &Server{
 		Addr: s.Addr,
 		addr: s.addr,
-		DC:   s.DC,
 	}
 }
 
@@ -82,7 +78,7 @@ func (s *Server) Equal(o *Server) bool {
 		return false
 	}
 
-	return s.Addr.String() == o.Addr.String() && s.DC == o.DC
+	return s.Addr.String() == o.Addr.String()
 }
 
 type Servers []*Server
@@ -119,12 +115,7 @@ func (s Servers) shuffle() {
 
 func (s Servers) Sort() {
 	sort.Slice(s, func(i, j int) bool {
-		a, b := s[i], s[j]
-		if addr1, addr2 := a.Addr.String(), b.Addr.String(); addr1 == addr2 {
-			return a.DC < b.DC
-		} else {
-			return addr1 < addr2
-		}
+		return s[i].String() < s[j].String()
 	})
 }
 
@@ -201,18 +192,40 @@ func (m *Manager) SetServers(servers Servers) bool {
 	m.Lock()
 	defer m.Unlock()
 
-	// Sort both the  existing and incoming servers
-	servers.Sort()
-	m.servers.Sort()
-
 	// Determine if they are equal
-	equal := servers.Equal(m.servers)
+	equal := m.serversAreEqual(servers)
+
+	// If server list is equal don't change the list and return immediately
+	// This prevents unnecessary shuffling of a failed server that was moved to the
+	// bottom of the list
+	if equal {
+		return !equal
+	}
+
+	m.logger.Debug("new server list", "new_servers", servers, "old_servers", m.servers)
 
 	// Randomize the incoming servers
 	servers.shuffle()
 	m.servers = servers
 
 	return !equal
+}
+
+// Method to check if the arg list of servers is equal to the one we already have
+func (m *Manager) serversAreEqual(servers Servers) bool {
+	// We use a copy of the server list here because determining
+	// equality requires a sort step which modifies the order of the server list
+	var copy Servers
+	copy = make([]*Server, 0, len(m.servers))
+	for _, s := range m.servers {
+		copy = append(copy, s.Copy())
+	}
+
+	// Sort both the  existing and incoming servers
+	copy.Sort()
+	servers.Sort()
+
+	return copy.Equal(servers)
 }
 
 // FindServer returns a server to send an RPC too. If there are no servers, nil

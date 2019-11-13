@@ -18,6 +18,7 @@ import (
 	"github.com/hashicorp/nomad/client/testutil"
 	"github.com/hashicorp/nomad/helper/uuid"
 	"github.com/hashicorp/nomad/plugins/drivers"
+	dtestutil "github.com/hashicorp/nomad/plugins/drivers/testutils"
 	tu "github.com/hashicorp/nomad/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -298,23 +299,16 @@ func TestDockerDriver_BindMountsHonorVolumesEnabledFlag(t *testing.T) {
 			expectedVolumes: []string{"/tmp/nomad/alloc-dir/demo/test-path:/tmp/taskpath"},
 		},
 		{
-			name:            "relative local driver",
-			requiresVolumes: false,
+			name:            "named volume local driver",
+			requiresVolumes: true,
 			volumeDriver:    "local",
 			volumes:         []string{"test-path:/tmp/taskpath"},
-			expectedVolumes: []string{"/tmp/nomad/alloc-dir/demo/test-path:/tmp/taskpath"},
+			expectedVolumes: []string{"test-path:/tmp/taskpath"},
 		},
 		{
 			name:            "relative outside task-dir default driver",
 			requiresVolumes: false,
 			volumeDriver:    "",
-			volumes:         []string{"../test-path:/tmp/taskpath"},
-			expectedVolumes: []string{"/tmp/nomad/alloc-dir/test-path:/tmp/taskpath"},
-		},
-		{
-			name:            "relative outside task-dir local driver",
-			requiresVolumes: false,
-			volumeDriver:    "local",
 			volumes:         []string{"../test-path:/tmp/taskpath"},
 			expectedVolumes: []string{"/tmp/nomad/alloc-dir/test-path:/tmp/taskpath"},
 		},
@@ -326,11 +320,11 @@ func TestDockerDriver_BindMountsHonorVolumesEnabledFlag(t *testing.T) {
 			expectedVolumes: []string{"/tmp/nomad/test-path:/tmp/taskpath"},
 		},
 		{
-			name:            "relative outside task-dir local driver",
+			name:            "clean path local driver",
 			requiresVolumes: true,
 			volumeDriver:    "local",
-			volumes:         []string{"../../test-path:/tmp/taskpath"},
-			expectedVolumes: []string{"/tmp/nomad/test-path:/tmp/taskpath"},
+			volumes:         []string{"/tmp/nomad/../test-path:/tmp/taskpath"},
+			expectedVolumes: []string{"/tmp/test-path:/tmp/taskpath"},
 		},
 	}
 
@@ -686,6 +680,34 @@ func TestDockerDriver_Cleanup(t *testing.T) {
 	require.NoError(t, driver.Impl().(*Driver).cleanupImage(handle))
 }
 
+// Tests that images prefixed with "https://" are supported
+func TestDockerDriver_Start_Image_HTTPS(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+	testutil.DockerCompatible(t)
+
+	taskCfg := TaskConfig{
+		Image: "https://gcr.io/google_containers/pause:0.8.0",
+	}
+	task := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "pause",
+		AllocID:   uuid.Generate(),
+		Resources: basicResources,
+	}
+	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+	d := dockerDriverHarness(t, nil)
+	cleanup := d.MkAllocDir(task, true)
+	defer cleanup()
+
+	_, _, err := d.StartTask(task)
+	require.NoError(t, err)
+
+	d.DestroyTask(task.ID, true)
+}
+
 func newTaskConfig(variant string, command []string) TaskConfig {
 	// busyboxImageID is the ID stored in busybox.tar
 	busyboxImageID := "busybox:1.29.3"
@@ -732,4 +754,33 @@ func copyFile(src, dst string, t *testing.T) {
 	if err := out.Sync(); err != nil {
 		t.Fatalf("copying %v -> %v failed: %v", src, dst, err)
 	}
+}
+
+func TestDocker_ExecTaskStreaming(t *testing.T) {
+	if !tu.IsCI() {
+		t.Parallel()
+	}
+	testutil.DockerCompatible(t)
+
+	taskCfg := newTaskConfig("", []string{"/bin/sleep", "1000"})
+	task := &drivers.TaskConfig{
+		ID:        uuid.Generate(),
+		Name:      "nc-demo",
+		AllocID:   uuid.Generate(),
+		Resources: basicResources,
+	}
+	require.NoError(t, task.EncodeConcreteDriverConfig(&taskCfg))
+
+	d := dockerDriverHarness(t, nil)
+	cleanup := d.MkAllocDir(task, true)
+	defer cleanup()
+	copyImage(t, task.TaskDir(), "busybox.tar")
+
+	_, _, err := d.StartTask(task)
+	require.NoError(t, err)
+
+	defer d.DestroyTask(task.ID, true)
+
+	dtestutil.ExecTaskStreamingConformanceTests(t, d, task.ID)
+
 }

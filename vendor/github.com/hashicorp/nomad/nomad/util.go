@@ -8,11 +8,17 @@ import (
 	"path/filepath"
 	"strconv"
 
+	memdb "github.com/hashicorp/go-memdb"
 	version "github.com/hashicorp/go-version"
 	"github.com/hashicorp/nomad/nomad/state"
 	"github.com/hashicorp/nomad/nomad/structs"
 	"github.com/hashicorp/serf/serf"
 )
+
+// MinVersionPlanNormalization is the minimum version to support the
+// normalization of Plan in SubmitPlan, and the denormalization raft log entry committed
+// in ApplyPlanResultsRequest
+var MinVersionPlanNormalization = version.Must(version.NewVersion("0.9.2"))
 
 // ensurePath is used to make sure a path exists
 func ensurePath(path string, dir bool) error {
@@ -143,11 +149,12 @@ func isNomadServer(m serf.Member) (bool, *serverParts) {
 	return true, parts
 }
 
-// ServersMeetMinimumVersion returns whether the given alive servers are at least on the
-// given Nomad version
-func ServersMeetMinimumVersion(members []serf.Member, minVersion *version.Version) bool {
+// ServersMeetMinimumVersion returns whether the Nomad servers are at least on the
+// given Nomad version. The checkFailedServers parameter specifies whether version
+// for the failed servers should be verified.
+func ServersMeetMinimumVersion(members []serf.Member, minVersion *version.Version, checkFailedServers bool) bool {
 	for _, member := range members {
-		if valid, parts := isNomadServer(member); valid && parts.Status == serf.StatusAlive {
+		if valid, parts := isNomadServer(member); valid && (parts.Status == serf.StatusAlive || (checkFailedServers && parts.Status == serf.StatusFailed)) {
 			// Check if the versions match - version.LessThan will return true for
 			// 0.8.0-rc1 < 0.8.0, so we want to ignore the metadata
 			versionsMatch := slicesMatch(minVersion.Segments(), parts.Build.Segments())
@@ -188,6 +195,27 @@ func shuffleStrings(list []string) {
 		j := rand.Intn(i + 1)
 		list[i], list[j] = list[j], list[i]
 	}
+}
+
+// partitionAll splits a slice of strings into a slice of slices of strings, each with a max
+// size of `size`. All entries from the original slice are preserved. The last slice may be
+// smaller than `size`. The input slice is unmodified
+func partitionAll(size int, xs []string) [][]string {
+	if size < 1 {
+		return [][]string{xs}
+	}
+
+	out := [][]string{}
+
+	for i := 0; i < len(xs); i += size {
+		j := i + size
+		if j > len(xs) {
+			j = len(xs)
+		}
+		out = append(out, xs[i:j])
+	}
+
+	return out
 }
 
 // maxUint64 returns the maximum value
@@ -247,4 +275,29 @@ func nodeSupportsRpc(node *structs.Node) error {
 	}
 
 	return nil
+}
+
+// AllocGetter is an interface for retrieving allocations by ID. It is
+// satisfied by *state.StateStore and *state.StateSnapshot.
+type AllocGetter interface {
+	AllocByID(ws memdb.WatchSet, id string) (*structs.Allocation, error)
+}
+
+// getAlloc retrieves an allocation by ID and namespace. If the allocation is
+// nil, an error is returned.
+func getAlloc(state AllocGetter, allocID string) (*structs.Allocation, error) {
+	if allocID == "" {
+		return nil, structs.ErrMissingAllocID
+	}
+
+	alloc, err := state.AllocByID(nil, allocID)
+	if err != nil {
+		return nil, err
+	}
+
+	if alloc == nil {
+		return nil, structs.NewErrUnknownAllocation(allocID)
+	}
+
+	return alloc, nil
 }

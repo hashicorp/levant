@@ -36,11 +36,12 @@ type ClientStatsResponse struct {
 
 // AllocFileInfo holds information about a file inside the AllocDir
 type AllocFileInfo struct {
-	Name     string
-	IsDir    bool
-	Size     int64
-	FileMode string
-	ModTime  time.Time
+	Name        string
+	IsDir       bool
+	Size        int64
+	FileMode    string
+	ModTime     time.Time
+	ContentType string `json:",omitempty"`
 }
 
 // FsListRequest is used to list an allocation's directory.
@@ -142,6 +143,23 @@ type StreamErrWrapper struct {
 
 	// Payload is the payload
 	Payload []byte
+}
+
+// AllocExecRequest is the initial request for execing into an Alloc task
+type AllocExecRequest struct {
+	// AllocID is the allocation to stream logs from
+	AllocID string
+
+	// Task is the task to stream logs from
+	Task string
+
+	// Tty indicates whether to allocate a pseudo-TTY
+	Tty bool
+
+	// Cmd is the command to be executed
+	Cmd []string
+
+	structs.QueryOptions
 }
 
 // AllocStatsRequest is used to request the resource usage of a given

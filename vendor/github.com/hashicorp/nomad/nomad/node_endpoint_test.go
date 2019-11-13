@@ -201,7 +201,8 @@ func TestClientEndpoint_Register_SecretMismatch(t *testing.T) {
 	}
 }
 
-func TestClientEndpoint_Deregister(t *testing.T) {
+// Test the deprecated single node deregistration path
+func TestClientEndpoint_DeregisterOne(t *testing.T) {
 	t.Parallel()
 	s1 := TestServer(t, nil)
 	defer s1.Shutdown()
@@ -269,18 +270,18 @@ func TestClientEndpoint_Deregister_ACL(t *testing.T) {
 	invalidToken := mock.CreatePolicyAndToken(t, state, 1003, "test-invalid", mock.NodePolicy(acl.PolicyRead))
 
 	// Deregister without any token and expect it to fail
-	dereg := &structs.NodeDeregisterRequest{
-		NodeID:       node.ID,
+	dereg := &structs.NodeBatchDeregisterRequest{
+		NodeIDs:      []string{node.ID},
 		WriteRequest: structs.WriteRequest{Region: "global"},
 	}
 	var resp structs.GenericResponse
-	if err := msgpackrpc.CallWithCodec(codec, "Node.Deregister", dereg, &resp); err == nil {
+	if err := msgpackrpc.CallWithCodec(codec, "Node.BatchDeregister", dereg, &resp); err == nil {
 		t.Fatalf("node de-register succeeded")
 	}
 
 	// Deregister with a valid token
 	dereg.AuthToken = validToken.SecretID
-	if err := msgpackrpc.CallWithCodec(codec, "Node.Deregister", dereg, &resp); err != nil {
+	if err := msgpackrpc.CallWithCodec(codec, "Node.BatchDeregister", dereg, &resp); err != nil {
 		t.Fatalf("err: %v", err)
 	}
 
@@ -295,18 +296,18 @@ func TestClientEndpoint_Deregister_ACL(t *testing.T) {
 	}
 
 	// Deregister with an invalid token.
-	dereg1 := &structs.NodeDeregisterRequest{
-		NodeID:       node1.ID,
+	dereg1 := &structs.NodeBatchDeregisterRequest{
+		NodeIDs:      []string{node1.ID},
 		WriteRequest: structs.WriteRequest{Region: "global"},
 	}
 	dereg1.AuthToken = invalidToken.SecretID
-	if err := msgpackrpc.CallWithCodec(codec, "Node.Deregister", dereg1, &resp); err == nil {
+	if err := msgpackrpc.CallWithCodec(codec, "Node.BatchDeregister", dereg1, &resp); err == nil {
 		t.Fatalf("rpc should not have succeeded")
 	}
 
 	// Try with a root token
 	dereg1.AuthToken = root.SecretID
-	if err := msgpackrpc.CallWithCodec(codec, "Node.Deregister", dereg1, &resp); err != nil {
+	if err := msgpackrpc.CallWithCodec(codec, "Node.BatchDeregister", dereg1, &resp); err != nil {
 		t.Fatalf("err: %v", err)
 	}
 }
@@ -344,12 +345,12 @@ func TestClientEndpoint_Deregister_Vault(t *testing.T) {
 	state.UpsertVaultAccessor(100, []*structs.VaultAccessor{va1, va2})
 
 	// Deregister
-	dereg := &structs.NodeDeregisterRequest{
-		NodeID:       node.ID,
+	dereg := &structs.NodeBatchDeregisterRequest{
+		NodeIDs:      []string{node.ID},
 		WriteRequest: structs.WriteRequest{Region: "global"},
 	}
 	var resp2 structs.GenericResponse
-	if err := msgpackrpc.CallWithCodec(codec, "Node.Deregister", dereg, &resp2); err != nil {
+	if err := msgpackrpc.CallWithCodec(codec, "Node.BatchDeregister", dereg, &resp2); err != nil {
 		t.Fatalf("err: %v", err)
 	}
 	if resp2.Index == 0 {
@@ -1447,7 +1448,7 @@ func TestClientEndpoint_GetNode_Blocking(t *testing.T) {
 
 	// Node delete triggers watches
 	time.AfterFunc(100*time.Millisecond, func() {
-		if err := state.DeleteNode(400, node2.ID); err != nil {
+		if err := state.DeleteNode(400, []string{node2.ID}); err != nil {
 			t.Fatalf("err: %v", err)
 		}
 	})
@@ -2351,6 +2352,12 @@ func TestClientEndpoint_CreateNodeEvals(t *testing.T) {
 		if eval.JobID != expJobID {
 			t.Fatalf("JobID incorrect on type %v: %#v", schedType, eval)
 		}
+		if eval.CreateTime == 0 {
+			t.Fatalf("CreateTime is unset on type %v: %#v", schedType, eval)
+		}
+		if eval.ModifyTime == 0 {
+			t.Fatalf("ModifyTime is unset on type %v: %#v", schedType, eval)
+		}
 	}
 }
 
@@ -2432,6 +2439,12 @@ func TestClientEndpoint_Evaluate(t *testing.T) {
 	}
 	if eval.Status != structs.EvalStatusPending {
 		t.Fatalf("bad: %#v", eval)
+	}
+	if eval.CreateTime == 0 {
+		t.Fatalf("CreateTime is unset: %#v", eval)
+	}
+	if eval.ModifyTime == 0 {
+		t.Fatalf("ModifyTime is unset: %#v", eval)
 	}
 }
 
@@ -2662,7 +2675,7 @@ func TestClientEndpoint_ListNodes_Blocking(t *testing.T) {
 				Deadline: 10 * time.Second,
 			},
 		}
-		errCh <- state.UpdateNodeDrain(3, node.ID, s, false, nil)
+		errCh <- state.UpdateNodeDrain(3, node.ID, s, false, 0, nil)
 	})
 
 	req.MinQueryIndex = 2
@@ -2688,7 +2701,7 @@ func TestClientEndpoint_ListNodes_Blocking(t *testing.T) {
 
 	// Node status update triggers watches
 	time.AfterFunc(100*time.Millisecond, func() {
-		errCh <- state.UpdateNodeStatus(40, node.ID, structs.NodeStatusDown, nil)
+		errCh <- state.UpdateNodeStatus(40, node.ID, structs.NodeStatusDown, 0, nil)
 	})
 
 	req.MinQueryIndex = 38
@@ -2714,7 +2727,7 @@ func TestClientEndpoint_ListNodes_Blocking(t *testing.T) {
 
 	// Node delete triggers watches.
 	time.AfterFunc(100*time.Millisecond, func() {
-		errCh <- state.DeleteNode(50, node.ID)
+		errCh <- state.DeleteNode(50, []string{node.ID})
 	})
 
 	req.MinQueryIndex = 45

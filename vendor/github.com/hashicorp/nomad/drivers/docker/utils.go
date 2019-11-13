@@ -219,3 +219,49 @@ func isParentPath(parent, path string) bool {
 	rel, err := filepath.Rel(parent, path)
 	return err == nil && !strings.HasPrefix(rel, "..")
 }
+
+func parseVolumeSpec(volBind, os string) (hostPath string, containerPath string, mode string, err error) {
+	if os == "windows" {
+		return parseVolumeSpecWindows(volBind)
+	}
+	return parseVolumeSpecLinux(volBind)
+}
+
+func parseVolumeSpecWindows(volBind string) (hostPath string, containerPath string, mode string, err error) {
+	parts, err := windowsSplitRawSpec(volBind, rxDestination)
+	if err != nil {
+		return "", "", "", fmt.Errorf("not <src>:<destination> format")
+	}
+
+	if len(parts) < 2 {
+		return "", "", "", fmt.Errorf("not <src>:<destination> format")
+	}
+
+	hostPath = parts[0]
+	containerPath = parts[1]
+
+	if len(parts) > 2 {
+		mode = parts[2]
+	}
+
+	return
+}
+
+func parseVolumeSpecLinux(volBind string) (hostPath string, containerPath string, mode string, err error) {
+	// using internal parser to preserve old parsing behavior.  Docker
+	// parser has additional validators (e.g. mode validity) and accepts invalid output (per Nomad),
+	// e.g. single path entry to be treated as a container path entry with an auto-generated host-path.
+	//
+	// Reconsider updating to use Docker parser when ready to make incompatible changes.
+	parts := strings.Split(volBind, ":")
+	if len(parts) < 2 {
+		return "", "", "", fmt.Errorf("not <src>:<destination> format")
+	}
+
+	m := ""
+	if len(parts) > 2 {
+		m = parts[2]
+	}
+
+	return parts[0], parts[1], m, nil
+}

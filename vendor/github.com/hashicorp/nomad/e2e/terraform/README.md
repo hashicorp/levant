@@ -10,13 +10,21 @@ Use [envchain](https://github.com/sorah/envchain) to store your AWS credentials.
 
 ```
 $ cd e2e/terraform/
-$ envchain nomadaws TF_VAR_nomad_sha=<nomad_sha> terraform apply
+$ TF_VAR_nomad_sha=<nomad_sha> envchain nomadaws terraform apply
 ```
 
 After this step, you should have a nomad client address to point the end to end tests in the `e2e` folder to.
 
-Teardown
-========
+## SSH
+
+Terraform will output node IPs that may be accessed via ssh:
+
+```
+ssh -i keys/nomad-e2e-*.pem ubuntu@${EC2_IP_ADDR}
+```
+
+
+## Teardown
 The terraform state file stores all the info, so the nomad_sha doesn't need to be valid during teardown. 
 
 ```

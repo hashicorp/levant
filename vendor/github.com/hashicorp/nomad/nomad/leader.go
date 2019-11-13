@@ -47,7 +47,9 @@ var minSchedulerConfigVersion = version.Must(version.NewVersion("0.9.0"))
 // Default configuration for scheduler with preemption enabled for system jobs
 var defaultSchedulerConfig = &structs.SchedulerConfiguration{
 	PreemptionConfig: structs.PreemptionConfig{
-		SystemSchedulerEnabled: true,
+		SystemSchedulerEnabled:  true,
+		BatchSchedulerEnabled:   false,
+		ServiceSchedulerEnabled: false,
 	},
 }
 
@@ -264,15 +266,6 @@ func (s *Server) establishLeadership(stopCh chan struct{}) error {
 	if err := s.initializeHeartbeatTimers(); err != nil {
 		s.logger.Error("heartbeat timer setup failed", "error", err)
 		return err
-	}
-
-	// COMPAT 0.4 - 0.4.1
-	// Reconcile the summaries of the registered jobs. We reconcile summaries
-	// only if the server is 0.4.1 since summaries are not present in 0.4 they
-	// might be incorrect after upgrading to 0.4.1 the summaries might not be
-	// correct
-	if err := s.reconcileJobSummaries(); err != nil {
-		return fmt.Errorf("unable to reconcile job summaries: %v", err)
 	}
 
 	// Start replication of ACLs and Policies if they are enabled,
@@ -530,8 +523,10 @@ func (s *Server) reapFailedEvaluations(stopCh chan struct{}) {
 			// due to the fairly large backoff.
 			followupEvalWait := s.config.EvalFailedFollowupBaselineDelay +
 				time.Duration(rand.Int63n(int64(s.config.EvalFailedFollowupDelayRange)))
+
 			followupEval := eval.CreateFailedFollowUpEval(followupEvalWait)
 			updateEval.NextEval = followupEval.ID
+			updateEval.UpdateModifyTime()
 
 			// Update via Raft
 			req := structs.EvalUpdateRequest{
@@ -568,6 +563,7 @@ func (s *Server) reapDupBlockedEvaluations(stopCh chan struct{}) {
 				newEval := dup.Copy()
 				newEval.Status = structs.EvalStatusCancelled
 				newEval.StatusDescription = fmt.Sprintf("existing blocked evaluation exists for job %q", newEval.JobID)
+				newEval.UpdateModifyTime()
 				cancel[i] = newEval
 			}
 
@@ -654,6 +650,10 @@ func (s *Server) iterateJobSummaryMetrics(summary *structs.JobSummary) {
 				{
 					Name:  "task_group",
 					Value: name,
+				},
+				{
+					Name:  "namespace",
+					Value: summary.Namespace,
 				},
 			}
 
@@ -789,25 +789,6 @@ func (s *Server) reconcileMember(member serf.Member) error {
 		s.logger.Error("failed to reconcile member", "member", member, "error", err)
 		return err
 	}
-	return nil
-}
-
-// reconcileJobSummaries reconciles the summaries of all the jobs registered in
-// the system
-// COMPAT 0.4 -> 0.4.1
-func (s *Server) reconcileJobSummaries() error {
-	index, err := s.fsm.state.LatestIndex()
-	if err != nil {
-		return fmt.Errorf("unable to read latest index: %v", err)
-	}
-	s.logger.Debug("leader reconciling job summaries", "index", index)
-
-	args := &structs.GenericResponse{}
-	msg := structs.ReconcileJobSummariesRequestType | structs.IgnoreUnknownTypeFlag
-	if _, _, err = s.raftApply(msg, args); err != nil {
-		return fmt.Errorf("reconciliation of job summaries failed: %v", err)
-	}
-
 	return nil
 }
 
@@ -1243,7 +1224,7 @@ func (s *Server) getOrCreateAutopilotConfig() *structs.AutopilotConfig {
 		return config
 	}
 
-	if !ServersMeetMinimumVersion(s.Members(), minAutopilotVersion) {
+	if !ServersMeetMinimumVersion(s.Members(), minAutopilotVersion, false) {
 		s.logger.Named("autopilot").Warn("can't initialize until all servers are above minimum version", "min_version", minAutopilotVersion)
 		return nil
 	}
@@ -1270,7 +1251,7 @@ func (s *Server) getOrCreateSchedulerConfig() *structs.SchedulerConfiguration {
 	if config != nil {
 		return config
 	}
-	if !ServersMeetMinimumVersion(s.Members(), minSchedulerConfigVersion) {
+	if !ServersMeetMinimumVersion(s.Members(), minSchedulerConfigVersion, false) {
 		s.logger.Named("core").Warn("can't initialize scheduler config until all servers are above minimum version", "min_version", minSchedulerConfigVersion)
 		return nil
 	}

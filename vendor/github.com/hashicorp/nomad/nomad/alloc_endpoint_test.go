@@ -276,54 +276,90 @@ func TestAllocEndpoint_GetAlloc_ACL(t *testing.T) {
 	invalidToken := mock.CreatePolicyAndToken(t, state, 1003, "test-invalid",
 		mock.NamespacePolicy(structs.DefaultNamespace, "", []string{acl.NamespaceCapabilityListJobs}))
 
-	get := &structs.AllocSpecificRequest{
-		AllocID:      alloc.ID,
-		QueryOptions: structs.QueryOptions{Region: "global"},
+	getReq := func() *structs.AllocSpecificRequest {
+		return &structs.AllocSpecificRequest{
+			AllocID: alloc.ID,
+			QueryOptions: structs.QueryOptions{
+				Region: "global",
+			},
+		}
 	}
 
-	// Lookup the alloc without a token and expect failure
-	{
-		var resp structs.SingleAllocResponse
-		err := msgpackrpc.CallWithCodec(codec, "Alloc.GetAlloc", get, &resp)
-		assert.Equal(structs.ErrPermissionDenied.Error(), err.Error())
+	cases := []struct {
+		Name string
+		F    func(t *testing.T)
+	}{
+		// Lookup the alloc without a token and expect failure
+		{
+			Name: "no-token",
+			F: func(t *testing.T) {
+				var resp structs.SingleAllocResponse
+				err := msgpackrpc.CallWithCodec(codec, "Alloc.GetAlloc", getReq(), &resp)
+				require.True(t, structs.IsErrUnknownAllocation(err), "expected unknown alloc but found: %v", err)
+			},
+		},
+
+		// Try with a valid ACL token
+		{
+			Name: "valid-token",
+			F: func(t *testing.T) {
+				get := getReq()
+				get.AuthToken = validToken.SecretID
+				get.AllocID = alloc.ID
+				var resp structs.SingleAllocResponse
+				require.NoError(t, msgpackrpc.CallWithCodec(codec, "Alloc.GetAlloc", get, &resp), "RPC")
+				require.EqualValues(t, resp.Index, 1000, "resp.Index")
+				require.Equal(t, alloc, resp.Alloc, "Returned alloc not equal")
+			},
+		},
+
+		// Try with a valid Node.SecretID
+		{
+			Name: "valid-node-secret",
+			F: func(t *testing.T) {
+				node := mock.Node()
+				assert.Nil(state.UpsertNode(1005, node))
+				get := getReq()
+				get.AuthToken = node.SecretID
+				get.AllocID = alloc.ID
+				var resp structs.SingleAllocResponse
+				require.NoError(t, msgpackrpc.CallWithCodec(codec, "Alloc.GetAlloc", get, &resp), "RPC")
+				require.EqualValues(t, resp.Index, 1000, "resp.Index")
+				require.Equal(t, alloc, resp.Alloc, "Returned alloc not equal")
+			},
+		},
+
+		// Try with a invalid token
+		{
+			Name: "invalid-token",
+			F: func(t *testing.T) {
+				get := getReq()
+				get.AuthToken = invalidToken.SecretID
+				get.AllocID = alloc.ID
+				var resp structs.SingleAllocResponse
+				err := msgpackrpc.CallWithCodec(codec, "Alloc.GetAlloc", get, &resp)
+				require.NotNil(t, err, "RPC")
+				require.True(t, structs.IsErrUnknownAllocation(err), "expected unknown alloc but found: %v", err)
+			},
+		},
+
+		// Try with a root token
+		{
+			Name: "root-token",
+			F: func(t *testing.T) {
+				get := getReq()
+				get.AuthToken = root.SecretID
+				get.AllocID = alloc.ID
+				var resp structs.SingleAllocResponse
+				require.NoError(t, msgpackrpc.CallWithCodec(codec, "Alloc.GetAlloc", get, &resp), "RPC")
+				require.EqualValues(t, resp.Index, 1000, "resp.Index")
+				require.Equal(t, alloc, resp.Alloc, "Returned alloc not equal")
+			},
+		},
 	}
 
-	// Try with a valid ACL token
-	{
-		get.AuthToken = validToken.SecretID
-		var resp structs.SingleAllocResponse
-		assert.Nil(msgpackrpc.CallWithCodec(codec, "Alloc.GetAlloc", get, &resp), "RPC")
-		assert.EqualValues(resp.Index, 1000, "resp.Index")
-		assert.Equal(alloc, resp.Alloc, "Returned alloc not equal")
-	}
-
-	// Try with a valid Node.SecretID
-	{
-		node := mock.Node()
-		assert.Nil(state.UpsertNode(1005, node))
-		get.AuthToken = node.SecretID
-		var resp structs.SingleAllocResponse
-		assert.Nil(msgpackrpc.CallWithCodec(codec, "Alloc.GetAlloc", get, &resp), "RPC")
-		assert.EqualValues(resp.Index, 1000, "resp.Index")
-		assert.Equal(alloc, resp.Alloc, "Returned alloc not equal")
-	}
-
-	// Try with a invalid token
-	{
-		get.AuthToken = invalidToken.SecretID
-		var resp structs.SingleAllocResponse
-		err := msgpackrpc.CallWithCodec(codec, "Alloc.GetAlloc", get, &resp)
-		assert.NotNil(err, "RPC")
-		assert.Equal(err.Error(), structs.ErrPermissionDenied.Error())
-	}
-
-	// Try with a root token
-	{
-		get.AuthToken = root.SecretID
-		var resp structs.SingleAllocResponse
-		assert.Nil(msgpackrpc.CallWithCodec(codec, "Alloc.GetAlloc", get, &resp), "RPC")
-		assert.EqualValues(resp.Index, 1000, "resp.Index")
-		assert.Equal(alloc, resp.Alloc, "Returned alloc not equal")
+	for _, tc := range cases {
+		t.Run(tc.Name, tc.F)
 	}
 }
 
@@ -558,6 +594,68 @@ func TestAllocEndpoint_UpdateDesiredTransition(t *testing.T) {
 	e1, err := state.EvalByID(nil, get.Evals[0].ID)
 	require.Nil(err)
 	e2, err := state.EvalByID(nil, get.Evals[1].ID)
+	require.Nil(err)
+
+	require.NotNil(out1.DesiredTransition.Migrate)
+	require.NotNil(out2.DesiredTransition.Migrate)
+	require.NotNil(e1)
+	require.NotNil(e2)
+	require.True(*out1.DesiredTransition.Migrate)
+	require.True(*out2.DesiredTransition.Migrate)
+}
+
+func TestAllocEndpoint_Stop_ACL(t *testing.T) {
+	t.Parallel()
+	require := require.New(t)
+
+	s1, _ := TestACLServer(t, nil)
+	defer s1.Shutdown()
+	codec := rpcClient(t, s1)
+	testutil.WaitForLeader(t, s1.RPC)
+
+	// Create the register request
+	alloc := mock.Alloc()
+	alloc2 := mock.Alloc()
+	state := s1.fsm.State()
+	require.Nil(state.UpsertJobSummary(998, mock.JobSummary(alloc.JobID)))
+	require.Nil(state.UpsertJobSummary(999, mock.JobSummary(alloc2.JobID)))
+	require.Nil(state.UpsertAllocs(1000, []*structs.Allocation{alloc, alloc2}))
+
+	req := &structs.AllocStopRequest{
+		AllocID: alloc.ID,
+	}
+	req.Namespace = structs.DefaultNamespace
+	req.Region = alloc.Job.Region
+
+	// Try without permissions
+	var resp structs.AllocStopResponse
+	err := msgpackrpc.CallWithCodec(codec, "Alloc.Stop", req, &resp)
+	require.True(structs.IsErrPermissionDenied(err), "expected permissions error, got: %v", err)
+
+	// Try with management permissions
+	req.WriteRequest.AuthToken = s1.getLeaderAcl()
+	var resp2 structs.AllocStopResponse
+	require.Nil(msgpackrpc.CallWithCodec(codec, "Alloc.Stop", req, &resp2))
+	require.NotZero(resp2.Index)
+
+	// Try with alloc-lifecycle permissions
+	validToken := mock.CreatePolicyAndToken(t, state, 1002, "valid",
+		mock.NamespacePolicy(structs.DefaultNamespace, "", []string{acl.NamespaceCapabilityAllocLifecycle}))
+	req.WriteRequest.AuthToken = validToken.SecretID
+	req.AllocID = alloc2.ID
+
+	var resp3 structs.AllocStopResponse
+	require.Nil(msgpackrpc.CallWithCodec(codec, "Alloc.Stop", req, &resp3))
+	require.NotZero(resp3.Index)
+
+	// Look up the allocations
+	out1, err := state.AllocByID(nil, alloc.ID)
+	require.Nil(err)
+	out2, err := state.AllocByID(nil, alloc2.ID)
+	require.Nil(err)
+	e1, err := state.EvalByID(nil, resp2.EvalID)
+	require.Nil(err)
+	e2, err := state.EvalByID(nil, resp3.EvalID)
 	require.Nil(err)
 
 	require.NotNil(out1.DesiredTransition.Migrate)

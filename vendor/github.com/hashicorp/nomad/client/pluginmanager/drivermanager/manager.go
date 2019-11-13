@@ -29,6 +29,13 @@ type Manager interface {
 	Dispense(driver string) (drivers.DriverPlugin, error)
 }
 
+// TaskExecHandler is function to be called for executing commands in a task
+type TaskExecHandler func(
+	ctx context.Context,
+	command []string,
+	tty bool,
+	stream drivers.ExecTaskStream) error
+
 // EventHandler is a callback to be called for a task.
 // The handler should not block execution.
 type EventHandler func(*drivers.TaskEvent)
@@ -243,8 +250,17 @@ func (m *manager) waitForFirstFingerprint(ctx context.Context, cancel context.Ca
 	}
 
 	var mu sync.Mutex
-	var availDrivers []string
+	driversByStatus := map[drivers.HealthState][]string{}
+
 	var wg sync.WaitGroup
+
+	recordDriver := func(name string, lastHeath drivers.HealthState) {
+		mu.Lock()
+		defer mu.Unlock()
+
+		updated := append(driversByStatus[lastHeath], name)
+		driversByStatus[lastHeath] = updated
+	}
 
 	// loop through instances and wait for each to finish initial fingerprint
 	m.instancesMu.RLock()
@@ -253,16 +269,13 @@ func (m *manager) waitForFirstFingerprint(ctx context.Context, cancel context.Ca
 		go func(name string, instance *instanceManager) {
 			defer wg.Done()
 			instance.WaitForFirstFingerprint(ctx)
-			if instance.getLastHealth() != drivers.HealthStateUndetected {
-				mu.Lock()
-				availDrivers = append(availDrivers, name)
-				mu.Unlock()
-			}
+			recordDriver(name, instance.getLastHealth())
 		}(n, i)
 	}
 	m.instancesMu.RUnlock()
 	wg.Wait()
-	m.logger.Debug("detected drivers", "drivers", availDrivers)
+
+	m.logger.Debug("detected drivers", "drivers", driversByStatus)
 }
 
 func (m *manager) loadReattachConfigs() error {

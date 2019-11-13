@@ -504,6 +504,7 @@ func NewTaskGroup(name string, count int) *TaskGroup {
 	}
 }
 
+// Canonicalize sets defaults and merges settings that should be inherited from the job
 func (g *TaskGroup) Canonicalize(job *Job) {
 	if g.Name == nil {
 		g.Name = stringToPtr("")
@@ -563,13 +564,11 @@ func (g *TaskGroup) Canonicalize(job *Job) {
 	}
 
 	// Merge with default reschedule policy
-	if *job.Type == "service" {
-		defaultMigrateStrategy := &MigrateStrategy{}
-		defaultMigrateStrategy.Canonicalize()
-		if g.Migrate != nil {
-			defaultMigrateStrategy.Merge(g.Migrate)
-		}
-		g.Migrate = defaultMigrateStrategy
+	if g.Migrate == nil && *job.Type == "service" {
+		g.Migrate = &MigrateStrategy{}
+	}
+	if g.Migrate != nil {
+		g.Migrate.Canonicalize()
 	}
 
 	var defaultRestartPolicy *RestartPolicy

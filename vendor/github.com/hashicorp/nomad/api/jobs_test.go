@@ -224,6 +224,7 @@ func TestJobs_Canonicalize(t *testing.T) {
 				Type:        stringToPtr("service"),
 				Update: &UpdateStrategy{
 					MaxParallel: intToPtr(1),
+					AutoPromote: boolToPtr(true),
 				},
 				TaskGroups: []*TaskGroup{
 					{
@@ -234,6 +235,9 @@ func TestJobs_Canonicalize(t *testing.T) {
 							Attempts: intToPtr(10),
 							Delay:    timeToPtr(25 * time.Second),
 							Mode:     stringToPtr("delay"),
+						},
+						Update: &UpdateStrategy{
+							AutoRevert: boolToPtr(true),
 						},
 						EphemeralDisk: &EphemeralDisk{
 							SizeMB: intToPtr(300),
@@ -323,6 +327,7 @@ func TestJobs_Canonicalize(t *testing.T) {
 					ProgressDeadline: timeToPtr(10 * time.Minute),
 					AutoRevert:       boolToPtr(false),
 					Canary:           intToPtr(0),
+					AutoPromote:      boolToPtr(true),
 				},
 				TaskGroups: []*TaskGroup{
 					{
@@ -355,8 +360,9 @@ func TestJobs_Canonicalize(t *testing.T) {
 							MinHealthyTime:   timeToPtr(10 * time.Second),
 							HealthyDeadline:  timeToPtr(5 * time.Minute),
 							ProgressDeadline: timeToPtr(10 * time.Minute),
-							AutoRevert:       boolToPtr(false),
+							AutoRevert:       boolToPtr(true),
 							Canary:           intToPtr(0),
+							AutoPromote:      boolToPtr(true),
 						},
 						Migrate: DefaultMigrateStrategy(),
 						Tasks: []*Task{
@@ -486,6 +492,7 @@ func TestJobs_Canonicalize(t *testing.T) {
 					ProgressDeadline: timeToPtr(7 * time.Minute),
 					AutoRevert:       boolToPtr(false),
 					Canary:           intToPtr(0),
+					AutoPromote:      boolToPtr(false),
 				},
 				TaskGroups: []*TaskGroup{
 					{
@@ -497,6 +504,7 @@ func TestJobs_Canonicalize(t *testing.T) {
 							MinHealthyTime: timeToPtr(1 * time.Second),
 							AutoRevert:     boolToPtr(true),
 							Canary:         intToPtr(1),
+							AutoPromote:    boolToPtr(true),
 						},
 						Tasks: []*Task{
 							{
@@ -541,6 +549,7 @@ func TestJobs_Canonicalize(t *testing.T) {
 					ProgressDeadline: timeToPtr(7 * time.Minute),
 					AutoRevert:       boolToPtr(false),
 					Canary:           intToPtr(0),
+					AutoPromote:      boolToPtr(false),
 				},
 				TaskGroups: []*TaskGroup{
 					{
@@ -574,6 +583,7 @@ func TestJobs_Canonicalize(t *testing.T) {
 							ProgressDeadline: timeToPtr(7 * time.Minute),
 							AutoRevert:       boolToPtr(true),
 							Canary:           intToPtr(1),
+							AutoPromote:      boolToPtr(true),
 						},
 						Migrate: DefaultMigrateStrategy(),
 						Tasks: []*Task{
@@ -616,6 +626,7 @@ func TestJobs_Canonicalize(t *testing.T) {
 							ProgressDeadline: timeToPtr(7 * time.Minute),
 							AutoRevert:       boolToPtr(false),
 							Canary:           intToPtr(0),
+							AutoPromote:      boolToPtr(false),
 						},
 						Migrate: DefaultMigrateStrategy(),
 						Tasks: []*Task{
@@ -716,13 +727,13 @@ func TestJobs_Revert(t *testing.T) {
 	assertWriteMeta(t, wm)
 
 	// Fail revert at incorrect enforce
-	_, _, err = jobs.Revert(*job.ID, 0, uint64ToPtr(10), nil)
+	_, _, err = jobs.Revert(*job.ID, 0, uint64ToPtr(10), nil, "")
 	if err == nil || !strings.Contains(err.Error(), "enforcing version") {
 		t.Fatalf("expected enforcement error: %v", err)
 	}
 
 	// Works at correct index
-	revertResp, wm, err := jobs.Revert(*job.ID, 0, uint64ToPtr(1), nil)
+	revertResp, wm, err := jobs.Revert(*job.ID, 0, uint64ToPtr(1), nil, "")
 	if err != nil {
 		t.Fatalf("err: %s", err)
 	}
@@ -1206,9 +1217,9 @@ func TestJobs_JobSummary(t *testing.T) {
 
 func TestJobs_NewBatchJob(t *testing.T) {
 	t.Parallel()
-	job := NewBatchJob("job1", "myjob", "region1", 5)
+	job := NewBatchJob("job1", "myjob", "global", 5)
 	expect := &Job{
-		Region:   stringToPtr("region1"),
+		Region:   stringToPtr("global"),
 		ID:       stringToPtr("job1"),
 		Name:     stringToPtr("myjob"),
 		Type:     stringToPtr(JobTypeBatch),
@@ -1221,9 +1232,9 @@ func TestJobs_NewBatchJob(t *testing.T) {
 
 func TestJobs_NewServiceJob(t *testing.T) {
 	t.Parallel()
-	job := NewServiceJob("job1", "myjob", "region1", 5)
+	job := NewServiceJob("job1", "myjob", "global", 5)
 	expect := &Job{
-		Region:   stringToPtr("region1"),
+		Region:   stringToPtr("global"),
 		ID:       stringToPtr("job1"),
 		Name:     stringToPtr("myjob"),
 		Type:     stringToPtr(JobTypeService),

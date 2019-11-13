@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	memdb "github.com/hashicorp/go-memdb"
+	"github.com/hashicorp/go-memdb"
 	"github.com/hashicorp/nomad/helper"
 	"github.com/hashicorp/nomad/helper/uuid"
 	"github.com/hashicorp/nomad/nomad/mock"
@@ -88,6 +88,7 @@ func TestStateStore_Blocking_MinQuery(t *testing.T) {
 	}
 }
 
+// COMPAT 0.11: Uses AllocUpdateRequest.Alloc
 // This test checks that:
 // 1) The job is denormalized
 // 2) Allocations are created
@@ -138,6 +139,101 @@ func TestStateStore_UpsertPlanResults_AllocationsCreated_Denormalized(t *testing
 	assert.Nil(err)
 	assert.NotNil(evalOut)
 	assert.EqualValues(1000, evalOut.ModifyIndex)
+}
+
+// This test checks that:
+// 1) The job is denormalized
+// 2) Allocations are denormalized and updated with the diff
+// That stopped allocs Job is unmodified
+func TestStateStore_UpsertPlanResults_AllocationsDenormalized(t *testing.T) {
+	state := testStateStore(t)
+	alloc := mock.Alloc()
+	job := alloc.Job
+	alloc.Job = nil
+
+	stoppedAlloc := mock.Alloc()
+	stoppedAlloc.Job = job
+	stoppedAllocDiff := &structs.AllocationDiff{
+		ID:                 stoppedAlloc.ID,
+		DesiredDescription: "desired desc",
+		ClientStatus:       structs.AllocClientStatusLost,
+	}
+	preemptedAlloc := mock.Alloc()
+	preemptedAlloc.Job = job
+	preemptedAllocDiff := &structs.AllocationDiff{
+		ID:                    preemptedAlloc.ID,
+		PreemptedByAllocation: alloc.ID,
+	}
+
+	require := require.New(t)
+	require.NoError(state.UpsertAllocs(900, []*structs.Allocation{stoppedAlloc, preemptedAlloc}))
+	require.NoError(state.UpsertJob(999, job))
+
+	// modify job and ensure that stopped and preempted alloc point to original Job
+	mJob := job.Copy()
+	mJob.TaskGroups[0].Name = "other"
+
+	require.NoError(state.UpsertJob(1001, mJob))
+
+	eval := mock.Eval()
+	eval.JobID = job.ID
+
+	// Create an eval
+	require.NoError(state.UpsertEvals(1, []*structs.Evaluation{eval}))
+
+	// Create a plan result
+	res := structs.ApplyPlanResultsRequest{
+		AllocUpdateRequest: structs.AllocUpdateRequest{
+			AllocsUpdated: []*structs.Allocation{alloc},
+			AllocsStopped: []*structs.AllocationDiff{stoppedAllocDiff},
+			Job:           mJob,
+		},
+		EvalID:          eval.ID,
+		AllocsPreempted: []*structs.AllocationDiff{preemptedAllocDiff},
+	}
+	assert := assert.New(t)
+	planModifyIndex := uint64(1000)
+	err := state.UpsertPlanResults(planModifyIndex, &res)
+	require.NoError(err)
+
+	ws := memdb.NewWatchSet()
+	out, err := state.AllocByID(ws, alloc.ID)
+	require.NoError(err)
+	assert.Equal(alloc, out)
+
+	outJob, err := state.JobByID(ws, job.Namespace, job.ID)
+	require.NoError(err)
+	require.Equal(mJob.TaskGroups, outJob.TaskGroups)
+	require.NotEmpty(job.TaskGroups, outJob.TaskGroups)
+
+	updatedStoppedAlloc, err := state.AllocByID(ws, stoppedAlloc.ID)
+	require.NoError(err)
+	assert.Equal(stoppedAllocDiff.DesiredDescription, updatedStoppedAlloc.DesiredDescription)
+	assert.Equal(structs.AllocDesiredStatusStop, updatedStoppedAlloc.DesiredStatus)
+	assert.Equal(stoppedAllocDiff.ClientStatus, updatedStoppedAlloc.ClientStatus)
+	assert.Equal(planModifyIndex, updatedStoppedAlloc.AllocModifyIndex)
+	assert.Equal(planModifyIndex, updatedStoppedAlloc.AllocModifyIndex)
+	assert.Equal(job.TaskGroups, updatedStoppedAlloc.Job.TaskGroups)
+
+	updatedPreemptedAlloc, err := state.AllocByID(ws, preemptedAlloc.ID)
+	require.NoError(err)
+	assert.Equal(structs.AllocDesiredStatusEvict, updatedPreemptedAlloc.DesiredStatus)
+	assert.Equal(preemptedAllocDiff.PreemptedByAllocation, updatedPreemptedAlloc.PreemptedByAllocation)
+	assert.Equal(planModifyIndex, updatedPreemptedAlloc.AllocModifyIndex)
+	assert.Equal(planModifyIndex, updatedPreemptedAlloc.AllocModifyIndex)
+	assert.Equal(job.TaskGroups, updatedPreemptedAlloc.Job.TaskGroups)
+
+	index, err := state.Index("allocs")
+	require.NoError(err)
+	assert.EqualValues(planModifyIndex, index)
+
+	require.False(watchFired(ws))
+
+	evalOut, err := state.EvalByID(ws, eval.ID)
+	require.NoError(err)
+	require.NotNil(evalOut)
+	assert.EqualValues(planModifyIndex, evalOut.ModifyIndex)
+
 }
 
 // This test checks that the deployment is created and allocations count towards
@@ -271,11 +367,9 @@ func TestStateStore_UpsertPlanResults_PreemptedAllocs(t *testing.T) {
 	require.NoError(err)
 
 	minimalPreemptedAlloc := &structs.Allocation{
-		ID:                 preemptedAlloc.ID,
-		Namespace:          preemptedAlloc.Namespace,
-		DesiredStatus:      structs.AllocDesiredStatusEvict,
-		ModifyTime:         time.Now().Unix(),
-		DesiredDescription: fmt.Sprintf("Preempted by allocation %v", alloc.ID),
+		ID:                    preemptedAlloc.ID,
+		PreemptedByAllocation: alloc.ID,
+		ModifyTime:            time.Now().Unix(),
 	}
 
 	// Create eval for preempted job
@@ -316,7 +410,9 @@ func TestStateStore_UpsertPlanResults_PreemptedAllocs(t *testing.T) {
 	preempted, err := state.AllocByID(ws, preemptedAlloc.ID)
 	require.NoError(err)
 	require.Equal(preempted.DesiredStatus, structs.AllocDesiredStatusEvict)
-	require.Equal(preempted.DesiredDescription, fmt.Sprintf("Preempted by allocation %v", alloc.ID))
+	require.Equal(preempted.DesiredDescription, fmt.Sprintf("Preempted by alloc ID %v", alloc.ID))
+	require.Equal(preempted.Job.ID, preemptedAlloc.Job.ID)
+	require.Equal(preempted.Job, preemptedAlloc.Job)
 
 	// Verify eval for preempted job
 	preemptedJobEval, err := state.EvalByID(ws, eval2.ID)
@@ -415,7 +511,7 @@ func TestStateStore_UpsertDeployment(t *testing.T) {
 
 	// Create a watchset so we can test that upsert fires the watch
 	ws := memdb.NewWatchSet()
-	_, err := state.DeploymentsByJobID(ws, deployment.Namespace, deployment.ID)
+	_, err := state.DeploymentsByJobID(ws, deployment.Namespace, deployment.ID, true)
 	if err != nil {
 		t.Fatalf("bad: %v", err)
 	}
@@ -449,6 +545,43 @@ func TestStateStore_UpsertDeployment(t *testing.T) {
 	if watchFired(ws) {
 		t.Fatalf("bad")
 	}
+}
+
+// Tests that deployments of older create index and same job id are not returned
+func TestStateStore_OldDeployment(t *testing.T) {
+	state := testStateStore(t)
+	job := mock.Job()
+	job.ID = "job1"
+	state.UpsertJob(1000, job)
+
+	deploy1 := mock.Deployment()
+	deploy1.JobID = job.ID
+	deploy1.JobCreateIndex = job.CreateIndex
+
+	deploy2 := mock.Deployment()
+	deploy2.JobID = job.ID
+	deploy2.JobCreateIndex = 11
+
+	require := require.New(t)
+
+	// Insert both deployments
+	err := state.UpsertDeployment(1001, deploy1)
+	require.Nil(err)
+
+	err = state.UpsertDeployment(1002, deploy2)
+	require.Nil(err)
+
+	ws := memdb.NewWatchSet()
+	// Should return both deployments
+	deploys, err := state.DeploymentsByJobID(ws, deploy1.Namespace, job.ID, true)
+	require.Nil(err)
+	require.Len(deploys, 2)
+
+	// Should only return deploy1
+	deploys, err = state.DeploymentsByJobID(ws, deploy1.Namespace, job.ID, false)
+	require.Nil(err)
+	require.Len(deploys, 1)
+	require.Equal(deploy1.ID, deploys[0].ID)
 }
 
 func TestStateStore_DeleteDeployment(t *testing.T) {
@@ -676,49 +809,45 @@ func TestStateStore_UpsertNode_Node(t *testing.T) {
 
 func TestStateStore_DeleteNode_Node(t *testing.T) {
 	state := testStateStore(t)
-	node := mock.Node()
 
-	err := state.UpsertNode(1000, node)
-	if err != nil {
-		t.Fatalf("err: %v", err)
-	}
+	// Create and insert two nodes, which we'll delete
+	node0 := mock.Node()
+	node1 := mock.Node()
+	err := state.UpsertNode(1000, node0)
+	require.NoError(t, err)
+	err = state.UpsertNode(1001, node1)
+	require.NoError(t, err)
 
 	// Create a watchset so we can test that delete fires the watch
 	ws := memdb.NewWatchSet()
-	if _, err := state.NodeByID(ws, node.ID); err != nil {
-		t.Fatalf("bad: %v", err)
-	}
 
-	err = state.DeleteNode(1001, node.ID)
-	if err != nil {
-		t.Fatalf("err: %v", err)
-	}
+	// Check that both nodes are not nil
+	out, err := state.NodeByID(ws, node0.ID)
+	require.NoError(t, err)
+	require.NotNil(t, out)
+	out, err = state.NodeByID(ws, node1.ID)
+	require.NoError(t, err)
+	require.NotNil(t, out)
 
-	if !watchFired(ws) {
-		t.Fatalf("bad")
-	}
+	// Delete both nodes in a batch, fires the watch
+	err = state.DeleteNode(1002, []string{node0.ID, node1.ID})
+	require.NoError(t, err)
+	require.True(t, watchFired(ws))
 
+	// Check that both nodes are nil
 	ws = memdb.NewWatchSet()
-	out, err := state.NodeByID(ws, node.ID)
-	if err != nil {
-		t.Fatalf("err: %v", err)
-	}
+	out, err = state.NodeByID(ws, node0.ID)
+	require.NoError(t, err)
+	require.Nil(t, out)
+	out, err = state.NodeByID(ws, node1.ID)
+	require.NoError(t, err)
+	require.Nil(t, out)
 
-	if out != nil {
-		t.Fatalf("bad: %#v %#v", node, out)
-	}
-
+	// Ensure that the index is still at 1002, from DeleteNode
 	index, err := state.Index("nodes")
-	if err != nil {
-		t.Fatalf("err: %v", err)
-	}
-	if index != 1001 {
-		t.Fatalf("bad: %d", index)
-	}
-
-	if watchFired(ws) {
-		t.Fatalf("bad")
-	}
+	require.NoError(t, err)
+	require.Equal(t, uint64(1002), index)
+	require.False(t, watchFired(ws))
 }
 
 func TestStateStore_UpdateNodeStatus_Node(t *testing.T) {
@@ -739,7 +868,7 @@ func TestStateStore_UpdateNodeStatus_Node(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 
-	require.NoError(state.UpdateNodeStatus(801, node.ID, structs.NodeStatusReady, event))
+	require.NoError(state.UpdateNodeStatus(801, node.ID, structs.NodeStatusReady, 70, event))
 	require.True(watchFired(ws))
 
 	ws = memdb.NewWatchSet()
@@ -747,6 +876,7 @@ func TestStateStore_UpdateNodeStatus_Node(t *testing.T) {
 	require.NoError(err)
 	require.Equal(structs.NodeStatusReady, out.Status)
 	require.EqualValues(801, out.ModifyIndex)
+	require.EqualValues(70, out.StatusUpdatedAt)
 	require.Len(out.Events, 2)
 	require.Equal(event.Message, out.Events[1].Message)
 
@@ -794,7 +924,7 @@ func TestStateStore_BatchUpdateNodeDrain(t *testing.T) {
 		n2.ID: event,
 	}
 
-	require.Nil(state.BatchUpdateNodeDrain(1002, update, events))
+	require.Nil(state.BatchUpdateNodeDrain(1002, 7, update, events))
 	require.True(watchFired(ws))
 
 	ws = memdb.NewWatchSet()
@@ -806,6 +936,7 @@ func TestStateStore_BatchUpdateNodeDrain(t *testing.T) {
 		require.Equal(out.DrainStrategy, expectedDrain)
 		require.Len(out.Events, 2)
 		require.EqualValues(1002, out.ModifyIndex)
+		require.EqualValues(7, out.StatusUpdatedAt)
 	}
 
 	index, err := state.Index("nodes")
@@ -837,7 +968,7 @@ func TestStateStore_UpdateNodeDrain_Node(t *testing.T) {
 		Subsystem: structs.NodeEventSubsystemDrain,
 		Timestamp: time.Now(),
 	}
-	require.Nil(state.UpdateNodeDrain(1001, node.ID, expectedDrain, false, event))
+	require.Nil(state.UpdateNodeDrain(1001, node.ID, expectedDrain, false, 7, event))
 	require.True(watchFired(ws))
 
 	ws = memdb.NewWatchSet()
@@ -848,6 +979,7 @@ func TestStateStore_UpdateNodeDrain_Node(t *testing.T) {
 	require.Equal(out.DrainStrategy, expectedDrain)
 	require.Len(out.Events, 2)
 	require.EqualValues(1001, out.ModifyIndex)
+	require.EqualValues(7, out.StatusUpdatedAt)
 
 	index, err := state.Index("nodes")
 	require.Nil(err)
@@ -966,7 +1098,7 @@ func TestStateStore_UpdateNodeDrain_ResetEligiblity(t *testing.T) {
 		Subsystem: structs.NodeEventSubsystemDrain,
 		Timestamp: time.Now(),
 	}
-	require.Nil(state.UpdateNodeDrain(1001, node.ID, drain, false, event1))
+	require.Nil(state.UpdateNodeDrain(1001, node.ID, drain, false, 7, event1))
 	require.True(watchFired(ws))
 
 	// Remove the drain
@@ -975,7 +1107,7 @@ func TestStateStore_UpdateNodeDrain_ResetEligiblity(t *testing.T) {
 		Subsystem: structs.NodeEventSubsystemDrain,
 		Timestamp: time.Now(),
 	}
-	require.Nil(state.UpdateNodeDrain(1002, node.ID, nil, true, event2))
+	require.Nil(state.UpdateNodeDrain(1002, node.ID, nil, true, 9, event2))
 
 	ws = memdb.NewWatchSet()
 	out, err := state.NodeByID(ws, node.ID)
@@ -985,6 +1117,7 @@ func TestStateStore_UpdateNodeDrain_ResetEligiblity(t *testing.T) {
 	require.Equal(out.SchedulingEligibility, structs.NodeSchedulingEligible)
 	require.Len(out.Events, 3)
 	require.EqualValues(1002, out.ModifyIndex)
+	require.EqualValues(9, out.StatusUpdatedAt)
 
 	index, err := state.Index("nodes")
 	require.Nil(err)
@@ -1015,7 +1148,7 @@ func TestStateStore_UpdateNodeEligibility(t *testing.T) {
 		Subsystem: structs.NodeEventSubsystemCluster,
 		Timestamp: time.Now(),
 	}
-	require.Nil(state.UpdateNodeEligibility(1001, node.ID, expectedEligibility, event))
+	require.Nil(state.UpdateNodeEligibility(1001, node.ID, expectedEligibility, 7, event))
 	require.True(watchFired(ws))
 
 	ws = memdb.NewWatchSet()
@@ -1025,6 +1158,7 @@ func TestStateStore_UpdateNodeEligibility(t *testing.T) {
 	require.Len(out.Events, 2)
 	require.Equal(out.Events[1], event)
 	require.EqualValues(1001, out.ModifyIndex)
+	require.EqualValues(7, out.StatusUpdatedAt)
 
 	index, err := state.Index("nodes")
 	require.Nil(err)
@@ -1037,10 +1171,10 @@ func TestStateStore_UpdateNodeEligibility(t *testing.T) {
 			Deadline: -1 * time.Second,
 		},
 	}
-	require.Nil(state.UpdateNodeDrain(1002, node.ID, expectedDrain, false, nil))
+	require.Nil(state.UpdateNodeDrain(1002, node.ID, expectedDrain, false, 7, nil))
 
 	// Try to set the node to eligible
-	err = state.UpdateNodeEligibility(1003, node.ID, structs.NodeSchedulingEligible, nil)
+	err = state.UpdateNodeEligibility(1003, node.ID, structs.NodeSchedulingEligible, 9, nil)
 	require.NotNil(err)
 	require.Contains(err.Error(), "while it is draining")
 }
@@ -6973,6 +7107,125 @@ func TestStateStore_Abandon(t *testing.T) {
 	default:
 		t.Fatalf("bad")
 	}
+}
+
+// Verifies that an error is returned when an allocation doesn't exist in the state store.
+func TestStateSnapshot_DenormalizeAllocationDiffSlice_AllocDoesNotExist(t *testing.T) {
+	state := testStateStore(t)
+	alloc := mock.Alloc()
+	require := require.New(t)
+
+	// Insert job
+	err := state.UpsertJob(999, alloc.Job)
+	require.NoError(err)
+
+	allocDiffs := []*structs.AllocationDiff{
+		{
+			ID: alloc.ID,
+		},
+	}
+
+	snap, err := state.Snapshot()
+	require.NoError(err)
+
+	denormalizedAllocs, err := snap.DenormalizeAllocationDiffSlice(allocDiffs)
+
+	require.EqualError(err, fmt.Sprintf("alloc %v doesn't exist", alloc.ID))
+	require.Nil(denormalizedAllocs)
+}
+
+// TestStateStore_SnapshotMinIndex_OK asserts StateStore.SnapshotMinIndex blocks
+// until the StateStore's latest index is >= the requested index.
+func TestStateStore_SnapshotMinIndex_OK(t *testing.T) {
+	t.Parallel()
+
+	s := testStateStore(t)
+	index, err := s.LatestIndex()
+	require.NoError(t, err)
+
+	node := mock.Node()
+	require.NoError(t, s.UpsertNode(index+1, node))
+
+	// Assert SnapshotMinIndex returns immediately if index < latest index
+	ctx, cancel := context.WithTimeout(context.Background(), 0)
+	snap, err := s.SnapshotMinIndex(ctx, index)
+	cancel()
+	require.NoError(t, err)
+
+	snapIndex, err := snap.LatestIndex()
+	require.NoError(t, err)
+	if snapIndex <= index {
+		require.Fail(t, "snapshot index should be greater than index")
+	}
+
+	// Assert SnapshotMinIndex returns immediately if index == latest index
+	ctx, cancel = context.WithTimeout(context.Background(), 0)
+	snap, err = s.SnapshotMinIndex(ctx, index+1)
+	cancel()
+	require.NoError(t, err)
+
+	snapIndex, err = snap.LatestIndex()
+	require.NoError(t, err)
+	require.Equal(t, snapIndex, index+1)
+
+	// Assert SnapshotMinIndex blocks if index > latest index
+	errCh := make(chan error, 1)
+	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	go func() {
+		defer close(errCh)
+		waitIndex := index + 2
+		snap, err := s.SnapshotMinIndex(ctx, waitIndex)
+		if err != nil {
+			errCh <- err
+			return
+		}
+
+		snapIndex, err := snap.LatestIndex()
+		if err != nil {
+			errCh <- err
+			return
+		}
+
+		if snapIndex < waitIndex {
+			errCh <- fmt.Errorf("snapshot index < wait index: %d < %d", snapIndex, waitIndex)
+			return
+		}
+	}()
+
+	select {
+	case err := <-errCh:
+		require.NoError(t, err)
+	case <-time.After(500 * time.Millisecond):
+		// Let it block for a bit before unblocking by upserting
+	}
+
+	node.Name = "hal"
+	require.NoError(t, s.UpsertNode(index+2, node))
+
+	select {
+	case err := <-errCh:
+		require.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		require.Fail(t, "timed out waiting for SnapshotMinIndex to unblock")
+	}
+}
+
+// TestStateStore_SnapshotMinIndex_Timeout asserts StateStore.SnapshotMinIndex
+// returns an error if the desired index is not reached within the deadline.
+func TestStateStore_SnapshotMinIndex_Timeout(t *testing.T) {
+	t.Parallel()
+
+	s := testStateStore(t)
+	index, err := s.LatestIndex()
+	require.NoError(t, err)
+
+	// Assert SnapshotMinIndex blocks if index > latest index
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	snap, err := s.SnapshotMinIndex(ctx, index+1)
+	require.EqualError(t, err, context.DeadlineExceeded.Error())
+	require.Nil(t, snap)
 }
 
 // watchFired is a helper for unit tests that returns if the given watch set
