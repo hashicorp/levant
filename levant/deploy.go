@@ -223,7 +223,7 @@ func (l *levantDeployment) evaluationInspector(evalID *string) error {
 
 			for group, metrics := range evalInfo.FailedTGAllocs {
 
-				// Check if any nodes have been exhausted of resources and therfore are
+				// Check if any nodes have been exhausted of resources and therefor are
 				// unable to place allocs.
 				if metrics.NodesExhausted > 0 {
 					var exhausted, dimension []string
@@ -394,8 +394,8 @@ func (l *levantDeployment) checkCanaryDeploymentHealth(depID string) (healthy bo
 		return
 	}
 
-	// Itertate each task in the deployment to determine is health status. If an
-	// unhealthy task is found, incrament the unhealthy counter.
+	// Iterate over each task in the deployment to determine its health status. If an
+	// unhealthy task is found, increment the unhealthy counter.
 	for taskName, taskInfo := range dep.TaskGroups {
 		// skip any task groups which are not configured for canary deployments
 		if taskInfo.DesiredCanaries == 0 {
@@ -425,7 +425,7 @@ func (l *levantDeployment) triggerPeriodic(jobID *string) (evalID string, err er
 
 	log.Info().Msg("levant/deploy: triggering a run of periodic job")
 
-	// Trigger the run if possible and just returning both the evalID and the err.
+	// Trigger the run if possible and just return both the evalID and the err.
 	// There is no need to check this here as the caller does this.
 	evalID, _, err = l.nomad.Jobs().PeriodicForce(*jobID, nil)
 	return
@@ -465,14 +465,14 @@ func (l *levantDeployment) getDeploymentID(evalID string) (depID string, err err
 }
 
 // dynamicGroupCountUpdater takes the templated and rendered job and updates the
-// group counts based on the currently deployed job; if its running.
+// group counts based on the currently deployed job; if it's running.
 func (l *levantDeployment) dynamicGroupCountUpdater() error {
 
 	// Gather information about the current state, if any, of the job on the
 	// Nomad cluster.
 	rJob, _, err := l.nomad.Jobs().Info(*l.config.Template.Job.Name, &nomad.QueryOptions{})
 
-	// This is a hack due to GH-1849; we check the error string for 404 which
+	// This is a hack due to GH-1849; we check the error string for 404, which
 	// indicates the job is not running, not that there was an error in the API
 	// call.
 	if err != nil && strings.Contains(err.Error(), "404") {
@@ -491,7 +491,7 @@ func (l *levantDeployment) dynamicGroupCountUpdater() error {
 
 	log.Debug().Msgf("levant/deploy: running dynamic job count updater")
 
-	// Iterate the templated job and the Nomad returned job and update group count
+	// Iterate over the templated job and the Nomad returned job and update group count
 	// based on matches.
 	for _, rGroup := range rJob.TaskGroups {
 		for _, group := range l.config.Template.Job.TaskGroups {
@@ -505,6 +505,7 @@ func (l *levantDeployment) dynamicGroupCountUpdater() error {
 	return nil
 }
 
+// isJobZeroCount checks that all task groups have a count bigger than zero.
 func (l *levantDeployment) isJobZeroCount() bool {
 	for _, tg := range l.config.Template.Job.TaskGroups {
 		if tg.Count == nil {
