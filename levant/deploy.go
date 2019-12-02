@@ -155,16 +155,7 @@ func (l *levantDeployment) deploy() (success bool) {
 
 	switch *l.config.Template.Job.Type {
 	case nomad.JobTypeService:
-
-		// If the service job doesn't have an update stanza, the job will not use
-		// Nomad deployments.
-		if l.config.Template.Job.Update == nil {
-			log.Info().Msg("levant/deploy: job is not configured with update stanza, consider adding to use deployments")
-			return l.jobStatusChecker(&eval.EvalID)
-		}
-
 		log.Info().Msgf("levant/deploy: beginning deployment watcher for job")
-
 		// Get the deploymentID from the evaluationID so that we can watch the
 		// deployment for end status.
 		depID, err := l.getDeploymentID(eval.EvalID)
@@ -173,6 +164,7 @@ func (l *levantDeployment) deploy() (success bool) {
 			return
 		}
 
+		log.Info().Msgf("levant/deploy: watching deployment %s for job", depID)
 		// Get the success of the deployment and return if we have success.
 		if success = l.deploymentWatcher(depID); success {
 			return
