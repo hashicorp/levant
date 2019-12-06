@@ -3,7 +3,7 @@ default: check test build
 .PHONY: tools
 tools: ## Install the tools used to test and build
 	@echo "==> Installing build tools"
-	go get github.com/ahmetb/govvv
+	GO111MODULE=off go get -u github.com/ahmetb/govvv
 	GO111MODULE=off go get -u github.com/golangci/golangci-lint/cmd/golangci-lint
 
 .PHONY: build
