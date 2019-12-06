@@ -2,8 +2,6 @@ package scale
 
 import (
 	nomad "github.com/hashicorp/nomad/api"
-	nomadStructs "github.com/hashicorp/nomad/nomad/structs"
-
 	"github.com/jrasell/levant/client"
 	"github.com/jrasell/levant/levant"
 	"github.com/jrasell/levant/levant/structs"
@@ -68,8 +66,8 @@ func updateJob(client *nomad.Client, config *Config) *nomad.Job {
 
 	// You can't scale a job that isn't running; or at least you shouldn't in
 	// my current opinion.
-	if *job.Status != nomadStructs.JobStatusRunning {
-		log.Error().Msgf("levant/scale: job is not in %s state", nomadStructs.JobStatusRunning)
+	if *job.Status != "running" {
+		log.Error().Msgf("levant/scale: job is not in running state")
 		return nil
 	}
 

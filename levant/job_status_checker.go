@@ -2,7 +2,6 @@ package levant
 
 import (
 	nomad "github.com/hashicorp/nomad/api"
-	nomadStructs "github.com/hashicorp/nomad/nomad/structs"
 	"github.com/rs/zerolog/log"
 )
 
@@ -60,14 +59,14 @@ func (l *levantDeployment) simpleJobStatusChecker() bool {
 
 		// Checks the status of the job and proceed as expected depending on this.
 		switch *job.Status {
-		case nomadStructs.JobStatusRunning:
+		case "running":
 			log.Info().Msgf("levant/job_status_checker: job has status %s", *job.Status)
 			return true
-		case nomadStructs.JobStatusPending:
+		case "pending":
 			log.Debug().Msgf("levant/job_status_checker: job has status %s", *job.Status)
 			q.WaitIndex = meta.LastIndex
 			continue
-		case nomadStructs.JobStatusDead:
+		case "dead":
 			log.Error().Msgf("levant/job_status_checker: job has status %s", *job.Status)
 			return false
 		}
@@ -136,10 +135,10 @@ func allocationStatusChecker(levantTasks map[TaskCoordinate]string, allocs []*no
 			// then we have some case specific actions
 			switch levantTasks[TaskCoordinate{alloc.ID, taskName}] {
 			// if a task is still pendign we are not yet done
-			case nomadStructs.TaskStatePending:
+			case "pending":
 				complete = false
 				// if the task is dead we record that
-			case nomadStructs.TaskStateDead:
+			case "dead":
 				deadTasks++
 			}
 		}
