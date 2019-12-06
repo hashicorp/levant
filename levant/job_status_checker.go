@@ -21,7 +21,7 @@ func (l *levantDeployment) jobStatusChecker(evalID *string) bool {
 
 	// Run the initial job status check to ensure the job reaches a state of
 	// running.
-	jStatus := l.simpleJobStatusChecker(*l.config.Template.Job.ID)
+	jStatus := l.simpleJobStatusChecker()
 
 	// Periodic and parameterized batch jobs do not produce evaluations and so
 	// can only go through the simplest of checks.
@@ -40,7 +40,7 @@ func (l *levantDeployment) jobStatusChecker(evalID *string) bool {
 
 // simpleJobStatusChecker is used to check that jobs which do not emit initial
 // evaluations at least reach a job status of running.
-func (l *levantDeployment) simpleJobStatusChecker(jobID string) bool {
+func (l *levantDeployment) simpleJobStatusChecker() bool {
 
 	q := &nomad.QueryOptions{WaitIndex: 1}
 

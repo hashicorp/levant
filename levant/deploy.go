@@ -274,7 +274,7 @@ func (l *levantDeployment) deploymentWatcher(depID string) (success bool) {
 	deploymentChan := make(chan interface{})
 
 	t := time.Now()
-	wt := time.Duration(5 * time.Second)
+	wt := 5 * time.Second
 
 	// Setup the canaryChan and launch the autoPromote go routine if autoPromote
 	// has been enabled.

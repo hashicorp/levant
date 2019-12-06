@@ -4,8 +4,7 @@ default: check test build
 tools: ## Install the tools used to test and build
 	@echo "==> Installing build tools"
 	go get github.com/ahmetb/govvv
-	go get github.com/alecthomas/gometalinter
-	gometalinter --install
+	GO111MODULE=off go get -u github.com/golangci/golangci-lint/cmd/golangci-lint
 
 .PHONY: build
 build: ## Build Levant for development purposes
@@ -29,26 +28,9 @@ release: ## Trigger the release build script
 	@goreleaser --rm-dist
 
 .PHONY: check
-check: ## Run the gometalinter suite
+check: ## Run golangci-lint
 	@echo "==> Running $@..."
-	gometalinter \
-			--deadline 10m \
-			--vendor \
-			--sort="path" \
-			--aggregate \
-			--disable-all \
-			--enable golint \
-			--enable-gc \
-			--enable goimports \
-			--enable misspell \
-			--enable vet \
-			--enable deadcode \
-			--enable varcheck \
-			--enable ineffassign \
-			--enable structcheck \
-			--enable errcheck \
-			--enable gofmt \
-			./...
+	golangci-lint run buildtime/... client/... command/... helper/... levant/... logging/... scale/... template/... version/...
 
 HELP_FORMAT="    \033[36m%-25s\033[0m %s\n"
 .PHONY: help
