@@ -2,6 +2,7 @@
 
 IMPROVEMENTS:
  * Update vendoered version of Nomad to 0.9.6 [GH-313](https://github.com/jrasell/levant/pull/313)
+ * Update to go 1.13 and use modules rather than dep [GH-319](https://github.com/jrasell/levant/pull/319)
 
 BUG FIXES:
  * Use info level logs when no changes are detected [GH-303](https://github.com/jrasell/levant/pull/303)
