@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	nomad "github.com/hashicorp/nomad/api"
-	nomadStructs "github.com/hashicorp/nomad/nomad/structs"
 	"github.com/rs/zerolog/log"
 )
 
@@ -26,7 +25,7 @@ func (l *levantDeployment) checkFailedDeployment(depID *string) {
 	for _, alloc := range allocs {
 		for _, task := range alloc.TaskStates {
 			// we need to test for success both for service style jobs and for batch style jobs
-			if task.State != nomadStructs.TaskStarted {
+			if task.State != "started" {
 				allocIDS = append(allocIDS, alloc.ID)
 				// once we add the allocation we don't need to add it again
 				break

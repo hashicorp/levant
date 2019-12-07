@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	nomad "github.com/hashicorp/nomad/api"
-	nomadStructs "github.com/hashicorp/nomad/nomad/structs"
 )
 
 func TestJobStatusChecker_allocationStatusChecker(t *testing.T) {
@@ -17,7 +16,7 @@ func TestJobStatusChecker_allocationStatusChecker(t *testing.T) {
 	// Build a small AllocationListStubs with required information.
 	var allocs1 []*nomad.AllocationListStub
 	taskStates1 := make(map[string]*nomad.TaskState)
-	taskStates1["task1"] = &nomad.TaskState{State: nomadStructs.TaskStateRunning}
+	taskStates1["task1"] = &nomad.TaskState{State: "running"}
 	allocs1 = append(allocs1, &nomad.AllocationListStub{
 		ID:         "10246d87-ecd7-21ad-13b2-f0c564647d64",
 		TaskStates: taskStates1,
@@ -25,8 +24,8 @@ func TestJobStatusChecker_allocationStatusChecker(t *testing.T) {
 
 	var allocs2 []*nomad.AllocationListStub
 	taskStates2 := make(map[string]*nomad.TaskState)
-	taskStates2["task1"] = &nomad.TaskState{State: nomadStructs.TaskStateRunning}
-	taskStates2["task2"] = &nomad.TaskState{State: nomadStructs.TaskStatePending}
+	taskStates2["task1"] = &nomad.TaskState{State: "running"}
+	taskStates2["task2"] = &nomad.TaskState{State: "pending"}
 	allocs2 = append(allocs2, &nomad.AllocationListStub{
 		ID:         "20246d87-ecd7-21ad-13b2-f0c564647d64",
 		TaskStates: taskStates2,
@@ -34,7 +33,7 @@ func TestJobStatusChecker_allocationStatusChecker(t *testing.T) {
 
 	var allocs3 []*nomad.AllocationListStub
 	taskStates3 := make(map[string]*nomad.TaskState)
-	taskStates3["task1"] = &nomad.TaskState{State: nomadStructs.TaskStateDead}
+	taskStates3["task1"] = &nomad.TaskState{State: "dead"}
 	allocs3 = append(allocs3, &nomad.AllocationListStub{
 		ID:         "30246d87-ecd7-21ad-13b2-f0c564647d64",
 		TaskStates: taskStates3,

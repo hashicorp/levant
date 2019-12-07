@@ -4,16 +4,15 @@ import (
 	"fmt"
 
 	nomad "github.com/hashicorp/nomad/api"
-	nomadStructs "github.com/hashicorp/nomad/nomad/structs"
 	"github.com/jrasell/levant/client"
 	"github.com/jrasell/levant/levant/structs"
 	"github.com/rs/zerolog/log"
 )
 
-var (
-	diffTypeAdded  = string(nomadStructs.DiffTypeAdded)
-	diffTypeEdited = string(nomadStructs.DiffTypeEdited)
-	diffTypeNone   = string(nomadStructs.DiffTypeNone)
+const (
+	diffTypeAdded  = "Added"
+	diffTypeEdited = "Edited"
+	diffTypeNone   = "None"
 )
 
 type levantPlan struct {

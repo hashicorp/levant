@@ -7,11 +7,14 @@ import (
 	"time"
 
 	nomad "github.com/hashicorp/nomad/api"
-	nomadStructs "github.com/hashicorp/nomad/nomad/structs"
 	"github.com/jrasell/levant/client"
 	"github.com/jrasell/levant/levant/structs"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
+)
+
+const (
+	jobStatusRunning = "running"
 )
 
 // levantDeployment is the all deployment related objects for this Levant
@@ -96,7 +99,7 @@ func (l *levantDeployment) preDeployValidate() (success bool) {
 	// If job.Type isn't set we can't continue
 	if l.config.Template.Job.Type == nil {
 		log.Error().Msgf("levant/deploy: Nomad job `type` is not set; should be set to `%s`, `%s` or `%s`",
-			nomadStructs.JobTypeBatch, nomadStructs.JobTypeSystem, nomadStructs.JobTypeService)
+			nomad.JobTypeBatch, nomad.JobTypeSystem, nomad.JobTypeService)
 		return
 	}
 
@@ -151,7 +154,7 @@ func (l *levantDeployment) deploy() (success bool) {
 	}
 
 	switch *l.config.Template.Job.Type {
-	case nomadStructs.JobTypeService:
+	case nomad.JobTypeService:
 
 		// If the service job doesn't have an update stanza, the job will not use
 		// Nomad deployments.
@@ -192,10 +195,10 @@ func (l *levantDeployment) deploy() (success bool) {
 			l.checkAutoRevert(dep)
 		}
 
-	case nomadStructs.JobTypeBatch:
+	case nomad.JobTypeBatch:
 		return l.jobStatusChecker(&eval.EvalID)
 
-	case nomadStructs.JobTypeSystem:
+	case nomad.JobTypeSystem:
 		return l.jobStatusChecker(&eval.EvalID)
 
 	default:
@@ -215,7 +218,7 @@ func (l *levantDeployment) evaluationInspector(evalID *string) error {
 		}
 
 		switch evalInfo.Status {
-		case nomadStructs.EvalStatusComplete, nomadStructs.EvalStatusFailed, nomadStructs.EvalStatusCancelled:
+		case "complete", "failed", "canceled":
 			if len(evalInfo.FailedTGAllocs) == 0 {
 				log.Info().Msgf("levant/deploy: evaluation %s finished successfully", *evalID)
 				return nil
@@ -326,10 +329,10 @@ func (l *levantDeployment) deploymentWatcher(depID string) (success bool) {
 func (l *levantDeployment) checkDeploymentStatus(dep *nomad.Deployment, shutdownChan chan interface{}) (bool, error) {
 
 	switch dep.Status {
-	case nomadStructs.DeploymentStatusSuccessful:
+	case "successful":
 		log.Info().Msgf("levant/deploy: deployment %v has completed successfully", dep.ID)
 		return false, nil
-	case nomadStructs.DeploymentStatusRunning:
+	case jobStatusRunning:
 		return true, nil
 	default:
 		if shutdownChan != nil {
@@ -485,7 +488,7 @@ func (l *levantDeployment) dynamicGroupCountUpdater() error {
 
 	// Check that the job is actually running and not in a potentially stopped
 	// state.
-	if *rJob.Status != nomadStructs.JobStatusRunning {
+	if *rJob.Status != jobStatusRunning {
 		return nil
 	}
 
