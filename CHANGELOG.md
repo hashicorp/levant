@@ -1,4 +1,4 @@
-## 0.2.9 (Unreleased)
+## 0.2.9 (27 December 2019)
 
 IMPROVEMENTS:
  * Update vendoered version of Nomad to 0.9.6 [GH-313](https://github.com/jrasell/levant/pull/313)
