@@ -20,8 +20,8 @@ require (
 	github.com/hashicorp/hil v0.0.0-20170627220502-fa9f258a9250 // indirect
 	github.com/hashicorp/logutils v1.0.0 // indirect
 	github.com/hashicorp/memberlist v0.1.5 // indirect
-	github.com/hashicorp/nomad v0.9.6
-	github.com/hashicorp/nomad/api v0.0.0-20191205150928-e2ce1eb2ea85
+	github.com/hashicorp/nomad v0.10.4
+	github.com/hashicorp/nomad/api v0.0.0-20200201010253-0040c75e8e7c
 	github.com/hashicorp/raft v0.0.0-20170830143153-c837e57a6077 // indirect
 	github.com/hashicorp/serf v0.8.1 // indirect
 	github.com/hashicorp/terraform v0.10.5

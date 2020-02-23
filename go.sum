@@ -60,6 +60,8 @@ github.com/hashicorp/go-plugin v1.0.0 h1:/gQ1sNR8/LHpoxKRQq4PmLBuacfZb4tC93e9B30
 github.com/hashicorp/go-plugin v1.0.0/go.mod h1:++UyYGoz3o5w9ZzAdZxtQKrWWP+iqPBn3cQptSMzBuY=
 github.com/hashicorp/go-rootcerts v1.0.0 h1:Rqb66Oo1X/eSV1x66xbDccZjhJigjg0+e82kpwzSwCI=
 github.com/hashicorp/go-rootcerts v1.0.0/go.mod h1:K6zTfqpRlCUIjkwsN4Z+hiSfzSTQa6eBIzfwKfwNnHU=
+github.com/hashicorp/go-rootcerts v1.0.2 h1:jzhAVGtqPKbwpyCPELlgNWhE1znq+qwJtW5Oi2viEzc=
+github.com/hashicorp/go-rootcerts v1.0.2/go.mod h1:pqUvnprVnM5bf7AOirdbb01K4ccR319Vf4pU3K5EGc8=
 github.com/hashicorp/go-sockaddr v1.0.0 h1:GeH6tui99pF4NJgfnhp+L6+FfobzVW3Ah46sLo0ICXs=
 github.com/hashicorp/go-sockaddr v1.0.0/go.mod h1:7Xibr9yA9JjQq1JpNB2Vw7kxv8xerXegt+ozgdvDeDU=
 github.com/hashicorp/go-uuid v1.0.0 h1:RS8zrF7PhGwyNPOtxSClXXj9HA8feRnJzgnI1RJCSnM=
@@ -78,8 +80,12 @@ github.com/hashicorp/memberlist v0.1.5 h1:AYBsgJOW9gab/toO5tEB8lWetVgDKZycqkebJ8
 github.com/hashicorp/memberlist v0.1.5/go.mod h1:ajVTdAv/9Im8oMAAj5G31PhhMCZJV2pPBoIllUwCN7I=
 github.com/hashicorp/nomad v0.9.6 h1:igFz6wwgsBDjc2EgYMxvQgQLAZJp7A+cKmgZN8yiV68=
 github.com/hashicorp/nomad v0.9.6/go.mod h1:WRaKjdO1G2iqi86TvTjIYtKTyxg4pl7NLr9InxtWaI0=
+github.com/hashicorp/nomad v0.10.4 h1:PPYawBHg95wN/2grlBSodImL9aYmehb7ZDcp8cYDN0k=
+github.com/hashicorp/nomad v0.10.4/go.mod h1:WRaKjdO1G2iqi86TvTjIYtKTyxg4pl7NLr9InxtWaI0=
 github.com/hashicorp/nomad/api v0.0.0-20191205150928-e2ce1eb2ea85 h1:s1Ux5pYNXfuLXOXR4sw4zT3ijEsvxkC2C7wHIHvlelw=
 github.com/hashicorp/nomad/api v0.0.0-20191205150928-e2ce1eb2ea85/go.mod h1:Kbx02dGxN6wnAHhSbTqeg/sdACnMMD20BFkVuAxJzds=
+github.com/hashicorp/nomad/api v0.0.0-20200201010253-0040c75e8e7c h1:0yLMS1nCQah72MKSmtcBZnJ0FzvLC2aePHfw4ZrK/K0=
+github.com/hashicorp/nomad/api v0.0.0-20200201010253-0040c75e8e7c/go.mod h1:WKCL+tLVhN1D+APwH3JiTRZoxcdwRk86bWu1LVCUPaE=
 github.com/hashicorp/raft v0.0.0-20170830143153-c837e57a6077 h1:5LlsrNy18VSoEhUW810qqcyVtKB/m2/ppvGIMmOFWWk=
 github.com/hashicorp/raft v0.0.0-20170830143153-c837e57a6077/go.mod h1:DVSAWItjLjTOkVbSpWQ0j0kUADIvDaCtBxIcbNAQLkI=
 github.com/hashicorp/serf v0.8.1 h1:mYs6SMzu72+90OcPa5wr3nfznA4Dw9UyR791ZFNOIf4=
@@ -109,6 +115,8 @@ github.com/mitchellh/copystructure v0.0.0-20170525013902-d23ffcb85de3 h1:dECZqiJ
 github.com/mitchellh/copystructure v0.0.0-20170525013902-d23ffcb85de3/go.mod h1:eOsF2yLPlBBJPvD+nhl5QMTBSOBbOph6N7j/IDUw7PY=
 github.com/mitchellh/go-homedir v1.0.0 h1:vKb8ShqSby24Yrqr/yDYkuFz8d0WUjys40rvnGC8aR0=
 github.com/mitchellh/go-homedir v1.0.0/go.mod h1:SfyaCUpYCn1Vlf4IUYiD9fPX4A5wJrkLzIz1N1q0pr0=
+github.com/mitchellh/go-homedir v1.1.0 h1:lukF9ziXFxDFPkA1vsr5zpc1XuPDn/wFntq5mG+4E0Y=
+github.com/mitchellh/go-homedir v1.1.0/go.mod h1:SfyaCUpYCn1Vlf4IUYiD9fPX4A5wJrkLzIz1N1q0pr0=
 github.com/mitchellh/go-testing-interface v0.0.0-20171004221916-a61a99592b77 h1:7GoSOOW2jpsfkntVKaS2rAr1TJqfcxotyaUcuxoZSzg=
 github.com/mitchellh/go-testing-interface v0.0.0-20171004221916-a61a99592b77/go.mod h1:kRemZodwjscx+RGhAo8eIhFbs2+BFgRtFPeD/KE+zxI=
 github.com/mitchellh/go-testing-interface v1.0.0 h1:fzU/JVNcaqHQEcVFAKeR41fkiLdIPrefOvVG1VZ96U0=
