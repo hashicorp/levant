@@ -1,6 +1,7 @@
 package template
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -35,6 +36,7 @@ func funcMap(consulClient *consul.Client) template.FuncMap {
 		"timeNow":            timeNowFunc,
 		"timeNowUTC":         timeNowUTCFunc,
 		"timeNowTimezone":    timeNowTimezoneFunc(),
+		"toJSON":             toJSON,
 		"toLower":            toLower,
 		"toUpper":            toUpper,
 
@@ -229,6 +231,15 @@ func timeNowTimezoneFunc() func(string) (string, error) {
 
 		return time.Now().In(loc).Format("2006-01-02T15:04:05Z07:00"), nil
 	}
+}
+
+// toJSON converts the given structure into a deeply nested JSON string.
+func toJSON(i interface{}) (string, error) {
+	result, err := json.Marshal(i)
+	if err != nil {
+		return "", err
+	}
+	return string(bytes.TrimSpace(result)), err
 }
 
 func toLower(s string) (string, error) {

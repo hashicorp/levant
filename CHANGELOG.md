@@ -1,3 +1,8 @@
+## 0.2.10 (Unreleased)
+
+IMPOROVEMENTS:
+ * Add `toJSON` template helper
+
 ## 0.2.9 (27 December 2019)
 
 IMPROVEMENTS:
