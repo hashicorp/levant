@@ -26,6 +26,7 @@ require (
 	github.com/hashicorp/serf v0.8.1 // indirect
 	github.com/hashicorp/terraform v0.10.5
 	github.com/hashicorp/yamux v0.0.0-20181012175058-2f1d1f20f75d // indirect
+	github.com/imdario/mergo v0.3.9
 	github.com/jmespath/go-jmespath v0.0.0-20151117175822-3433f3ea46d9 // indirect
 	github.com/mattn/go-isatty v0.0.2
 	github.com/mitchellh/cli v0.0.0-20170908181043-65fcae5817c8

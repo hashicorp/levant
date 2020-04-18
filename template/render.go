@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"path"
 
+	"github.com/imdario/mergo"
 	"github.com/jrasell/levant/client"
 	"github.com/jrasell/levant/helper"
 	"github.com/rs/zerolog/log"
@@ -80,8 +81,10 @@ func RenderTemplate(templateFile string, variableFiles []string, addr string, fl
 		if err != nil {
 			return
 		}
-		for k, v := range variables {
-			mergedVariables[k] = v
+
+		if err = mergo.Merge(&mergedVariables, variables, mergo.WithOverride); err != nil {
+			log.Debug().Msgf("template/render: error merging variables. %s", err)
+			return
 		}
 	}
 
