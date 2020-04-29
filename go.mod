@@ -3,6 +3,7 @@ module github.com/jrasell/levant
 go 1.13
 
 require (
+	github.com/ahmetb/govvv v0.3.0 // indirect
 	github.com/apparentlymart/go-cidr v0.0.0-20170616213631-2bd8b58cf427 // indirect
 	github.com/armon/go-radix v0.0.0-20170727155443-1fca145dffbc // indirect
 	github.com/aws/aws-sdk-go v1.10.46 // indirect
@@ -11,6 +12,7 @@ require (
 	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/go-ini/ini v1.28.2 // indirect
 	github.com/golang/protobuf v1.3.1 // indirect
+	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/hashicorp/consul v0.9.3
 	github.com/hashicorp/go-getter v0.0.0-20170914154444-56c651a79a6e // indirect
 	github.com/hashicorp/go-hclog v0.8.0 // indirect
@@ -20,8 +22,8 @@ require (
 	github.com/hashicorp/hil v0.0.0-20170627220502-fa9f258a9250 // indirect
 	github.com/hashicorp/logutils v1.0.0 // indirect
 	github.com/hashicorp/memberlist v0.1.5 // indirect
-	github.com/hashicorp/nomad v0.9.6
-	github.com/hashicorp/nomad/api v0.0.0-20191205150928-e2ce1eb2ea85
+	github.com/hashicorp/nomad v0.11.1
+	github.com/hashicorp/nomad/api v0.0.0-20200428221309-2a81c1246534
 	github.com/hashicorp/raft v0.0.0-20170830143153-c837e57a6077 // indirect
 	github.com/hashicorp/serf v0.8.1 // indirect
 	github.com/hashicorp/terraform v0.10.5
@@ -46,5 +48,5 @@ require (
 	google.golang.org/genproto v0.0.0-20190415143225-d1146b9035b9 // indirect
 	google.golang.org/grpc v1.20.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
-	gopkg.in/yaml.v2 v2.0.0-20170812160011-eb3733d160e7
+	gopkg.in/yaml.v2 v2.2.8
 )
