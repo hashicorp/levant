@@ -20,8 +20,8 @@ require (
 	github.com/hashicorp/hil v0.0.0-20170627220502-fa9f258a9250 // indirect
 	github.com/hashicorp/logutils v1.0.0 // indirect
 	github.com/hashicorp/memberlist v0.1.5 // indirect
-	github.com/hashicorp/nomad v0.9.6
-	github.com/hashicorp/nomad/api v0.0.0-20191205150928-e2ce1eb2ea85
+	github.com/hashicorp/nomad v0.11.3
+	github.com/hashicorp/nomad/api v0.0.0-20200529203653-c4416b26d3eb
 	github.com/hashicorp/raft v0.0.0-20170830143153-c837e57a6077 // indirect
 	github.com/hashicorp/serf v0.8.1 // indirect
 	github.com/hashicorp/terraform v0.10.5
@@ -46,5 +46,5 @@ require (
 	google.golang.org/genproto v0.0.0-20190415143225-d1146b9035b9 // indirect
 	google.golang.org/grpc v1.20.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
-	gopkg.in/yaml.v2 v2.0.0-20170812160011-eb3733d160e7
+	gopkg.in/yaml.v2 v2.2.8
 )
