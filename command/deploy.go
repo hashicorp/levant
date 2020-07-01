@@ -159,7 +159,7 @@ func (c *DeployCommand) Run(args []string) int {
 	}
 
 	config.Template.Job, err = template.RenderJob(config.Template.TemplateFile,
-		config.Template.VariableFiles, config.Client.ConsulAddr, &c.Meta.flagVars)
+		config.Template.VariableFiles, config.Client.Addr, config.Client.ConsulAddr, &c.Meta.flagVars)
 	if err != nil {
 		c.UI.Error(fmt.Sprintf("[ERROR] levant/command: %v", err))
 		return 1

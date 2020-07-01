@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	flaghelper "github.com/hashicorp/nomad/helper/flag-helpers"
+	"github.com/jrasell/levant/helper"
 	"github.com/jrasell/levant/levant"
 	"github.com/jrasell/levant/logging"
 )
@@ -66,7 +66,7 @@ func (c *DispatchCommand) Run(args []string) int {
 
 	flags := c.Meta.FlagSet("dispatch", FlagSetVars)
 	flags.Usage = func() { c.UI.Output(c.Help()) }
-	flags.Var((*flaghelper.StringFlag)(&meta), "meta", "")
+	flags.Var((*helper.FlagStringSlice)(&meta), "meta", "")
 	flags.StringVar(&addr, "address", "", "")
 	flags.StringVar(&logLevel, "log-level", "INFO", "")
 	flags.StringVar(&logFormat, "log-format", "human", "")

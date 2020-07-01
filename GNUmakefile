@@ -20,7 +20,7 @@ test: ## Run the Levant test suite with coverage
 .PHONY: acceptance-test
 acceptance-test: ## Run the Levant acceptance tests
 	@echo "==> Running $@..."
-	go test -timeout 120s github.com/jrasell/levant/test -v
+	go test -timeout 5m github.com/jrasell/levant/test -v
 
 .PHONY: release
 release: ## Trigger the release build script

@@ -1,74 +1,71 @@
 package command
 
-import (
-	"testing"
+// TODO: since jobspec parsing is now server-side, add acceptance tests
+// to cover these cases
 
-	"github.com/jrasell/levant/template"
-)
+// func TestDeploy_checkCanaryAutoPromote(t *testing.T) {
 
-func TestDeploy_checkCanaryAutoPromote(t *testing.T) {
+// 	fVars := make(map[string]string)
+// 	depCommand := &DeployCommand{}
+// 	canaryPromote := 30
 
-	fVars := make(map[string]string)
-	depCommand := &DeployCommand{}
-	canaryPromote := 30
+// 	cases := []struct {
+// 		File          string
+// 		CanaryPromote int
+// 		Output        error
+// 	}{
+// 		{
+// 			File:          "test-fixtures/job_canary.nomad",
+// 			CanaryPromote: canaryPromote,
+// 			Output:        nil,
+// 		},
+// 		{
+// 			File:          "test-fixtures/group_canary.nomad",
+// 			CanaryPromote: canaryPromote,
+// 			Output:        nil,
+// 		},
+// 	}
 
-	cases := []struct {
-		File          string
-		CanaryPromote int
-		Output        error
-	}{
-		{
-			File:          "test-fixtures/job_canary.nomad",
-			CanaryPromote: canaryPromote,
-			Output:        nil,
-		},
-		{
-			File:          "test-fixtures/group_canary.nomad",
-			CanaryPromote: canaryPromote,
-			Output:        nil,
-		},
-	}
+// 	for i, c := range cases {
+// 		job, err := template.RenderJob(c.File, []string{}, "", &fVars)
+// 		if err != nil {
+// 			t.Fatalf("case %d failed: %v", i, err)
+// 		}
 
-	for i, c := range cases {
-		job, err := template.RenderJob(c.File, []string{}, "", &fVars)
-		if err != nil {
-			t.Fatalf("case %d failed: %v", i, err)
-		}
+// 		out := depCommand.checkCanaryAutoPromote(job, c.CanaryPromote)
+// 		if out != c.Output {
+// 			t.Fatalf("case %d: got \"%v\"; want %v", i, out, c.Output)
+// 		}
+// 	}
+// }
 
-		out := depCommand.checkCanaryAutoPromote(job, c.CanaryPromote)
-		if out != c.Output {
-			t.Fatalf("case %d: got \"%v\"; want %v", i, out, c.Output)
-		}
-	}
-}
+// func TestDeploy_checkForceBatch(t *testing.T) {
 
-func TestDeploy_checkForceBatch(t *testing.T) {
+// 	fVars := make(map[string]string)
+// 	depCommand := &DeployCommand{}
+// 	forceBatch := true
 
-	fVars := make(map[string]string)
-	depCommand := &DeployCommand{}
-	forceBatch := true
+// 	cases := []struct {
+// 		File       string
+// 		ForceBatch bool
+// 		Output     error
+// 	}{
+// 		{
+// 			File:       "test-fixtures/periodic_batch.nomad",
+// 			ForceBatch: forceBatch,
+// 			Output:     nil,
+// 		},
+// 	}
 
-	cases := []struct {
-		File       string
-		ForceBatch bool
-		Output     error
-	}{
-		{
-			File:       "test-fixtures/periodic_batch.nomad",
-			ForceBatch: forceBatch,
-			Output:     nil,
-		},
-	}
+// 	for i, c := range cases {
+// 		job, err := template.RenderJob(c.File, []string{}, "", &fVars)
+// 		if err != nil {
+// 			t.Fatalf("case %d failed: %v", i, err)
+// 		}
 
-	for i, c := range cases {
-		job, err := template.RenderJob(c.File, []string{}, "", &fVars)
-		if err != nil {
-			t.Fatalf("case %d failed: %v", i, err)
-		}
-
-		out := depCommand.checkForceBatch(job, c.ForceBatch)
-		if out != c.Output {
-			t.Fatalf("case %d: got \"%v\"; want %v", i, out, c.Output)
-		}
-	}
-}
+// 		out := depCommand.checkForceBatch(job, c.ForceBatch)
+// 		if out != c.Output {
+// 			t.Fatalf("case %d: got \"%v\"; want %v", i, out, c.Output)
+// 		}
+// 	}
+// }

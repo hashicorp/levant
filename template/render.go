@@ -13,20 +13,25 @@ import (
 	yaml "gopkg.in/yaml.v2"
 
 	nomad "github.com/hashicorp/nomad/api"
-	"github.com/hashicorp/nomad/jobspec"
 	"github.com/hashicorp/terraform/config"
 )
 
 // RenderJob takes in a template and variables performing a render of the
 // template followed by Nomad jobspec parse.
-func RenderJob(templateFile string, variableFiles []string, addr string, flagVars *map[string]string) (job *nomad.Job, err error) {
+func RenderJob(templateFile string, variableFiles []string, nomadAddr string, consulAddr string, flagVars *map[string]string) (job *nomad.Job, err error) {
 	var tpl *bytes.Buffer
-	tpl, err = RenderTemplate(templateFile, variableFiles, addr, flagVars)
+	tpl, err = RenderTemplate(templateFile, variableFiles, consulAddr, flagVars)
 	if err != nil {
 		return
 	}
 
-	job, err = jobspec.Parse(tpl)
+	var n *nomad.Client
+	n, err = client.NewNomadClient(nomadAddr)
+	if err != nil {
+		return
+	}
+
+	job, err = n.Jobs().ParseHCL(tpl.String(), false)
 	return
 }
 
