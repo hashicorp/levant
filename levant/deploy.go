@@ -7,11 +7,14 @@ import (
 	"time"
 
 	nomad "github.com/hashicorp/nomad/api"
-	nomadStructs "github.com/hashicorp/nomad/nomad/structs"
 	"github.com/jrasell/levant/client"
 	"github.com/jrasell/levant/levant/structs"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
+)
+
+const (
+	jobStatusRunning = "running"
 )
 
 // levantDeployment is the all deployment related objects for this Levant
@@ -96,7 +99,7 @@ func (l *levantDeployment) preDeployValidate() (success bool) {
 	// If job.Type isn't set we can't continue
 	if l.config.Template.Job.Type == nil {
 		log.Error().Msgf("levant/deploy: Nomad job `type` is not set; should be set to `%s`, `%s` or `%s`",
-			nomadStructs.JobTypeBatch, nomadStructs.JobTypeSystem, nomadStructs.JobTypeService)
+			nomad.JobTypeBatch, nomad.JobTypeSystem, nomad.JobTypeService)
 		return
 	}
 
@@ -151,7 +154,7 @@ func (l *levantDeployment) deploy() (success bool) {
 	}
 
 	switch *l.config.Template.Job.Type {
-	case nomadStructs.JobTypeService:
+	case nomad.JobTypeService:
 
 		// If the service job doesn't have an update stanza, the job will not use
 		// Nomad deployments.
@@ -192,10 +195,10 @@ func (l *levantDeployment) deploy() (success bool) {
 			l.checkAutoRevert(dep)
 		}
 
-	case nomadStructs.JobTypeBatch:
+	case nomad.JobTypeBatch:
 		return l.jobStatusChecker(&eval.EvalID)
 
-	case nomadStructs.JobTypeSystem:
+	case nomad.JobTypeSystem:
 		return l.jobStatusChecker(&eval.EvalID)
 
 	default:
@@ -215,7 +218,7 @@ func (l *levantDeployment) evaluationInspector(evalID *string) error {
 		}
 
 		switch evalInfo.Status {
-		case nomadStructs.EvalStatusComplete, nomadStructs.EvalStatusFailed, nomadStructs.EvalStatusCancelled:
+		case "complete", "failed", "canceled":
 			if len(evalInfo.FailedTGAllocs) == 0 {
 				log.Info().Msgf("levant/deploy: evaluation %s finished successfully", *evalID)
 				return nil
@@ -223,7 +226,7 @@ func (l *levantDeployment) evaluationInspector(evalID *string) error {
 
 			for group, metrics := range evalInfo.FailedTGAllocs {
 
-				// Check if any nodes have been exhausted of resources and therfore are
+				// Check if any nodes have been exhausted of resources and therefor are
 				// unable to place allocs.
 				if metrics.NodesExhausted > 0 {
 					var exhausted, dimension []string
@@ -274,7 +277,7 @@ func (l *levantDeployment) deploymentWatcher(depID string) (success bool) {
 	deploymentChan := make(chan interface{})
 
 	t := time.Now()
-	wt := time.Duration(5 * time.Second)
+	wt := 5 * time.Second
 
 	// Setup the canaryChan and launch the autoPromote go routine if autoPromote
 	// has been enabled.
@@ -326,10 +329,10 @@ func (l *levantDeployment) deploymentWatcher(depID string) (success bool) {
 func (l *levantDeployment) checkDeploymentStatus(dep *nomad.Deployment, shutdownChan chan interface{}) (bool, error) {
 
 	switch dep.Status {
-	case nomadStructs.DeploymentStatusSuccessful:
+	case "successful":
 		log.Info().Msgf("levant/deploy: deployment %v has completed successfully", dep.ID)
 		return false, nil
-	case nomadStructs.DeploymentStatusRunning:
+	case jobStatusRunning:
 		return true, nil
 	default:
 		if shutdownChan != nil {
@@ -394,8 +397,8 @@ func (l *levantDeployment) checkCanaryDeploymentHealth(depID string) (healthy bo
 		return
 	}
 
-	// Itertate each task in the deployment to determine is health status. If an
-	// unhealthy task is found, incrament the unhealthy counter.
+	// Iterate over each task in the deployment to determine its health status. If an
+	// unhealthy task is found, increment the unhealthy counter.
 	for taskName, taskInfo := range dep.TaskGroups {
 		// skip any task groups which are not configured for canary deployments
 		if taskInfo.DesiredCanaries == 0 {
@@ -425,7 +428,7 @@ func (l *levantDeployment) triggerPeriodic(jobID *string) (evalID string, err er
 
 	log.Info().Msg("levant/deploy: triggering a run of periodic job")
 
-	// Trigger the run if possible and just returning both the evalID and the err.
+	// Trigger the run if possible and just return both the evalID and the err.
 	// There is no need to check this here as the caller does this.
 	evalID, _, err = l.nomad.Jobs().PeriodicForce(*jobID, nil)
 	return
@@ -465,14 +468,14 @@ func (l *levantDeployment) getDeploymentID(evalID string) (depID string, err err
 }
 
 // dynamicGroupCountUpdater takes the templated and rendered job and updates the
-// group counts based on the currently deployed job; if its running.
+// group counts based on the currently deployed job; if it's running.
 func (l *levantDeployment) dynamicGroupCountUpdater() error {
 
 	// Gather information about the current state, if any, of the job on the
 	// Nomad cluster.
 	rJob, _, err := l.nomad.Jobs().Info(*l.config.Template.Job.Name, &nomad.QueryOptions{})
 
-	// This is a hack due to GH-1849; we check the error string for 404 which
+	// This is a hack due to GH-1849; we check the error string for 404, which
 	// indicates the job is not running, not that there was an error in the API
 	// call.
 	if err != nil && strings.Contains(err.Error(), "404") {
@@ -485,13 +488,13 @@ func (l *levantDeployment) dynamicGroupCountUpdater() error {
 
 	// Check that the job is actually running and not in a potentially stopped
 	// state.
-	if *rJob.Status != nomadStructs.JobStatusRunning {
+	if *rJob.Status != jobStatusRunning {
 		return nil
 	}
 
 	log.Debug().Msgf("levant/deploy: running dynamic job count updater")
 
-	// Iterate the templated job and the Nomad returned job and update group count
+	// Iterate over the templated job and the Nomad returned job and update group count
 	// based on matches.
 	for _, rGroup := range rJob.TaskGroups {
 		for _, group := range l.config.Template.Job.TaskGroups {
@@ -505,6 +508,7 @@ func (l *levantDeployment) dynamicGroupCountUpdater() error {
 	return nil
 }
 
+// isJobZeroCount checks that all task groups have a count bigger than zero.
 func (l *levantDeployment) isJobZeroCount() bool {
 	for _, tg := range l.config.Template.Job.TaskGroups {
 		if tg.Count == nil {

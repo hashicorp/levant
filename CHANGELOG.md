@@ -1,6 +1,22 @@
-## 0.2.8 (Unreleased)
+## 0.2.9 (27 December 2019)
 
+IMPROVEMENTS:
+ * Update vendoered version of Nomad to 0.9.6 [GH-313](https://github.com/jrasell/levant/pull/313)
+ * Update to go 1.13 and use modules rather than dep [GH-319](https://github.com/jrasell/levant/pull/319)
+ * Remove use of vendor nomad/structs import to allow easier vendor [GH-320](https://github.com/jrasell/levant/pull/320)
+ * Add template replace function [GH-291](https://github.com/jrasell/levant/pull/291)
+
+BUG FIXES:
+ * Use info level logs when no changes are detected [GH-303](https://github.com/jrasell/levant/pull/303)
+
+## 0.2.8 (14 September 2019)
+
+IMPROVEMENTS:
  * Add `-force` flag to deploy CLI command which allows for forcing a deployment even if Levant detects 0 changes on plan [GH-296](https://github.com/jrasell/levant/pull/296)
+
+BUG FIXES:
+ * Fix segfault when logging deployID details [GH-286](https://github.com/jrasell/levant/pull/286)
+ * Fix error message within scale-in which incorrectly referenced scale-out [GH-285](https://github.com/jrasell/levant/pull/285/files)
 
 ## 0.2.7 (19 March 2019)
 

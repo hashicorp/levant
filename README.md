@@ -23,11 +23,13 @@ Levant is an open source templating and deployment tool for [HashiCorp Nomad](ht
 
 ## Download & Install
 
-* The Levant binary can be downloaded from the [GitHub releases page](https://github.com/jrasell/levant/releases) using `curl -L https://github.com/jrasell/levant/releases/download/0.2.7/linux-amd64-levant -o levant`
+* Levant can be installed via go toolkit using `go get github.com/jrasell/levant && go install github.com/jrasell/levant`
+
+* The Levant binary can be downloaded from the [GitHub releases page](https://github.com/jrasell/levant/releases) using `curl -L https://github.com/jrasell/levant/releases/download/0.2.8/linux-amd64-levant -o levant`
 
 * A docker image can be found on [Docker Hub](https://hub.docker.com/r/jrasell/levant/), the latest version can be downloaded using `docker pull jrasell/levant`.
 
-* Levant can be built from source by firstly cloning the repository `git clone github.com/jrasell/levant.git`. Once cloned the binary can be built using the `make` command or invoking the `build.sh` script located in the scripts directory.
+* Levant can be built from source by firstly cloning the repository `git clone git://github.com/jrasell/levant.git`. Once cloned the binary can be built using the `make` command or invoking the `build.sh` script located in the scripts directory.
 
 * There is a [Levant Ansible role](https://github.com/stevenscg/ansible-role-levant) available to help installation on machines. Thanks to @stevenscg for this.
 

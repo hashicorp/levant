@@ -307,6 +307,20 @@ Render:
 100
 ```
 
+#### replace
+
+Replaces all occurrences of the search string with the replacement string.
+
+Example:
+```
+[[ replace "Batman and Robin" "Robin" "Catwoman" ]]
+```
+
+Render:
+```
+Batman and Catwoman
+```
+
 #### timeNow
 
 Returns the current ISO_8601 standard timestamp as a string in the timezone of the machine the rendering was triggered on.
