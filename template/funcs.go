@@ -12,6 +12,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	consul "github.com/hashicorp/consul/api"
 	"github.com/rs/zerolog/log"
 )
@@ -44,6 +45,9 @@ func funcMap(consulClient *consul.Client) template.FuncMap {
 		"multiply": multiply,
 		"divide":   divide,
 		"modulo":   modulo,
+
+		//debug.
+		"spew": doSpew,
 	}
 }
 
@@ -459,4 +463,8 @@ func modulo(b, a interface{}) (interface{}, error) {
 	default:
 		return nil, fmt.Errorf("modulo: unknown type for %q (%T)", av, a)
 	}
+}
+
+func doSpew(a interface{}) (string, error) {
+	return spew.Sdump(a), nil
 }
