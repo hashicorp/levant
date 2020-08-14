@@ -3,9 +3,9 @@ package levant
 import (
 	"fmt"
 
+	"github.com/hashicorp/levant/client"
+	"github.com/hashicorp/levant/levant/structs"
 	nomad "github.com/hashicorp/nomad/api"
-	"github.com/jrasell/levant/client"
-	"github.com/jrasell/levant/levant/structs"
 	"github.com/rs/zerolog/log"
 )
 

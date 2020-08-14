@@ -5,7 +5,7 @@ import (
 	"flag"
 	"io"
 
-	"github.com/jrasell/levant/helper"
+	"github.com/hashicorp/levant/helper"
 	"github.com/mitchellh/cli"
 )
 

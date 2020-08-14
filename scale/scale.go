@@ -1,10 +1,10 @@
 package scale
 
 import (
+	"github.com/hashicorp/levant/client"
+	"github.com/hashicorp/levant/levant"
+	"github.com/hashicorp/levant/levant/structs"
 	nomad "github.com/hashicorp/nomad/api"
-	"github.com/jrasell/levant/client"
-	"github.com/jrasell/levant/levant"
-	"github.com/jrasell/levant/levant/structs"
 	"github.com/rs/zerolog/log"
 )
 
