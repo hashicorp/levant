@@ -12,6 +12,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/Masterminds/sprig/v3"
 	consul "github.com/hashicorp/consul/api"
 	"github.com/rs/zerolog/log"
 )
@@ -19,7 +20,7 @@ import (
 // funcMap builds the template functions and passes the consulClient where this
 // is required.
 func funcMap(consulClient *consul.Client) template.FuncMap {
-	return template.FuncMap{
+	r := template.FuncMap{
 		"consulKey":          consulKeyFunc(consulClient),
 		"consulKeyExists":    consulKeyExistsFunc(consulClient),
 		"consulKeyOrDefault": consulKeyOrDefaultFunc(consulClient),
@@ -44,6 +45,25 @@ func funcMap(consulClient *consul.Client) template.FuncMap {
 		"multiply": multiply,
 		"divide":   divide,
 		"modulo":   modulo,
+	}
+	// Add the Sprig functions to the funcmap
+	for k, v := range sprig.FuncMap() {
+		// Decorate all of the function names from the sprig library.
+		target := "sprig_" + k
+		r[target] = v
+		r["sprig_version"] = sprigVersionFunc
+	}
+	return r
+}
+
+// SprigVersion contains the semver of the included sprig library
+// it is used in command/version and provided in the sprig_version
+// template function
+const SprigVersion = "3.1.0"
+
+func sprigVersionFunc() func(string) (string, error) {
+	return func(s string) (string, error) {
+		return SprigVersion, nil
 	}
 }
 
