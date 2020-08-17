@@ -12,7 +12,7 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
+	spewLib "github.com/davecgh/go-spew/spew"
 	consul "github.com/hashicorp/consul/api"
 	"github.com/rs/zerolog/log"
 )
@@ -47,7 +47,8 @@ func funcMap(consulClient *consul.Client) template.FuncMap {
 		"modulo":   modulo,
 
 		//debug.
-		"spew": doSpew,
+		"spewDump":   spewDump,
+		"spewPrintf": spewPrintf,
 	}
 }
 
@@ -465,6 +466,10 @@ func modulo(b, a interface{}) (interface{}, error) {
 	}
 }
 
-func doSpew(a interface{}) (string, error) {
-	return spew.Sdump(a), nil
+func spewDump(a interface{}) (string, error) {
+	return spewLib.Sdump(a), nil
+}
+
+func spewPrintf(format string, args ...interface{}) (string, error) {
+	return spewLib.Sprintf(format, args), nil
 }
