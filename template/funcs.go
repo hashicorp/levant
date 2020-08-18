@@ -11,6 +11,8 @@ import (
 	"strings"
 	"text/template"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/Masterminds/sprig/v3"
 	consul "github.com/hashicorp/consul/api"
@@ -45,14 +47,27 @@ func funcMap(consulClient *consul.Client) template.FuncMap {
 		"multiply": multiply,
 		"divide":   divide,
 		"modulo":   modulo,
+		// Case Helpers
+		"firstRuneToUpper": firstRuneToUpper,
+		"firstRuneToLower": firstRuneToLower,
+		"runeToUpper":      runeToUpper,
+		"runeToLower":      runeToLower,
 	}
 	// Add the Sprig functions to the funcmap
 	for k, v := range sprig.FuncMap() {
 		// Decorate all of the function names from the sprig library.
-		target := "sprig_" + k
-		r[target] = v
-		r["sprig_version"] = sprigVersionFunc
+		if name, err := firstRuneToUpper(k); err == nil {
+			functionName := "sprig" + name
+			// Would like to have some sort of trace level event for
+			// adding these functions.
+			// println(fmt.Sprintf("adding \"%v\".", functionName))
+			r[functionName] = v
+		} else {
+			log.Error().Msgf("template/funcs: could not add \"%v\" function. error:%v", k, err))
+		}
 	}
+	r["sprigVersion"] = sprigVersionFunc
+
 	return r
 }
 
@@ -479,4 +494,40 @@ func modulo(b, a interface{}) (interface{}, error) {
 	default:
 		return nil, fmt.Errorf("modulo: unknown type for %q (%T)", av, a)
 	}
+}
+
+func firstRuneToUpper(s string) (string, error) {
+	return runeToUpper(s, 0)
+}
+
+func runeToUpper(inString string, runeIndex int) (string, error) {
+	return funcOnRune(unicode.ToUpper, inString, runeIndex)
+}
+
+func firstRuneToLower(s string) (string, error) {
+	return runeToLower(s, 0)
+}
+
+func runeToLower(inString string, runeIndex int) (string, error) {
+	return funcOnRune(unicode.ToLower, inString, runeIndex)
+}
+
+func funcOnRune(inFunc func(rune) rune, inString string, runeIndex int) (string, error) {
+	if !utf8.ValidString(inString) {
+		return "", errors.New("funcOnRune: not a valid UTF-8 string")
+	}
+
+	runeCount := utf8.RuneCountInString(inString)
+
+	if runeIndex > runeCount-1 || runeIndex < 0 {
+		return "", fmt.Errorf("funcOnRune: runeIndex out of range (max:%v, provided:%v)", runeCount-1, runeIndex)
+	}
+	runes := []rune(inString)
+	transformedRune := inFunc(runes[runeIndex])
+
+	if runes[runeIndex] == transformedRune {
+		return inString, nil
+	}
+	runes[runeIndex] = transformedRune
+	return string(runes), nil
 }
