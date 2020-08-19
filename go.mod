@@ -9,6 +9,7 @@ require (
 	github.com/bgentry/go-netrc v0.0.0-20140422174119-9fd32a8b3d3d // indirect
 	github.com/bgentry/speakeasy v0.1.0 // indirect
 	github.com/blang/semver v3.5.1+incompatible // indirect
+	github.com/davecgh/go-spew v1.1.1
 	github.com/go-ini/ini v1.28.2 // indirect
 	github.com/golang/protobuf v1.3.1 // indirect
 	github.com/hashicorp/consul v0.9.3

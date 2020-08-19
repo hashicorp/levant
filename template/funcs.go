@@ -12,6 +12,7 @@ import (
 	"text/template"
 	"time"
 
+	spewLib "github.com/davecgh/go-spew/spew"
 	consul "github.com/hashicorp/consul/api"
 	"github.com/rs/zerolog/log"
 )
@@ -44,6 +45,10 @@ func funcMap(consulClient *consul.Client) template.FuncMap {
 		"multiply": multiply,
 		"divide":   divide,
 		"modulo":   modulo,
+
+		//debug.
+		"spewDump":   spewDump,
+		"spewPrintf": spewPrintf,
 	}
 }
 
@@ -459,4 +464,12 @@ func modulo(b, a interface{}) (interface{}, error) {
 	default:
 		return nil, fmt.Errorf("modulo: unknown type for %q (%T)", av, a)
 	}
+}
+
+func spewDump(a interface{}) (string, error) {
+	return spewLib.Sdump(a), nil
+}
+
+func spewPrintf(format string, args ...interface{}) (string, error) {
+	return spewLib.Sprintf(format, args), nil
 }
