@@ -1,8 +1,6 @@
 package command
 
 import (
-	"fmt"
-
 	"github.com/mitchellh/cli"
 )
 
@@ -26,6 +24,6 @@ func (c *VersionCommand) Synopsis() string {
 
 // Run executes the version command.
 func (c *VersionCommand) Run(_ []string) int {
-	fmt.Println(c.Version)
+	c.UI.Info(c.Version)
 	return 0
 }
