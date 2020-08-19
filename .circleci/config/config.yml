@@ -1,0 +1,13 @@
+---
+version: 2.1
+
+executors:
+  go:
+    machine: true
+    shell: /usr/bin/env bash -euo pipefail -c
+    environment:
+      GO111MODULE: "on"
+      CIRCLECI_CLI_VERSION: 0.1.6772
+      GO_VERSION: 1.14.7
+      GO_TAGS: ""
+    working_directory: /go/src/github.com/hashicorp/levant

@@ -3,7 +3,7 @@ package test
 import (
 	"testing"
 
-	"github.com/jrasell/levant/test/acctest"
+	"github.com/hashicorp/levant/test/acctest"
 )
 
 func TestDeploy_basic(t *testing.T) {

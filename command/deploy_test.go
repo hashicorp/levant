@@ -3,7 +3,7 @@ package command
 import (
 	"testing"
 
-	"github.com/jrasell/levant/template"
+	"github.com/hashicorp/levant/template"
 )
 
 func TestDeploy_checkCanaryAutoPromote(t *testing.T) {

@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/jrasell/levant/helper"
-	"github.com/jrasell/levant/template"
+	"github.com/hashicorp/levant/helper"
+	"github.com/hashicorp/levant/template"
 )
 
 // RenderCommand is the command implementation that allows users to render a

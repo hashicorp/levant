@@ -145,7 +145,7 @@ func CheckTaskGroupCount(groupName string, count int) TestStateFunc {
 	}
 }
 
-// newNomadClient creates a Nomad API client configrable by NOMAD_
+// newNomadClient creates a Nomad API client configurable by NOMAD_
 // env variables or returns an error if Nomad is in an unhealthy state
 func newNomadClient() (*nomad.Client, error) {
 	c, err := nomad.NewClient(nomad.DefaultConfig())
@@ -158,9 +158,8 @@ func newNomadClient() (*nomad.Client, error) {
 		return nil, err
 	}
 
-	if !resp.Server.Ok || !resp.Client.Ok {
+	if (resp.Server != nil && !resp.Server.Ok) || (resp.Client != nil && !resp.Client.Ok) {
 		return nil, fmt.Errorf("agent unhealthy")
 	}
-
 	return c, nil
 }

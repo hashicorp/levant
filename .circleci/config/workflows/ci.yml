@@ -1,0 +1,5 @@
+jobs:
+  - lint-go
+  - check-deps-go
+  - test-go
+  - build-go

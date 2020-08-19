@@ -4,23 +4,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/jrasell/levant/buildtime"
 	"github.com/mitchellh/cli"
 )
 
-// These variables are populated by govvv during build time to provide detailed
-// version output information.
-var (
-	Version    = "dev"
-	BuildDate  string
-	GitCommit  string
-	GitBranch  string
-	GitState   string
-	GitSummary string
-)
-
 func main() {
-	exportBuildtimeConsts()
 	os.Exit(Run(os.Args[1:]))
 }
 
@@ -73,13 +60,4 @@ func RunCustom(args []string, commands map[string]cli.CommandFactory) int {
 	}
 
 	return exitCode
-}
-
-func exportBuildtimeConsts() {
-	buildtime.GitCommit = GitCommit
-	buildtime.GitBranch = GitBranch
-	buildtime.GitState = GitState
-	buildtime.GitSummary = GitSummary
-	buildtime.BuildDate = BuildDate
-	buildtime.Version = Version
 }

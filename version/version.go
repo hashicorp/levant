@@ -1,21 +1,52 @@
 package version
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
-// Version is the main version number that is being run at the moment.
-const Version = "0.3.0"
+var (
+	GitCommit   string
+	GitDescribe string
 
-// VersionPrerelease is a pre-release marker for the version. If this is ""
-// (empty string) then it means that it is a final release. Otherwise, this is
-// a pre-release such as "dev" (in development), "beta", "rc1", etc.
-const VersionPrerelease = "dev"
+	// Version must conform to the format expected by
+	// github.com/hashicorp/go-version for tests to work.
+	Version = "0.3.0"
 
-// Get returns a human readable version of Levant.
-func Get() string {
+	// VersionPrerelease is the marker for the version. If this is ""
+	// (empty string) then it means that it is a final release. Otherwise, this
+	// is a pre-release such as "dev" (in development), "beta", "rc1", etc.
+	VersionPrerelease = "dev"
+)
 
-	if VersionPrerelease != "" {
-		return fmt.Sprintf("%s-%s", Version, VersionPrerelease)
+// GetHumanVersion composes the parts of the version in a way that's suitable
+// for displaying to humans.
+func GetHumanVersion() string {
+	version := Version
+	if GitDescribe != "" {
+		version = GitDescribe
 	}
 
-	return Version
+	// Add v as prefix if not present
+	if !strings.HasPrefix(version, "v") {
+		version = fmt.Sprintf("v%s", version)
+	}
+
+	release := VersionPrerelease
+	if GitDescribe == "" && release == "" {
+		release = "dev"
+	}
+
+	if release != "" {
+		if !strings.HasSuffix(version, "-"+release) {
+			// if we tagged a prerelease version then the release is in the version already
+			version += fmt.Sprintf("-%s", release)
+		}
+		if GitCommit != "" {
+			version += fmt.Sprintf(" (%s)", GitCommit)
+		}
+	}
+
+	// Strip off any single quotes added by the git information.
+	return strings.Replace(version, "'", "", -1)
 }

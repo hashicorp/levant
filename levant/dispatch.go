@@ -1,8 +1,8 @@
 package levant
 
 import (
+	"github.com/hashicorp/levant/client"
 	nomad "github.com/hashicorp/nomad/api"
-	"github.com/jrasell/levant/client"
 	"github.com/rs/zerolog/log"
 )
 
