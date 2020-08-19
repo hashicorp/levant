@@ -63,7 +63,7 @@ func funcMap(consulClient *consul.Client) template.FuncMap {
 			// println(fmt.Sprintf("adding \"%v\".", functionName))
 			r[functionName] = v
 		} else {
-			log.Error().Msgf("template/funcs: could not add \"%v\" function. error:%v", k, err))
+			log.Error().Msgf("template/funcs: could not add \"%v\" function. error:%v", k, err)
 		}
 	}
 	r["sprigVersion"] = sprigVersionFunc
