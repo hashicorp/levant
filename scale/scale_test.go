@@ -3,8 +3,8 @@ package scale
 import (
 	"testing"
 
+	"github.com/hashicorp/levant/levant/structs"
 	nomad "github.com/hashicorp/nomad/api"
-	"github.com/jrasell/levant/levant/structs"
 )
 
 func TestScale_updateTaskGroup(t *testing.T) {

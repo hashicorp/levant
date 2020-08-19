@@ -1,0 +1,5 @@
+executor: go
+steps:
+  - install-go
+  - checkout
+  - run: make test

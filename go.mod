@@ -1,4 +1,4 @@
-module github.com/jrasell/levant
+module github.com/hashicorp/levant
 
 go 1.13
 
@@ -41,6 +41,7 @@ require (
 	github.com/sean-/conswriter v0.0.0-20180208195008-f5ae3917a627
 	github.com/sean-/pager v0.0.0-20180208200047-666be9bf53b5 // indirect
 	github.com/smartystreets/goconvey v1.6.4 // indirect
+	github.com/stretchr/testify v1.3.0
 	github.com/ugorji/go v0.0.0-20170826155943-8c0409fcbb70 // indirect
 	github.com/ulikunitz/xz v0.5.4 // indirect
 	google.golang.org/genproto v0.0.0-20190415143225-d1146b9035b9 // indirect

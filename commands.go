@@ -1,10 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
-	"github.com/jrasell/levant/command"
-	"github.com/jrasell/levant/version"
+	"github.com/hashicorp/levant/command"
+	"github.com/hashicorp/levant/version"
 	"github.com/mitchellh/cli"
 )
 
@@ -57,16 +58,9 @@ func Commands(metaPtr *command.Meta) map[string]cli.CommandFactory {
 			}, nil
 		},
 		"version": func() (cli.Command, error) {
-			ver := version.Version
-			rel := version.VersionPrerelease
-
-			if rel == "" && version.VersionPrerelease != "" {
-				rel = "dev"
-			}
 			return &command.VersionCommand{
-				Version:           ver,
-				VersionPrerelease: rel,
-				UI:                meta.UI,
+				Version: fmt.Sprintf("Levant %s", version.GetHumanVersion()),
+				UI:      meta.UI,
 			}, nil
 		},
 	}

@@ -1,36 +1,52 @@
-default: check test build
+SHELL = bash
+default: lint test build check-mod
+
+GIT_COMMIT := $(shell git rev-parse --short HEAD)
+GIT_DIRTY := $(if $(shell git status --porcelain),+CHANGES)
+
+GO_LDFLAGS := "-X github.com/hashicorp/levant/version.GitCommit=$(GIT_COMMIT)$(GIT_DIRTY)"
 
 .PHONY: tools
 tools: ## Install the tools used to test and build
-	@echo "==> Installing build tools"
-	GO111MODULE=off go get -u github.com/ahmetb/govvv
+	@echo "==> Installing tools..."
 	GO111MODULE=off go get -u github.com/golangci/golangci-lint/cmd/golangci-lint
+	@echo "==> Done"
 
 .PHONY: build
-build: ## Build Levant for development purposes
-	@echo "==> Running $@..."
-	govvv build -o levant-local . -version local
+build:
+	@echo "==> Building Levant..."
+	@CGO_ENABLED=0 GO111MODULE=on \
+	go build \
+	-ldflags $(GO_LDFLAGS) \
+	-o ./bin/levant
+	@echo "==> Done"
 
 .PHONY: test
-test: ## Run the Levant test suite with coverage
-	@echo "==> Running $@..."
+test: ## Test the source code
+	@echo "==> Testing source code..."
 	@go test -cover -v -tags -race \
 		"$(BUILDTAGS)" $(shell go list ./... |grep -v vendor |grep -v test)
 
 .PHONY: acceptance-test
 acceptance-test: ## Run the Levant acceptance tests
 	@echo "==> Running $@..."
-	go test -timeout 120s github.com/jrasell/levant/test -v
+	go test -timeout 120s github.com/hashicorp/levant/test -v
 
-.PHONY: release
-release: ## Trigger the release build script
-	@echo "==> Running $@..."
-	@goreleaser --rm-dist
+.PHONY: lint
+lint: ## Lint the source code
+	@echo "==> Linting source code..."
+	@golangci-lint run -j 1
+	@echo "==> Done"
 
-.PHONY: check
-check: ## Run golangci-lint
-	@echo "==> Running $@..."
-	golangci-lint run buildtime/... client/... command/... helper/... levant/... logging/... scale/... template/... version/...
+.PHONEY: check-mod
+check-mod: ## Checks the Go mod is tidy
+	@echo "==> Checking Go mod..."
+	@GO111MODULE=on go mod tidy
+	@if (git status --porcelain | grep -q go.mod); then \
+		echo go.mod needs updating; \
+		git --no-pager diff go.mod; \
+		exit 1; fi
+	@echo "==> Done"
 
 HELP_FORMAT="    \033[36m%-25s\033[0m %s\n"
 .PHONY: help

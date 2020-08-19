@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/hashicorp/levant/helper"
+	"github.com/hashicorp/levant/levant"
+	"github.com/hashicorp/levant/levant/structs"
+	"github.com/hashicorp/levant/logging"
+	"github.com/hashicorp/levant/template"
 	nomad "github.com/hashicorp/nomad/api"
-	"github.com/jrasell/levant/helper"
-	"github.com/jrasell/levant/levant"
-	"github.com/jrasell/levant/levant/structs"
-	"github.com/jrasell/levant/logging"
-	"github.com/jrasell/levant/template"
 )
 
 // DeployCommand is the command implementation that allows users to deploy a

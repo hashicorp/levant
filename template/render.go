@@ -7,14 +7,13 @@ import (
 	"io/ioutil"
 	"path"
 
-	"github.com/jrasell/levant/client"
-	"github.com/jrasell/levant/helper"
-	"github.com/rs/zerolog/log"
-	yaml "gopkg.in/yaml.v2"
-
+	"github.com/hashicorp/levant/client"
+	"github.com/hashicorp/levant/helper"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/hashicorp/nomad/jobspec"
 	"github.com/hashicorp/terraform/config"
+	"github.com/rs/zerolog/log"
+	yaml "gopkg.in/yaml.v2"
 )
 
 // RenderJob takes in a template and variables performing a render of the

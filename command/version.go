@@ -1,17 +1,15 @@
 package command
 
 import (
-	"fmt"
-
-	"github.com/jrasell/levant/buildtime"
 	"github.com/mitchellh/cli"
 )
 
+var _ cli.Command = &VersionCommand{}
+
 // VersionCommand is a Command implementation that prints the version.
 type VersionCommand struct {
-	Version           string
-	VersionPrerelease string
-	UI                cli.Ui
+	Version string
+	UI      cli.Ui
 }
 
 // Help provides the help information for the version command.
@@ -26,18 +24,6 @@ func (c *VersionCommand) Synopsis() string {
 
 // Run executes the version command.
 func (c *VersionCommand) Run(_ []string) int {
-
-	v := fmt.Sprintf("Levant v%s", c.Version)
-
-	if c.VersionPrerelease != "" {
-		v = v + fmt.Sprintf("-%s", c.VersionPrerelease)
-	}
-
-	c.UI.Output(v)
-	c.UI.Output(fmt.Sprintf("Date: %s", buildtime.BuildDate))
-	c.UI.Output(fmt.Sprintf("Commit: %s", buildtime.GitCommit))
-	c.UI.Output(fmt.Sprintf("Branch: %s", buildtime.GitBranch))
-	c.UI.Output(fmt.Sprintf("State: %s", buildtime.GitState))
-	c.UI.Output(fmt.Sprintf("Summary: %s", buildtime.GitSummary))
+	c.UI.Info(c.Version)
 	return 0
 }
