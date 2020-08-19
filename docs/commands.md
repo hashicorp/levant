@@ -94,6 +94,10 @@ levant plan -log-level=debug -address=nomad.devoops -var-file=var.yaml -var 'var
 
 * **-consul-address** (string: "localhost:8500") The Consul host and port to use when making Consul KeyValue lookups for template rendering.
 
+* **-log-level** (string: "DEBUG") The level at which Levant will log to. Valid values are DEBUG, INFO, WARN, ERROR and FATAL.
+
+* **-log-format** (string: "JSON") Specify the format of Levant's logs. Valid values are HUMAN or JSON
+
 * **-var-file** (string: "") The variables file to render the template with. This flag can be specified multiple times to supply multiple variables files.
 
 * **-out** (string: "") The path to write the rendered template to. The template will be rendered to stdout if this is not set.
