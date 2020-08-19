@@ -1,7 +1,6 @@
 # Levant
 
-[![Build Status](https://travis-ci.org/jrasell/levant.svg?branch=master)](https://travis-ci.org/jrasell/levant) [![Go Report Card](https://goreportcard.com/badge/github.com/jrasell/levant)](https://goreportcard.com/report/github.com/jrasell/levant) [![GoDoc](https://godoc.org/github.com/jrasell/levant?status.svg)](https://godoc.org/github.com/jrasell/levant)
-[![Join the chat at https://gitter.im/levantdeployment/Lobby](https://badges.gitter.im/levantdeployment/Lobby/Lobby.svg)](https://gitter.im/levantdeployment/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+[![Build Status](https://circleci.com/gh/hashicorp/levant.svg?style=svg)](https://circleci.com/gh/hashicorp/levant) [![Discuss](https://img.shields.io/badge/discuss-nomad-00BC7F?style=flat)](https://discuss.hashicorp.com/c/nomad)
 
 Levant is an open source templating and deployment tool for [HashiCorp Nomad](https://www.nomadproject.io/) jobs that provides realtime feedback and detailed failure messages upon deployment issues.
 
@@ -23,13 +22,13 @@ Levant is an open source templating and deployment tool for [HashiCorp Nomad](ht
 
 ## Download & Install
 
-* Levant can be installed via go toolkit using `go get github.com/jrasell/levant && go install github.com/jrasell/levant`
+* Levant can be installed via go toolkit using `go get github.com/hashicorp/levent && go install github.com/hashicorp/levent`
 
-* The Levant binary can be downloaded from the [GitHub releases page](https://github.com/jrasell/levant/releases) using `curl -L https://github.com/jrasell/levant/releases/download/0.2.8/linux-amd64-levant -o levant`
+* The Levant binary can be downloaded from the [GitHub releases page](https://github.com/hashicorp/levant/releases) using `curl -L https://github.com/hashicorp/levent/releases/download/0.2.8/linux-amd64-levant -o levant`
 
 * A docker image can be found on [Docker Hub](https://hub.docker.com/r/jrasell/levant/), the latest version can be downloaded using `docker pull jrasell/levant`.
 
-* Levant can be built from source by firstly cloning the repository `git clone git://github.com/jrasell/levant.git`. Once cloned the binary can be built using the `make` command or invoking the `build.sh` script located in the scripts directory.
+* Levant can be built from source by firstly cloning the repository `git clone git://github.com/hashicorp/levent.git`. Once cloned the binary can be built using the `make` command or invoking the `build.sh` script located in the scripts directory.
 
 * There is a [Levant Ansible role](https://github.com/stevenscg/ansible-role-levant) available to help installation on machines. Thanks to @stevenscg for this.
 
@@ -47,4 +46,4 @@ Levant utilises the Nomad and Consul offical clients and configuration can be do
 
 ## Contributing
 
-Contributions to Levant are very welcome! Please refer to our [contribution guide](https://github.com/jrasell/levant/blob/master/.github/CONTRIBUTING.md) for details about hacking on Levant.
+Contributions to Levant are very welcome! Please refer to our [contribution guide](https://github.com/hashicorp/levent/blob/master/.github/CONTRIBUTING.md) for details about hacking on Levant.
