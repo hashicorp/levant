@@ -8,17 +8,17 @@ Levant is an open source templating and deployment tool for [HashiCorp Nomad][] 
 
 - **Realtime Feedback**: Using watchers, Levant provides realtime feedback on Nomad job deployments allowing for greater insight and knowledge about application deployments.
 
-- **Advanced Job Status Checking**: Particularly for system and batch jobs, Levant will ensure the job, evaluations and allocations all reach the desired state providing feedback at every stage.
+- **Advanced Job Status Checking**: Particularly for system and batch jobs, Levant ensures the job, evaluations and allocations all reach the desired state providing feedback at every stage.
 
-- **Dynamic Job Group Counts**: If the Nomad job is currently running on the cluster, Levant will dynamically update the rendered template with the relevant job group counts before deployment.
+- **Dynamic Job Group Counts**: If the Nomad job is currently running on the cluster, Levant dynamically updates the rendered template with the relevant job group counts before deployment.
 
-- **Failure Inspection**: Upon a deployment failure, Levant will inspect each allocation and log information about each event, providing useful information for debugging without the need for querying the cluster retrospectively.
+- **Failure Inspection**: Upon a deployment failure, Levant inspects each allocation and log information about each event, providing useful information for debugging without the need for querying the cluster retrospectively.
 
-- **Canary Auto Promotion**: In environments with advanced automation and alerting, automatic promotion of canary deployments may be desirable after a certain time threshold. Levant allows the user to specify a `canary-auto-promote` time period, which if reached with a healthy set of canaries, will automatically promote the deployment.
+- **Canary Auto Promotion**: In environments with advanced automation and alerting, automatic promotion of canary deployments may be desirable after a certain time threshold. Levant allows the user to specify a `canary-auto-promote` time period, which if reached with a healthy set of canaries, automatically promotes the deployment.
 
 - **Multiple Variable File Formats**: Currently Levant supports `.json`, `.tf`, `.yaml`, and `.yml` file extensions for the declaration of template variables.
 
-- **Auto Revert Checking**: In the event that a job deployment does not pass its healthy threshold and the job has auto-revert enabled; Levant will track the resulting rollback deployment so you can see the exact outcome of the deployment process.
+- **Auto Revert Checking**: In the event that a job deployment does not pass its healthy threshold and the job has auto-revert enabled; Levant tracks the resulting rollback deployment so you can see the exact outcome of the deployment process.
 
 ## Download & Install
 
@@ -46,7 +46,7 @@ Levant utilizes the Nomad and Consul official clients and configuration can be d
 
 ## Contributing
 
-Contributions to Levant are very welcome! Please refer to our [contribution guide][] for details about hacking on Levant.
+Community contributions to Levant are encouraged. Please refer to the [contribution guide][] for details about hacking on Levant.
 
 [clients]: ./docs/clients.md
 [commands]: ./docs/commands.md
