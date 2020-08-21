@@ -3,6 +3,7 @@ module github.com/hashicorp/levant
 go 1.13
 
 require (
+	github.com/Masterminds/sprig/v3 v3.1.0
 	github.com/apparentlymart/go-cidr v0.0.0-20170616213631-2bd8b58cf427 // indirect
 	github.com/blang/semver v3.5.1+incompatible // indirect
 	github.com/davecgh/go-spew v1.1.1
