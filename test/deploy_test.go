@@ -134,3 +134,17 @@ func TestDeploy_canary(t *testing.T) {
 		CleanupFunc: acctest.CleanupPurgeJob,
 	})
 }
+
+func TestDeploy_lifecycle(t *testing.T) {
+	acctest.Test(t, acctest.TestCase{
+		Steps: []acctest.TestStep{
+			{
+				Runner: acctest.DeployTestStepRunner{
+					FixtureName: "deploy_lifecycle.nomad",
+				},
+				Check: acctest.CheckDeploymentStatus("successful"),
+			},
+		},
+		CleanupFunc: acctest.CleanupPurgeJob,
+	})
+}

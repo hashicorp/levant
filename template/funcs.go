@@ -15,6 +15,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/Masterminds/sprig/v3"
+	spewLib "github.com/davecgh/go-spew/spew"
 	consul "github.com/hashicorp/consul/api"
 	"github.com/rs/zerolog/log"
 )
@@ -47,11 +48,16 @@ func funcMap(consulClient *consul.Client) template.FuncMap {
 		"multiply": multiply,
 		"divide":   divide,
 		"modulo":   modulo,
+
 		// Case Helpers
 		"firstRuneToUpper": firstRuneToUpper,
 		"firstRuneToLower": firstRuneToLower,
 		"runeToUpper":      runeToUpper,
 		"runeToLower":      runeToLower,
+
+		//debug.
+		"spewDump":   spewDump,
+		"spewPrintf": spewPrintf,
 	}
 	// Add the Sprig functions to the funcmap
 	for k, v := range sprig.FuncMap() {
@@ -530,4 +536,12 @@ func funcOnRune(inFunc func(rune) rune, inString string, runeIndex int) (string,
 	}
 	runes[runeIndex] = transformedRune
 	return string(runes), nil
+}
+
+func spewDump(a interface{}) (string, error) {
+	return spewLib.Sdump(a), nil
+}
+
+func spewPrintf(format string, args ...interface{}) (string, error) {
+	return spewLib.Sprintf(format, args), nil
 }
