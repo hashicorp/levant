@@ -45,18 +45,16 @@ func RenderTemplate(templateFile string, variableFiles []string, addr string, fl
 
 	t.consulClient = c
 
-	if len(variableFiles) == 0 {
+	if len(t.variableFiles) == 0 {
 		log.Debug().Msgf("template/render: no variable file passed, trying defaults")
-		defaultVarFile := helper.GetDefaultVarFile()
-		if defaultVarFile != "" {
-			t.variableFiles = make([]string, 1)
-			t.variableFiles[0] = defaultVarFile
-			log.Debug().Msgf("template/render: found default variable file, using %s", t.variableFiles[0])
+		if defaultVarFile := helper.GetDefaultVarFile(); defaultVarFile != "" {
+			t.variableFiles = []string{defaultVarFile}
+			log.Debug().Msgf("template/render: found default variable file, using %s", defaultVarFile)
 		}
 	}
 
 	mergedVariables := make(map[string]interface{})
-	for _, variableFile := range variableFiles {
+	for _, variableFile := range t.variableFiles {
 		// Process the variable file extension and log DEBUG so the template can be
 		// correctly rendered.
 		var ext string
