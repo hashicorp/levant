@@ -41,7 +41,7 @@ func (l *levantDeployment) jobStatusChecker(evalID *string) bool {
 // evaluations at least reach a job status of running.
 func (l *levantDeployment) simpleJobStatusChecker() bool {
 
-	q := &nomad.QueryOptions{WaitIndex: 1}
+	q := &nomad.QueryOptions{WaitIndex: 1, Namespace: *l.config.Template.Job.Namespace}
 
 	for {
 
@@ -77,7 +77,7 @@ func (l *levantDeployment) simpleJobStatusChecker() bool {
 // jobs that do not support Nomad deployments.
 func (l *levantDeployment) jobAllocationChecker(evalID *string) bool {
 
-	q := &nomad.QueryOptions{WaitIndex: 1}
+	q := &nomad.QueryOptions{WaitIndex: 1, Namespace: *l.config.Template.Job.Namespace}
 
 	// Build our small internal checking struct.
 	levantTasks := make(map[TaskCoordinate]string)
