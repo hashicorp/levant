@@ -1,9 +1,10 @@
 package levant
 
 import (
+	"testing"
+
 	"github.com/hashicorp/levant/levant/structs"
 	nomad "github.com/hashicorp/nomad/api"
-	"testing"
 )
 
 func TestHasUpdateStanza(t *testing.T) {
