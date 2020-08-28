@@ -77,8 +77,8 @@ func (c *RenderCommand) Run(args []string) int {
 	flags.Usage = func() { c.UI.Output(c.Help()) }
 
 	flags.StringVar(&addr, "consul-address", "", "")
-	flags.StringVar(&level, "log-level", "DEBUG", "")
-	flags.StringVar(&format, "log-format", "JSON", "")
+	flags.StringVar(&level, "log-level", "INFO", "")
+	flags.StringVar(&format, "log-format", "HUMAN", "")
 	flags.Var((*helper.FlagStringSlice)(&variables), "var-file", "")
 	flags.StringVar(&outPath, "out", "", "")
 
