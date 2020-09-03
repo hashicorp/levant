@@ -9,8 +9,8 @@ import (
 
 	"github.com/hashicorp/levant/client"
 	"github.com/hashicorp/levant/helper"
+	"github.com/hashicorp/levant/template/jobspec"
 	nomad "github.com/hashicorp/nomad/api"
-	"github.com/hashicorp/nomad/jobspec"
 	"github.com/hashicorp/terraform/config"
 	"github.com/rs/zerolog/log"
 	yaml "gopkg.in/yaml.v2"
