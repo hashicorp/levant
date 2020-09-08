@@ -224,7 +224,7 @@ Takes the given string and parses it as a boolean value which can be helpful in 
 
 Example:
 ```
-[[ if key "service/config/beta" | parseBool ]][[ "beta-release" ]][[ end ]]
+[[ if "true" | parseBool ]][[ "beta-release" ]][[ end ]]
 ```
 
 Render:
@@ -369,7 +369,7 @@ Takes the argument as a string and converts it to lowercase.
 
 Example:
 ```
-[[ key "service/config/queue-name" | toLower ]]
+[[ "QUEUE-NAME" | toLower ]]
 ```
 
 Render:
@@ -383,7 +383,7 @@ Takes the argument as a string and converts it to uppercase.
 
 Example:
 ```
-[[ key "service/config/queue-name" | toUpper ]]
+[[ "queue-name" | toUpper ]]
 ```
 
 Render:
