@@ -460,3 +460,62 @@ Render:
 ```
 1
 ```
+
+#### Access Variable Globally
+
+Example config file:
+```yaml
+my_i32: 1
+my_array:
+  - "a"
+  - "b"
+  - "c"
+my_nested:
+  my_data1: "lorempium"
+  my_data2: "faker"
+```
+
+Template:
+```
+[[ $.my_i32 ]]
+[[ range $c := $.my_array ]][[ $c ]]-[[ $.my_i32 ]],[[ end ]]
+```
+
+Render:
+```
+1
+a1,b1,c1,
+```
+
+#### Sprig Template
+More about Sprig here: [Sprig](https://masterminds.github.io/sprig/)
+
+#### Sprig Join String
+
+Template: 
+```
+[[ $.my_array | sprigJoin `-` ]]
+```
+
+Render:
+```
+a-b-c
+```
+
+#### Define variable
+
+Template:
+```
+[[ with $data := $.my_nested ]]
+ENV_x1=[[ $data.my_data1 ]]
+ENV_x2=[[ $data.my_data2 ]]
+[[ end ]] 
+```
+
+Render:
+```
+
+ENV_x1=lorempium
+ENV_x2=faker
+
+```
