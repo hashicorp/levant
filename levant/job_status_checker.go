@@ -1,6 +1,7 @@
 package levant
 
 import (
+	nomadHelper "github.com/hashicorp/levant/helper/nomad"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/rs/zerolog/log"
 )
@@ -41,7 +42,7 @@ func (l *levantDeployment) jobStatusChecker(evalID *string) bool {
 // evaluations at least reach a job status of running.
 func (l *levantDeployment) simpleJobStatusChecker() bool {
 
-	q := &nomad.QueryOptions{WaitIndex: 1, Namespace: *l.config.Template.Job.Namespace}
+	q := nomadHelper.GenerateBlockingQueryOptions(l.config.Template.Job.Namespace)
 
 	for {
 
@@ -77,7 +78,7 @@ func (l *levantDeployment) simpleJobStatusChecker() bool {
 // jobs that do not support Nomad deployments.
 func (l *levantDeployment) jobAllocationChecker(evalID *string) bool {
 
-	q := &nomad.QueryOptions{WaitIndex: 1, Namespace: *l.config.Template.Job.Namespace}
+	q := nomadHelper.GenerateBlockingQueryOptions(l.config.Template.Job.Namespace)
 
 	// Build our small internal checking struct.
 	levantTasks := make(map[TaskCoordinate]string)
