@@ -7,7 +7,6 @@ import (
 	multierror "github.com/hashicorp/go-multierror"
 	"github.com/hashicorp/hcl"
 	"github.com/hashicorp/hcl/hcl/ast"
-	"github.com/hashicorp/levant/template/helper"
 	"github.com/hashicorp/nomad/api"
 	"github.com/mitchellh/mapstructure"
 )
@@ -25,7 +24,7 @@ func ParseNetwork(o *ast.ObjectList) (*api.NetworkResource, error) {
 		"dns",
 		"port",
 	}
-	if err := helper.CheckHCLKeys(o.Items[0].Val, valid); err != nil {
+	if err := checkHCLKeys(o.Items[0].Val, valid); err != nil {
 		return nil, multierror.Prefix(err, "network ->")
 	}
 
@@ -81,7 +80,7 @@ func parsePorts(networkObj *ast.ObjectList, nw *api.NetworkResource) error {
 			"to",
 			"host_network",
 		}
-		if err := helper.CheckHCLKeys(port.Val, valid); err != nil {
+		if err := checkHCLKeys(port.Val, valid); err != nil {
 			return err
 		}
 
@@ -119,7 +118,7 @@ func parseDNS(dns *ast.ObjectItem) (*api.DNSConfig, error) {
 		"options",
 	}
 
-	if err := helper.CheckHCLKeys(dns.Val, valid); err != nil {
+	if err := checkHCLKeys(dns.Val, valid); err != nil {
 		return nil, multierror.Prefix(err, "dns ->")
 	}
 

@@ -1,4 +1,7 @@
-package helper
+package jobspec
+
+// These functions are copied from helper/funcs.go
+// added here to avoid jobspec depending on any other package
 
 import (
 	"fmt"
@@ -10,22 +13,22 @@ import (
 	"github.com/hashicorp/hcl/hcl/ast"
 )
 
-// boolToPtr returns the pointer to a boolean
-func BoolToPtr(b bool) *bool {
-	return &b
-}
-
-// StringToPtr returns the pointer to a string
-func StringToPtr(str string) *string {
+// stringToPtr returns the pointer to a string
+func stringToPtr(str string) *string {
 	return &str
 }
 
-// TimeToPtr returns the pointer to a time stamp
-func TimeToPtr(t time.Duration) *time.Duration {
+// timeToPtr returns the pointer to a time.Duration.
+func timeToPtr(t time.Duration) *time.Duration {
 	return &t
 }
 
-func CheckHCLKeys(node ast.Node, valid []string) error {
+// boolToPtr returns the pointer to a boolean
+func boolToPtr(b bool) *bool {
+	return &b
+}
+
+func checkHCLKeys(node ast.Node, valid []string) error {
 	var list *ast.ObjectList
 	switch n := node.(type) {
 	case *ast.ObjectList:
@@ -54,7 +57,7 @@ func CheckHCLKeys(node ast.Node, valid []string) error {
 }
 
 // UnusedKeys returns a pretty-printed error if any `hcl:",unusedKeys"` is not empty
-func UnusedKeys(obj interface{}) error {
+func unusedKeys(obj interface{}) error {
 	val := reflect.ValueOf(obj)
 	if val.Kind() == reflect.Ptr {
 		val = reflect.Indirect(val)

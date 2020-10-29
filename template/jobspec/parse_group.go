@@ -6,7 +6,6 @@ import (
 	multierror "github.com/hashicorp/go-multierror"
 	"github.com/hashicorp/hcl"
 	"github.com/hashicorp/hcl/hcl/ast"
-	"github.com/hashicorp/levant/template/helper"
 	"github.com/hashicorp/nomad/api"
 	"github.com/mitchellh/mapstructure"
 )
@@ -58,7 +57,7 @@ func parseGroups(result *api.Job, list *ast.ObjectList) error { // nolint:gocycl
 			"scaling",
 			"stop_after_client_disconnect",
 		}
-		if err := helper.CheckHCLKeys(listVal, valid); err != nil {
+		if err := checkHCLKeys(listVal, valid); err != nil {
 			return multierror.Prefix(err, fmt.Sprintf("'%s' ->", n))
 		}
 
@@ -84,7 +83,7 @@ func parseGroups(result *api.Job, list *ast.ObjectList) error { // nolint:gocycl
 
 		// Build the group with the basic decode
 		var g api.TaskGroup
-		g.Name = helper.StringToPtr(n)
+		g.Name = stringToPtr(n)
 		dec, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
 			DecodeHook:       mapstructure.StringToTimeDurationHookFunc(),
 			WeaklyTypedInput: true,
@@ -186,7 +185,7 @@ func parseGroups(result *api.Job, list *ast.ObjectList) error { // nolint:gocycl
 
 		// Parse scaling policy
 		if o := listVal.Filter("scaling"); len(o.Items) > 0 {
-			if err := parseScalingPolicy(&g.Scaling, o); err != nil {
+			if err := parseGroupScalingPolicy(&g.Scaling, o); err != nil {
 				return multierror.Prefix(err, "scaling ->")
 			}
 		}
@@ -201,8 +200,8 @@ func parseGroups(result *api.Job, list *ast.ObjectList) error { // nolint:gocycl
 		// If we have a vault block, then parse that
 		if o := listVal.Filter("vault"); len(o.Items) > 0 {
 			tgVault := &api.Vault{
-				Env:        helper.BoolToPtr(true),
-				ChangeMode: helper.StringToPtr("restart"),
+				Env:        boolToPtr(true),
+				ChangeMode: stringToPtr("restart"),
 			}
 
 			if err := parseVault(tgVault, o); err != nil {
@@ -244,7 +243,7 @@ func parseEphemeralDisk(result **api.EphemeralDisk, list *ast.ObjectList) error 
 		"size",
 		"migrate",
 	}
-	if err := helper.CheckHCLKeys(obj.Val, valid); err != nil {
+	if err := checkHCLKeys(obj.Val, valid); err != nil {
 		return err
 	}
 
@@ -278,7 +277,7 @@ func parseRestartPolicy(final **api.RestartPolicy, list *ast.ObjectList) error {
 		"delay",
 		"mode",
 	}
-	if err := helper.CheckHCLKeys(obj.Val, valid); err != nil {
+	if err := checkHCLKeys(obj.Val, valid); err != nil {
 		return err
 	}
 
@@ -308,7 +307,7 @@ func parseVolumes(out *map[string]*api.VolumeRequest, list *ast.ObjectList) erro
 	_ = hcl.DecodeObject(out, list)
 
 	for k, v := range *out {
-		err := helper.UnusedKeys(v)
+		err := unusedKeys(v)
 		if err != nil {
 			return err
 		}
@@ -320,21 +319,39 @@ func parseVolumes(out *map[string]*api.VolumeRequest, list *ast.ObjectList) erro
 	return nil
 }
 
-func parseScalingPolicy(out **api.ScalingPolicy, list *ast.ObjectList) error {
-	list = list.Elem()
+func parseGroupScalingPolicy(out **api.ScalingPolicy, list *ast.ObjectList) error {
 	if len(list.Items) > 1 {
 		return fmt.Errorf("only one 'scaling' block allowed")
 	}
+	item := list.Items[0]
+	if len(item.Keys) != 0 {
+		return fmt.Errorf("task group scaling policy should not have a name")
+	}
+	p, err := parseScalingPolicy(item)
+	if err != nil {
+		return err
+	}
 
-	// Get our resource object
-	o := list.Items[0]
+	// group-specific validation
+	if p.Max == nil {
+		return fmt.Errorf("missing 'max'")
+	}
+	if p.Type == "" {
+		p.Type = "horizontal"
+	} else if p.Type != "horizontal" {
+		return fmt.Errorf("task group scaling policy had invalid type: %q", p.Type)
+	}
+	*out = p
+	return nil
+}
 
+func parseScalingPolicy(item *ast.ObjectItem) (*api.ScalingPolicy, error) {
 	// We need this later
 	var listVal *ast.ObjectList
-	if ot, ok := o.Val.(*ast.ObjectType); ok {
+	if ot, ok := item.Val.(*ast.ObjectType); ok {
 		listVal = ot.List
 	} else {
-		return fmt.Errorf("should be an object")
+		return nil, fmt.Errorf("should be an object")
 	}
 
 	valid := []string{
@@ -342,14 +359,15 @@ func parseScalingPolicy(out **api.ScalingPolicy, list *ast.ObjectList) error {
 		"max",
 		"policy",
 		"enabled",
+		"type",
 	}
-	if err := helper.CheckHCLKeys(o.Val, valid); err != nil {
-		return err
+	if err := checkHCLKeys(item.Val, valid); err != nil {
+		return nil, err
 	}
 
 	var m map[string]interface{}
-	if err := hcl.DecodeObject(&m, o.Val); err != nil {
-		return err
+	if err := hcl.DecodeObject(&m, item.Val); err != nil {
+		return nil, err
 	}
 	delete(m, "policy")
 
@@ -359,30 +377,26 @@ func parseScalingPolicy(out **api.ScalingPolicy, list *ast.ObjectList) error {
 		Result:           &result,
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := dec.Decode(m); err != nil {
-		return err
-	}
-	if result.Max == nil {
-		return fmt.Errorf("missing 'max'")
+		return nil, err
 	}
 
 	// If we have policy, then parse that
 	if o := listVal.Filter("policy"); len(o.Items) > 0 {
 		if len(o.Elem().Items) > 1 {
-			return fmt.Errorf("only one 'policy' block allowed per 'scaling' block")
+			return nil, fmt.Errorf("only one 'policy' block allowed per 'scaling' block")
 		}
 		p := o.Elem().Items[0]
 		var m map[string]interface{}
 		if err := hcl.DecodeObject(&m, p.Val); err != nil {
-			return err
+			return nil, err
 		}
 		if err := mapstructure.WeakDecode(m, &result.Policy); err != nil {
-			return err
+			return nil, err
 		}
 	}
 
-	*out = &result
-	return nil
+	return &result, nil
 }
