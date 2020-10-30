@@ -12,8 +12,8 @@ import (
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/hashicorp/levant/client"
 	"github.com/hashicorp/levant/helper"
-	"github.com/hashicorp/levant/template/jobspec"
 	nomad "github.com/hashicorp/nomad/api"
+	"github.com/hashicorp/nomad/jobspec"
 	"github.com/rs/zerolog/log"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -36,8 +36,7 @@ func RenderJob(templateFile string, variableFiles []string, addr string, flagVar
 		return
 	}
 
-	job, err = jobspec.Parse(tpl)
-	return
+	return jobspec.Parse(tpl)
 }
 
 // RenderTemplate is the main entry point to render the template based on the

@@ -30,7 +30,7 @@ test: ## Test the source code
 .PHONY: acceptance-test
 acceptance-test: ## Run the Levant acceptance tests
 	@echo "==> Running $@..."
-	go test -timeout 120s github.com/hashicorp/levant/test -v
+	go test -timeout 300s github.com/hashicorp/levant/test -v
 
 .PHONY: lint
 lint: ## Lint the source code
