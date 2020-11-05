@@ -1,4 +1,4 @@
-## 0.3.0 (unreleased)
+## UNRELEASED
 
 BUG FIXES:
  * cli: Fixed panic when dispatching a job. [[GH-348](https://github.com/hashicorp/levant/pull/348)]
