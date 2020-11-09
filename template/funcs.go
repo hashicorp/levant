@@ -61,16 +61,17 @@ func funcMap(consulClient *consul.Client) template.FuncMap {
 	}
 	// Add the Sprig functions to the funcmap
 	for k, v := range sprig.FuncMap() {
-		// Decorate all of the function names from the sprig library.
-		if name, err := firstRuneToUpper(k); err == nil {
-			functionName := "sprig" + name
-			// Would like to have some sort of trace level event for
-			// adding these functions.
-			// println(fmt.Sprintf("adding \"%v\".", functionName))
-			r[functionName] = v
-		} else {
-			log.Error().Msgf("template/funcs: could not add \"%v\" function. error:%v", k, err)
+		// if there is a name conflict, favor sprig and rename original version
+		if origFun, ok := r[k]; ok {
+			if name, err := firstRuneToUpper(k); err == nil {
+				name = "levant" + name
+				log.Debug().Msgf("template/funcs: renaming \"%v\" function to \"%v\"", k, name)
+				r[name] = origFun
+			} else {
+				log.Error().Msgf("template/funcs: could not add \"%v\" function. error:%v", k, err)
+			}
 		}
+		r[k] = v
 	}
 	r["sprigVersion"] = sprigVersionFunc
 
