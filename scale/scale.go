@@ -45,12 +45,7 @@ func TriggerScalingEvent(config *Config) bool {
 	// Trigger a deployment of the updated job which results in the scaling of
 	// the job and will go through all the deployment tracking until an end
 	// state is reached.
-	success := levant.TriggerDeployment(deploymentConfig, nomadClient)
-	if !success {
-		return false
-	}
-
-	return true
+	return levant.TriggerDeployment(deploymentConfig, nomadClient)
 }
 
 // updateJob gathers information on the current state of the running job and

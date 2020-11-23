@@ -37,7 +37,7 @@ type DeployConfig struct {
 func newLevantDeployment(config *DeployConfig, nomadClient *nomad.Client) (*levantDeployment, error) {
 
 	var err error
-	if config.Deploy.EnvVault == true {
+	if config.Deploy.EnvVault {
 		config.Deploy.VaultToken = os.Getenv("VAULT_TOKEN")
 	}
 

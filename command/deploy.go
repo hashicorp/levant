@@ -134,7 +134,7 @@ func (c *DeployCommand) Run(args []string) int {
 
 	args = flags.Args()
 
-	if config.Deploy.EnvVault == true && config.Deploy.VaultToken != "" {
+	if config.Deploy.EnvVault && config.Deploy.VaultToken != "" {
 		c.UI.Error(c.Help())
 		c.UI.Error("\nERROR: Can not used -vault and -vault-token flag at the same time")
 		return 1
