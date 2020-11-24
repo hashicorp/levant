@@ -1,4 +1,4 @@
-## UNRELEASED
+## 0.3.0-beta1 (November 24, 2020)
 
 BUG FIXES:
  * cli: Fixed panic when dispatching a job. [[GH-348](https://github.com/hashicorp/levant/pull/348)]
