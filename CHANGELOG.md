@@ -6,7 +6,7 @@ BUG FIXES:
  * template: Fixed issue with default variables file not being used. [[GH-353](https://github.com/hashicorp/levant/pull/353)]
 
 IMPROVEMENTS:
- * build: Updated Nomad dependency to 0.12.3. [[GH-349](https://github.com/hashicorp/levant/pull/349)]
+ * build: Updated Nomad dependency to 1.0.0. [[GH-370](https://github.com/hashicorp/levant/pull/370)]
  * cli: Added `log-level` and `log-format` flags to render command. [[GH-346](https://github.com/hashicorp/levant/pull/346)]
  * template: Added [sprig](https://github.com/Masterminds/sprig) template functions. [[GH-347](https://github.com/hashicorp/levant/pull/347)]
  * template: Added `spewDump` and `spewPrintf` functions for easier debugging. [[GH-344](https://github.com/hashicorp/levant/pull/344)]
