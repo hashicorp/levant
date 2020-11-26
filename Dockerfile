@@ -1,23 +1,15 @@
+FROM golang:1.14 AS BUILD
+
+LABEL maintainer="Gabriele Paggi"
+
+COPY . /go/src/github.com/hashicorp/levant
+
+WORKDIR /go/src/github.com/hashicorp/levant
+
+RUN make build
+
 FROM alpine:latest
 
-LABEL maintainer James Rasell<(jamesrasell@gmail.com)> (@jrasell)
-LABEL vendor "jrasell"
+COPY --from=BUILD /go/src/github.com/hashicorp/levant/bin/levant /usr/local/bin/levant
 
-ENV LEVANT_VERSION 0.2.9
-
-WORKDIR /usr/bin/
-
-RUN buildDeps=' \
-                bash \
-                wget \
-        ' \
-        set -x \
-        && apk --no-cache add $buildDeps ca-certificates \
-        && wget -O levant https://github.com/jrasell/levant/releases/download/${LEVANT_VERSION}/linux-amd64-levant \
-        && chmod +x /usr/bin/levant \
-        && apk del $buildDeps \
-        && echo "Build complete."
-
-ENTRYPOINT ["levant"]
-
-CMD ["--help"]
+ENTRYPOINT ["/usr/local/bin/levant"]
