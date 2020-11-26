@@ -23,8 +23,10 @@ type terraformVars struct {
 }
 
 type terraformVar struct {
-	Key     string `hcl:"key,label"`
-	Default string `hcl:"default"`
+	Key         string `hcl:"key,label"`
+	Default     string `hcl:"default"`
+	Type        string `hcl:"type"`
+	Description string `hcl:"description"`
 }
 
 // RenderJob takes in a template and variables performing a render of the
