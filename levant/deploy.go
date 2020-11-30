@@ -257,6 +257,19 @@ func (l *levantDeployment) evaluationInspector(evalID *string) error {
 							group, len(metrics.ConstraintFiltered), cf)
 					}
 				}
+
+				eligibleNodes := 0
+				for dc, cnt := range metrics.NodesAvailable {
+					if cnt == 0 {
+						log.Error().Msgf("levant/deploy: no nodes are available in datacenter %s", dc)
+					}
+					eligibleNodes += cnt
+				}
+				if eligibleNodes == 0 {
+					log.Error().Msgf("levant/deploy: no nodes were eligible for evaluation")
+					l.failDeployement(*evalID)
+					return fmt.Errorf("no nodes were eligible for evaluation")
+				}
 			}
 
 			// Do not return an error here; there could well be information from
@@ -271,13 +284,21 @@ func (l *levantDeployment) evaluationInspector(evalID *string) error {
 	}
 }
 
+func (l *levantDeployment) failDeployement(evalID string) {
+	if depID, err := l.getDeploymentID(evalID); err == nil {
+		if _, _, err := l.nomad.Deployments().Fail(depID, nil); err == nil {
+			log.Info().Msgf("levant/deploy: deployment %s failed", depID)
+		}
+	}
+}
+
 func (l *levantDeployment) deploymentWatcher(depID string) (success bool) {
 
 	var canaryChan chan interface{}
 	deploymentChan := make(chan interface{})
 
 	t := time.Now()
-	wt := 5 * time.Second
+	wt := 1 * time.Second
 
 	// Setup the canaryChan and launch the autoPromote go routine if autoPromote
 	// has been enabled.
