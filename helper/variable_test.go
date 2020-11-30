@@ -7,7 +7,7 @@ import (
 
 func TestHelper_VariableMerge(t *testing.T) {
 
-	flagVars := make(map[string]string)
+	flagVars := make(map[string]interface{})
 	flagVars["job_name"] = "levantExample"
 	flagVars["datacentre"] = "dc13"
 

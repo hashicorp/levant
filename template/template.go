@@ -10,7 +10,7 @@ import (
 // inbuilt functions.
 type tmpl struct {
 	consulClient    *consul.Client
-	flagVariables   *map[string]string
+	flagVariables   *map[string]interface{}
 	jobTemplateFile string
 	variableFiles   []string
 }

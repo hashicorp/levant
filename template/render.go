@@ -29,7 +29,7 @@ type terraformVar struct {
 
 // RenderJob takes in a template and variables performing a render of the
 // template followed by Nomad jobspec parse.
-func RenderJob(templateFile string, variableFiles []string, addr string, flagVars *map[string]string) (job *nomad.Job, err error) {
+func RenderJob(templateFile string, variableFiles []string, addr string, flagVars *map[string]interface{}) (job *nomad.Job, err error) {
 	var tpl *bytes.Buffer
 	tpl, err = RenderTemplate(templateFile, variableFiles, addr, flagVars)
 	if err != nil {
@@ -41,7 +41,7 @@ func RenderJob(templateFile string, variableFiles []string, addr string, flagVar
 
 // RenderTemplate is the main entry point to render the template based on the
 // passed variables file.
-func RenderTemplate(templateFile string, variableFiles []string, addr string, flagVars *map[string]string) (tpl *bytes.Buffer, err error) {
+func RenderTemplate(templateFile string, variableFiles []string, addr string, flagVars *map[string]interface{}) (tpl *bytes.Buffer, err error) {
 
 	t := &tmpl{}
 	t.flagVariables = flagVars

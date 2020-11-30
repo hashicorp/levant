@@ -12,7 +12,7 @@ import (
 type DeployTestStepRunner struct {
 	FixtureName string
 
-	Vars map[string]string
+	Vars map[string]interface{}
 
 	Canary     int
 	ForceBatch bool
@@ -22,7 +22,7 @@ type DeployTestStepRunner struct {
 // Run renders the job fixture and triggers a deployment
 func (c DeployTestStepRunner) Run(s *TestState) error {
 	if c.Vars == nil {
-		c.Vars = map[string]string{}
+		c.Vars = map[string]interface{}{}
 	}
 	c.Vars["job_name"] = s.JobName
 
