@@ -7,25 +7,15 @@ import (
 	"io/ioutil"
 	"path"
 
-	"github.com/hashicorp/hcl/v2"
-	"github.com/hashicorp/hcl/v2/gohcl"
-	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/hashicorp/levant/client"
 	"github.com/hashicorp/levant/helper"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/hashicorp/nomad/jobspec"
+	"github.com/hashicorp/terraform/configs"
+	"github.com/hashicorp/terraform/configs/hcl2shim"
 	"github.com/rs/zerolog/log"
 	yaml "gopkg.in/yaml.v2"
 )
-
-type terraformVars struct {
-	Vars []terraformVar `hcl:"variable,block"`
-}
-
-type terraformVar struct {
-	Key     string `hcl:"key,label"`
-	Default string `hcl:"default"`
-}
 
 // RenderJob takes in a template and variables performing a render of the
 // template followed by Nomad jobspec parse.
@@ -125,28 +115,18 @@ func (t *tmpl) parseJSONVars(variableFile string) (variables map[string]interfac
 
 func (t *tmpl) parseTFVars(variableFile string) (map[string]interface{}, error) {
 
-	src, err := ioutil.ReadFile(variableFile)
-	if err != nil {
-		return nil, err
+	tfParser := configs.NewParser(nil)
+	loadedFile, loadDiags := tfParser.LoadConfigFile(variableFile)
+	if loadDiags != nil && loadDiags.HasErrors() {
+		return nil, loadDiags
 	}
-
-	file, diags := hclsyntax.ParseConfig(src, variableFile, hcl.Pos{Line: 1, Column: 1})
-	if diags != nil && diags.HasErrors() {
-		return nil, diags
-	}
-	if file == nil {
+	if loadedFile == nil {
 		return nil, fmt.Errorf("hcl returned nil file")
 	}
 
-	tfVars := terraformVars{}
-
-	if diags = gohcl.DecodeBody(file.Body, nil, &tfVars); diags.HasErrors() {
-		return nil, diags
-	}
-
 	variables := make(map[string]interface{})
-	for _, variable := range tfVars.Vars {
-		variables[variable.Key] = variable.Default
+	for _, variable := range loadedFile.Variables {
+		variables[variable.Name] = hcl2shim.ConfigValueFromHCL2(variable.Default)
 	}
 	return variables, nil
 }
@@ -162,7 +142,6 @@ func (t *tmpl) parseYAMLVars(variableFile string) (variables map[string]interfac
 	if err = yaml.Unmarshal(yamlFile, &variables); err != nil {
 		return
 	}
-
 	return variables, nil
 }
 
