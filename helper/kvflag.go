@@ -16,10 +16,11 @@ func (v *Flag) String() string {
 // Set takes a flag variable argument and pulls the correct key and value to
 // create or add to a map.
 func (v *Flag) Set(raw string) error {
-	idx := strings.Index(raw, "=")
-	if idx == -1 {
+	split := strings.SplitN(raw, "=", 2)
+	if len(split) != 2 {
 		return fmt.Errorf("no '=' value in arg: %s", raw)
 	}
+	keyRaw, value := split[0], split[1]
 
 	if *v == nil {
 		*v = make(map[string]interface{})
@@ -27,33 +28,25 @@ func (v *Flag) Set(raw string) error {
 
 	// Split the variable key based on the nested delimiter to get a list of
 	// nested keys.
-	keys := strings.Split(raw[0:idx], ".")
+	keys := strings.Split(keyRaw, ".")
 
-	// If we only have a single key, then we are not dealing with a nested set
-	// meaning we can update the variable mapping and exit.
-	if len(keys) == 1 {
-		(*v)[keys[0]] = raw[idx+1:]
-		return nil
+	lastKeyIdx := len(keys) - 1
+	// Find the nested map where this value belongs
+	// create missing maps as we go
+	target := *v
+	for i := 0; i < lastKeyIdx; i++ {
+		raw, ok := target[keys[i]]
+		if !ok {
+			raw = make(map[string]interface{})
+			target[keys[i]] = raw
+		}
+		var newTarget Flag
+		if newTarget, ok = raw.(map[string]interface{}); !ok {
+			return fmt.Errorf("simple value already exists at key %q", strings.Join(keys[:i+1], "."))
+		}
+		target = newTarget
 	}
-
-	// Identify the index max of the list for easy use.
-	nestedLen := len(keys) - 1
-
-	// The end map is the only thing we concretely know which contains our
-	// final key:value pair.
-	endEntry := map[string]interface{}{keys[nestedLen]: raw[idx+1:]}
-
-	// Track the root of the nested map structure so we can continue to iterate
-	// the nested keys below.
-	root := endEntry
-
-	// Iterate the nested keys backwards. Set a new root map containing the
-	// previous root as its value. Do not iterate backwards fully to the end,
-	// instead save the first key for the entry into Flag.
-	for i := nestedLen - 1; i > 0; i-- {
-		root = map[string]interface{}{keys[i]: root}
-	}
-	(*v)[keys[0]] = root
+	target[keys[lastKeyIdx]] = value
 	return nil
 }
 

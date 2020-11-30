@@ -10,6 +10,7 @@ require (
 	github.com/hashicorp/consul/api v1.7.0
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-hclog v0.14.1 // indirect
+	github.com/hashicorp/go-multierror v1.1.0
 	github.com/hashicorp/go-uuid v1.0.2 // indirect
 	github.com/hashicorp/hcl/v2 v2.7.1
 	github.com/hashicorp/nomad v0.12.5-0.20201123213618-289d91df2e1c
