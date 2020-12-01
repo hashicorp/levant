@@ -110,7 +110,7 @@ func (c *PlanCommand) Run(args []string) int {
 	flags.StringVar(&logLevel, "log-level", "INFO", "")
 	flags.StringVar(&logFormat, "log-format", "HUMAN", "")
 	flags.StringVar(&outFormat, "output-format", "DIFF", "")
-	flags.StringVar(&outDest, "output-to", "CLI", "")
+	flags.StringVar(&outDest, "output-to", "LOG", "")
 	flags.Var((*helper.FlagStringSlice)(&config.Template.VariableFiles), "var-file", "")
 
 	if err = flags.Parse(args); err != nil {
