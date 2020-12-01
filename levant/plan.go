@@ -150,7 +150,7 @@ func outputDiff(config *structs.DiffOutputConfig, diff *nomad.JobDiff) {
 func printDiffAsJSON(diff *nomad.JobDiff, outFun func(string)) {
 	out, err := json.Marshal(diff)
 	if err != nil {
-		log.Error().Msgf("levant/plan: failed to marshall plan to JSON: %s", err.Error)
+		log.Error().Msgf("levant/plan: failed to marshall plan to JSON: %s", err.Error())
 		return
 	}
 	outFun(string(out))
@@ -196,7 +196,8 @@ func createJobLine(item string, depth int, oper string) *JSONLine {
 }
 
 func createTaskgroupLine(item string, depth int, oper string, updates map[string]uint64) *JSONLine {
-	var ann []string
+	ann := make([]string, 0, 5)
+
 	for updateType, count := range updates {
 		ann = append(ann, fmt.Sprintf("%d %s", count, updateType))
 	}
@@ -222,7 +223,7 @@ func createFieldLine(item string, depth int, oper string, before string, after s
 // parsePlanJSON builds a newline delimited JSON which can
 // then be formatted before emitting to the log.
 func parsePlanJSON(plan *nomad.JobDiff) []*JSONLine {
-	var lines []*JSONLine
+	lines := make([]*JSONLine, 0, 100)
 	var depth int = 0
 	lines = append(lines, createJobLine(plan.ID, 0, plan.Type))
 	depth = depth + 1
@@ -235,7 +236,7 @@ func parsePlanJSON(plan *nomad.JobDiff) []*JSONLine {
 }
 
 func parseTaskGroupDiff(tg *nomad.TaskGroupDiff, depth int) []*JSONLine {
-	var lines []*JSONLine
+	lines := make([]*JSONLine, 0, 100)
 
 	lines = append(lines, createTaskgroupLine(tg.Name, depth, tg.Type, tg.Updates))
 	depth = depth + 1
@@ -248,7 +249,7 @@ func parseTaskGroupDiff(tg *nomad.TaskGroupDiff, depth int) []*JSONLine {
 }
 
 func parseTaskDiff(task *nomad.TaskDiff, depth int) []*JSONLine {
-	var lines []*JSONLine
+	lines := make([]*JSONLine, 0, 100)
 	lines = append(lines, createTaskLine(task.Name, depth, task.Type, task.Annotations))
 	depth = depth + 1
 	lines = append(lines, parseFieldDiffs(task.Fields, depth)...)
@@ -257,7 +258,7 @@ func parseTaskDiff(task *nomad.TaskDiff, depth int) []*JSONLine {
 }
 
 func parseObjectDiffs(objects []*nomad.ObjectDiff, depth int) []*JSONLine {
-	var lines []*JSONLine
+	lines := make([]*JSONLine, 0, 100)
 
 	for _, object := range objects {
 		lines = append(lines, createObjectLine(object.Name, depth, object.Type))
@@ -271,7 +272,7 @@ func parseObjectDiffs(objects []*nomad.ObjectDiff, depth int) []*JSONLine {
 }
 
 func parseFieldDiffs(fields []*nomad.FieldDiff, depth int) []*JSONLine {
-	var lines []*JSONLine
+	lines := make([]*JSONLine, 0, 20)
 
 	for _, field := range fields {
 		lines = append(lines, createFieldLine(field.Name, depth, field.Type, field.Old, field.New, field.Annotations))
