@@ -86,7 +86,7 @@ func TestTemplater_RenderTemplate(t *testing.T) {
 	}
 
 	// Test var-args only render.
-	fVars = map[string]string{"job_name": testJobName, "task_resource_cpu": "1313"}
+	fVars = map[string]interface{}{"job_name": testJobName, "task_resource_cpu": "1313"}
 	job, err = RenderJob("test-fixtures/single_templated.nomad", []string{}, "", &fVars)
 	if err != nil {
 		t.Fatal(err)
