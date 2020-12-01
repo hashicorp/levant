@@ -180,7 +180,7 @@ func (c *DeployCommand) Run(args []string) int {
 	}
 
 	if !config.Deploy.Force {
-		p := levant.PlanConfig{
+		p := structs.LevantPlanConfig{
 			Client:   config.Client,
 			Plan:     config.Plan,
 			Template: config.Template,

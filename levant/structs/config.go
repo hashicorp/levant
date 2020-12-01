@@ -1,6 +1,9 @@
 package structs
 
-import nomad "github.com/hashicorp/nomad/api"
+import (
+	nomad "github.com/hashicorp/nomad/api"
+	"github.com/mitchellh/cli"
+)
 
 const (
 	// JobIDContextField is the logging context feild added when interacting
@@ -68,6 +71,22 @@ type PlanConfig struct {
 	// IgnoreNoChanges is used to allow operators to force Levant to exit cleanly
 	// even if there are no changes found during the plan.
 	IgnoreNoChanges bool
+}
+
+// LevantPlanConfig is the set of config structs required to run a Levant plan.
+type LevantPlanConfig struct {
+	Client   *ClientConfig
+	Plan     *PlanConfig
+	Template *TemplateConfig
+	Output   *DiffOutputConfig
+}
+
+// DiffOutputConfig controls how the output is returned to the user for
+// a Levant plan
+type DiffOutputConfig struct {
+	Format      *string
+	Destination *string
+	UI          *cli.Ui
 }
 
 // TemplateConfig contains all the job templating configuration options including
