@@ -22,7 +22,7 @@ func TestTemplater_RenderTemplate(t *testing.T) {
 	var err error
 
 	// Start with an empty passed var args map.
-	fVars := make(map[string]string)
+	fVars := make(map[string]interface{})
 
 	// Test basic TF template render.
 	job, err = RenderJob("test-fixtures/single_templated.nomad", []string{"test-fixtures/test.tf"}, "", &fVars)

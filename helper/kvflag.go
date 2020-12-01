@@ -7,7 +7,7 @@ import (
 
 // Flag is a flag.Value implementation for parsing user variables
 // from the command-line in the format of '-var key=value'.
-type Flag map[string]string
+type Flag map[string]interface{}
 
 func (v *Flag) String() string {
 	return ""
@@ -16,17 +16,37 @@ func (v *Flag) String() string {
 // Set takes a flag variable argument and pulls the correct key and value to
 // create or add to a map.
 func (v *Flag) Set(raw string) error {
-	idx := strings.Index(raw, "=")
-	if idx == -1 {
+	split := strings.SplitN(raw, "=", 2)
+	if len(split) != 2 {
 		return fmt.Errorf("no '=' value in arg: %s", raw)
 	}
+	keyRaw, value := split[0], split[1]
 
 	if *v == nil {
-		*v = make(map[string]string)
+		*v = make(map[string]interface{})
 	}
 
-	key, value := raw[0:idx], raw[idx+1:]
-	(*v)[key] = value
+	// Split the variable key based on the nested delimiter to get a list of
+	// nested keys.
+	keys := strings.Split(keyRaw, ".")
+
+	lastKeyIdx := len(keys) - 1
+	// Find the nested map where this value belongs
+	// create missing maps as we go
+	target := *v
+	for i := 0; i < lastKeyIdx; i++ {
+		raw, ok := target[keys[i]]
+		if !ok {
+			raw = make(map[string]interface{})
+			target[keys[i]] = raw
+		}
+		var newTarget Flag
+		if newTarget, ok = raw.(map[string]interface{}); !ok {
+			return fmt.Errorf("simple value already exists at key %q", strings.Join(keys[:i+1], "."))
+		}
+		target = newTarget
+	}
+	target[keys[lastKeyIdx]] = value
 	return nil
 }
 
