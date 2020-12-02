@@ -60,7 +60,7 @@ func setLogFormat(format string) error {
 		isatty.IsCygwinTerminal(os.Stdout.Fd()) {
 		logWriter = conswriter.GetTerminal()
 	} else {
-		logWriter = os.Stdout
+		logWriter = os.Stderr
 	}
 
 	switch format {

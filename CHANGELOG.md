@@ -1,3 +1,8 @@
+## UNRELEASED 
+
+IMPROVEMENTS: 
+ * render: when rendering, send logging to stderr if stdout is not a terminal [[GH-386](https://github.com/hashicorp/levant/pull/386)]
+
 ## 0.3.0-beta1 (November 24, 2020)
 
 BUG FIXES:
