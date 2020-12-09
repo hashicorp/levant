@@ -507,8 +507,8 @@ github.com/hashicorp/memberlist v0.2.2 h1:5+RffWKwqJ71YPu9mWsF7ZOscZmwfasdA8kbdC
 github.com/hashicorp/memberlist v0.2.2/go.mod h1:MS2lj3INKhZjWNqd3N0m3J+Jxf3DAOnAH9VT3Sh9MUE=
 github.com/hashicorp/net-rpc-msgpackrpc v0.0.0-20151116020338-a14192a58a69 h1:lc3c72qGlIMDqQpQH82Y4vaglRMMFdJbziYWriR4UcE=
 github.com/hashicorp/net-rpc-msgpackrpc v0.0.0-20151116020338-a14192a58a69/go.mod h1:/z+jUGRBlwVpUZfjute9jWaF6/HuhjuFQuL1YXzVD1Q=
-github.com/hashicorp/nomad v0.12.5-0.20201123213618-289d91df2e1c h1:vRqN27vIVI8XR91J8VKnWO4H42VT5zjpUzP1OLyynZk=
-github.com/hashicorp/nomad v0.12.5-0.20201123213618-289d91df2e1c/go.mod h1:bAMAFdF0lPGu8rb19OTLSjE1Fkyzcw6W54MwA50ptj8=
+github.com/hashicorp/nomad v0.12.5-0.20201208211811-bbf1eaa833ed h1:qknHSEyIuMyGauH/sC7BfFO8E8lLU5e9aIK6oHsKSQc=
+github.com/hashicorp/nomad v0.12.5-0.20201208211811-bbf1eaa833ed/go.mod h1:bAMAFdF0lPGu8rb19OTLSjE1Fkyzcw6W54MwA50ptj8=
 github.com/hashicorp/nomad/vendor/github.com/hashicorp/nomad/api v0.0.0-20201029214628-fa2008a42bae h1:FOagwzTrFNcPlerpgTsOla7GKLId98GrbrhQcaKTD8E=
 github.com/hashicorp/nomad/vendor/github.com/hashicorp/nomad/api v0.0.0-20201029214628-fa2008a42bae/go.mod h1:bCQhFF3AFAZqORXM7okqLdpsrrag/uX9zfHDhwZwPag=
 github.com/hashicorp/raft v1.1.1/go.mod h1:vPAJM8Asw6u8LxC3eJCUZmRP/E4QmUGE1R7g7k8sG/8=
@@ -681,6 +681,8 @@ github.com/mitchellh/mapstructure v1.1.2/go.mod h1:FVVH3fgwuzCH5S8UJGiWEs2h04kUh
 github.com/mitchellh/mapstructure v1.2.3/go.mod h1:bFUtVrKA4DC2yAKiSyO/QUcy7e+RRV2QTWOzhPopBRo=
 github.com/mitchellh/mapstructure v1.3.3 h1:SzB1nHZ2Xi+17FP0zVQBHIZqvwRN9408fJO8h+eeNA8=
 github.com/mitchellh/mapstructure v1.3.3/go.mod h1:bFUtVrKA4DC2yAKiSyO/QUcy7e+RRV2QTWOzhPopBRo=
+github.com/mitchellh/mapstructure v1.4.0 h1:7ks8ZkOP5/ujthUsT07rNv+nkLXCQWKNHuwzOAesEks=
+github.com/mitchellh/mapstructure v1.4.0/go.mod h1:bFUtVrKA4DC2yAKiSyO/QUcy7e+RRV2QTWOzhPopBRo=
 github.com/mitchellh/osext v0.0.0-20151018003038-5e2d6d41470f/go.mod h1:OkQIRizQZAeMln+1tSwduZz7+Af5oFlKirV/MSYes2A=
 github.com/mitchellh/panicwrap v1.0.0/go.mod h1:pKvZHwWrZowLUzftuFq7coarnxbBXU4aQh3N0BJOeeA=
 github.com/mitchellh/prefixedio v0.0.0-20190213213902-5733675afd51/go.mod h1:kB1naBgV9ORnkiTVeyJOI1DavaJkG4oNIq0Af6ZVKUo=

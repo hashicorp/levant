@@ -13,14 +13,15 @@ require (
 	github.com/hashicorp/go-multierror v1.1.0
 	github.com/hashicorp/go-uuid v1.0.2 // indirect
 	github.com/hashicorp/hcl/v2 v2.7.1 // indirect
-	github.com/hashicorp/nomad v0.12.5-0.20201123213618-289d91df2e1c
-	github.com/hashicorp/nomad/api v0.0.0-20201123213618-289d91df2e1c
+	github.com/hashicorp/nomad v0.12.5-0.20201208211811-bbf1eaa833ed
+	github.com/hashicorp/nomad/api v0.0.0-20201208211811-bbf1eaa833ed
 	github.com/hashicorp/serf v0.9.5 // indirect
 	github.com/hashicorp/terraform v0.13.5
 	github.com/mattn/go-colorable v0.1.8 // indirect
 	github.com/mattn/go-isatty v0.0.12
 	github.com/mitchellh/cli v1.1.0
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
+	github.com/mitchellh/mapstructure v1.4.0 // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/rs/zerolog v1.6.0
 	github.com/sean-/conswriter v0.0.0-20180208195008-f5ae3917a627
