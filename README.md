@@ -78,6 +78,6 @@ details about hacking on Levant.
 [contribution guide]: https://github.com/hashicorp/levant/blob/master/.github/CONTRIBUTING.md
 [hashicorp nomad]: https://www.nomadproject.io/
 [releases]: https://github.com/hashicorp/levant/releases
-[levant-docker]: https://hub.docker.com/r/jrasell/levant/
+[levant-docker]: https://hub.docker.com/r/hashicorp/levant/
 [levant-ansible]: https://github.com/stevenscg/ansible-role-levant
 [releases-hashicorp]: https://releases.hashicorp.com/levant/
