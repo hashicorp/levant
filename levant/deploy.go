@@ -164,6 +164,11 @@ func (l *levantDeployment) deploy() (success bool) {
 			return
 		}
 
+		if depID == "" {
+			log.Info().Msgf("levant/deploy: no deploy ID found for evaluation %s", eval.EvalID)
+			return l.jobStatusChecker(&eval.EvalID)
+		}
+
 		log.Info().Msgf("levant/deploy: watching deployment %s for job", depID)
 		// Get the success of the deployment and return if we have success.
 		if success = l.deploymentWatcher(depID); success {
