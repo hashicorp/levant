@@ -83,6 +83,9 @@ type TemplateConfig struct {
 	// VariableFiles contains the variables which will be substituted into the
 	// templateFile before deployment.
 	VariableFiles []string
+
+	// HCL2 is a boolean flag that enables using jobspec2 parser
+	HCL2 bool
 }
 
 // ScaleConfig contains all the scaling specific configuration options.

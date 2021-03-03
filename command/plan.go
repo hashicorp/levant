@@ -41,7 +41,7 @@ General Options:
 
   -allow-stale
     Allow stale consistency mode for requests into nomad.
-		
+
   -consul-address=<addr>
     The Consul host and port to use when making Consul KeyValue lookups for
     template rendering.
@@ -68,6 +68,9 @@ General Options:
     Used in conjunction with the -job-file will plan a templated job against your
     Nomad cluster. You can repeat this flag multiple times to supply multiple var-files.
     [default: levant.(json|yaml|yml|tf)]
+
+  -hcl2
+    Use HCL2 jopspec parser.
 `
 	return strings.TrimSpace(helpText)
 }
@@ -97,6 +100,7 @@ func (c *PlanCommand) Run(args []string) int {
 	flags.BoolVar(&config.Plan.IgnoreNoChanges, "ignore-no-changes", false, "")
 	flags.StringVar(&level, "log-level", "INFO", "")
 	flags.StringVar(&format, "log-format", "HUMAN", "")
+	flags.BoolVar(&config.Template.HCL2, "hcl2", false, "")
 	flags.Var((*helper.FlagStringSlice)(&config.Template.VariableFiles), "var-file", "")
 
 	if err = flags.Parse(args); err != nil {
@@ -124,7 +128,7 @@ func (c *PlanCommand) Run(args []string) int {
 	}
 
 	config.Template.Job, err = template.RenderJob(config.Template.TemplateFile,
-		config.Template.VariableFiles, config.Client.ConsulAddr, &c.Meta.flagVars)
+		config.Template.VariableFiles, config.Client.ConsulAddr, &c.Meta.flagVars, config.Template.HCL2)
 
 	if err != nil {
 		c.UI.Error(fmt.Sprintf("[ERROR] levant/command: %v", err))
