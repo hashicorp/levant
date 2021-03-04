@@ -37,7 +37,7 @@ realtime feedback and detailed failure messages upon deployment issues.
 - Levant can be installed via go toolkit using `go get github.com/hashicorp/levant && go install github.com/hashicorp/levant`
 
 - The Levant binary can be downloaded from the [GitHub releases page][releases] using
-  `curl -L https://github.com/hashicorp/levant/releases/download/0.2.8/linux-amd64-levant -o levant`
+  `curl -L https://github.com/hashicorp/levant/releases/download/0.2.9/linux-amd64-levant -o levant`
   if you are using a release prior to the migration to the HashiCorp organisation. Releases after
   the migration can be found on the [HashiCorp releases site][releases-hashicorp].
 
