@@ -1,9 +1,7 @@
-## UNRELEASED 
+## UNRELEASED
 
-IMPROVEMENTS: 
- * render: when rendering, send logging to stderr if stdout is not a terminal [[GH-386](https://github.com/hashicorp/levant/pull/386)]
-
-## 0.3.0-beta1 (November 24, 2020)
+__BACKWARDS INCOMPATIBILITIES:__
+ * template: existing Levant functions that share a name with [sprig](https://github.com/Masterminds/sprig) functions have been renamed to include the prefix `levant` such as `levantEnv`.
 
 BUG FIXES:
  * cli: Fixed panic when dispatching a job. [[GH-348](https://github.com/hashicorp/levant/pull/348)]
@@ -13,6 +11,7 @@ BUG FIXES:
 IMPROVEMENTS:
  * build: Updated Nomad dependency to 1.0.0. [[GH-370](https://github.com/hashicorp/levant/pull/370)]
  * cli: Added `log-level` and `log-format` flags to render command. [[GH-346](https://github.com/hashicorp/levant/pull/346)]
+ * render: when rendering, send logging to stderr if stdout is not a terminal [[GH-386](https://github.com/hashicorp/levant/pull/386)]
  * template: Added [sprig](https://github.com/Masterminds/sprig) template functions. [[GH-347](https://github.com/hashicorp/levant/pull/347)]
  * template: Added `spewDump` and `spewPrintf` functions for easier debugging. [[GH-344](https://github.com/hashicorp/levant/pull/344)]
 
