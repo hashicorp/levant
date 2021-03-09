@@ -9,7 +9,7 @@ BUG FIXES:
  * template: Fixed issue with default variables file not being used. [[GH-353](https://github.com/hashicorp/levant/pull/353)]
 
 IMPROVEMENTS:
- * build: Updated Nomad dependency to 1.0.0. [[GH-370](https://github.com/hashicorp/levant/pull/370)]
+ * build: Updated Nomad dependency to 1.0.4. [[GH-399](https://github.com/hashicorp/levant/pull/399)]
  * cli: Added `log-level` and `log-format` flags to render command. [[GH-346](https://github.com/hashicorp/levant/pull/346)]
  * render: when rendering, send logging to stderr if stdout is not a terminal [[GH-386](https://github.com/hashicorp/levant/pull/386)]
  * template: Added [sprig](https://github.com/Masterminds/sprig) template functions. [[GH-347](https://github.com/hashicorp/levant/pull/347)]
