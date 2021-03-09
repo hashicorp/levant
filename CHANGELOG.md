@@ -1,4 +1,4 @@
-## UNRELEASED
+## 0.3.0 (March 09, 2021)
 
 __BACKWARDS INCOMPATIBILITIES:__
  * template: existing Levant functions that share a name with [sprig](https://github.com/Masterminds/sprig) functions have been renamed to include the prefix `levant` such as `levantEnv`.
