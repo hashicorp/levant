@@ -4,7 +4,7 @@ Levant supports a number of command line arguments which provide control over th
 
 ### Command: `deploy`
 
-`deploy` is the main entry point into Levant for deploying a Nomad job and supports the following flags which should then be proceeded by the Nomad job template you which to deploy. Levant also supports autoloading files by which Levant will look in the current working directory for a `levant.[yaml,yml,tf]` file and a single `*.nomad` file to use for the command actions.
+`deploy` is the main entry point into Levant for deploying a Nomad job and supports the following flags which should then be proceeded by the Nomad job template you whish to deploy. Levant also supports autoloading files by which Levant will look in the current working directory for a `levant.[yaml,yml,tf]` file and a single `*.nomad` file to use for the command actions.
 
 * **-address** (string: "http://localhost:4646") The HTTP API endpoint for Nomad where all calls will be made.
 
