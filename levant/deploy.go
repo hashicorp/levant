@@ -184,15 +184,17 @@ func (l *levantDeployment) deploy() (success bool) {
 			return
 		}
 
-		// If the job is not a canary job, then run the auto-revert checker, the
-		// current checking mechanism is slightly hacky and should be updated.
-		// The reason for this is currently the config.Job is populate from the
-		// rendered job and so a user could potentially not set canary meaning
-		// the field shows a null.
-		if l.config.Template.Job.Update.Canary == nil {
-			l.checkAutoRevert(dep)
-		} else if *l.config.Template.Job.Update.Canary == 0 {
-			l.checkAutoRevert(dep)
+		if l.config.Template.Job.Update != nil {
+			// If the job is not a canary job, then run the auto-revert checker, the
+			// current checking mechanism is slightly hacky and should be updated.
+			// The reason for this is currently the config.Job is populates from the
+			// rendered job and so a user could potentially not set canary meaning
+			// the field shows a null.
+			if l.config.Template.Job.Update.Canary == nil {
+				l.checkAutoRevert(dep)
+			} else if *l.config.Template.Job.Update.Canary == 0 {
+				l.checkAutoRevert(dep)
+			}
 		}
 
 	case nomad.JobTypeBatch:
