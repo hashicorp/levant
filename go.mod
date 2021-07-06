@@ -24,7 +24,7 @@ require (
 	github.com/sean-/conswriter v0.0.0-20180208195008-f5ae3917a627
 	github.com/sean-/pager v0.0.0-20180208200047-666be9bf53b5 // indirect
 	github.com/stretchr/testify v1.6.1
-	golang.org/x/crypto v0.0.0-20200820211705-5c72a883971a // indirect
+	golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a // indirect
 	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	gopkg.in/yaml.v2 v2.3.0
