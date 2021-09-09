@@ -9,7 +9,7 @@ GO_LDFLAGS := "-X github.com/hashicorp/levant/version.GitCommit=$(GIT_COMMIT)$(G
 .PHONY: tools
 tools: ## Install the tools used to test and build
 	@echo "==> Installing tools..."
-	GO111MODULE=off go get -u github.com/golangci/golangci-lint/cmd/golangci-lint
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $$(go env GOPATH)/bin
 	@echo "==> Done"
 
 .PHONY: build
