@@ -313,7 +313,7 @@ Replaces all occurrences of the search string with the replacement string.
 
 Example:
 ```
-[[ replace "Batman and Robin" "Robin" "Catwoman" ]]
+[[ "Batman and Robin" | replace "Robin" "Catwoman" ]]
 ```
 
 Render:
