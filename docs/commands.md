@@ -50,7 +50,7 @@ levant deploy -log-level=debug -address=nomad.devoops -var-file=var.yaml -var 'v
 
 * **-log-format** (string: "HUMAN") Specify the format of Levant's logs. Valid values are HUMAN or JSON
 
-* **-meta** (string: "key=vaule") The metadata key will be merged into the job's metadata. The job may define a default value for the key which is overridden when dispatching. The flag can be provided more than once to inject multiple metadata key/value pairs. Arbitrary keys are not allowed. The parameterized job must allow the key to be merged.
+* **-meta** (string: "key=value") The metadata key will be merged into the job's metadata. The job may define a default value for the key which is overridden when dispatching. The flag can be provided more than once to inject multiple metadata key/value pairs. Arbitrary keys are not allowed. The parameterized job must allow the key to be merged.
 
 The command also supports the ability to send data payload to the dispatched instance. This can be provided via stdin by using "-" for the input source or by specifying a path to a file.
 
