@@ -14,7 +14,7 @@ func (l *levantDeployment) autoRevert(jobID, depID *string) {
 	i := 0
 	for i := 0; i < 5; i++ {
 
-		dep, _, err := l.nomad.Jobs().LatestDeployment(*jobID, nil)
+		dep, _, err := l.nomad.Jobs().LatestDeployment(*jobID, setQueryOptions(l.options))
 		if err != nil {
 			log.Error().Msgf("levant/auto_revert: unable to query latest deployment of job %s", *jobID)
 			return

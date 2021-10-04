@@ -38,7 +38,7 @@ func TriggerDispatch(job string, metaMap map[string]string, payload []byte, addr
 func (l *levantDeployment) dispatch(job string, metaMap map[string]string, payload []byte) bool {
 
 	// Initiate the dispatch with the passed meta parameters.
-	eval, _, err := l.nomad.Jobs().Dispatch(job, metaMap, payload, nil)
+	eval, _, err := l.nomad.Jobs().Dispatch(job, metaMap, payload, l.options)
 	if err != nil {
 		log.Error().Msgf("levant/dispatch: %v", err)
 		return false

@@ -14,7 +14,7 @@ func (l *levantDeployment) checkFailedDeployment(depID *string) {
 
 	var allocIDS []string
 
-	allocs, _, err := l.nomad.Deployments().Allocations(*depID, nil)
+	allocs, _, err := l.nomad.Deployments().Allocations(*depID, setQueryOptions(l.options))
 	if err != nil {
 		log.Error().Msgf("levant/failure_inspector: unable to query deployment allocations for deployment %v",
 			depID)
@@ -54,7 +54,7 @@ func (l *levantDeployment) allocInspector(allocID string, wg *sync.WaitGroup) {
 	// Inform the wait group we have finished our task upon completion.
 	defer wg.Done()
 
-	resp, _, err := l.nomad.Allocations().Info(allocID, nil)
+	resp, _, err := l.nomad.Allocations().Info(allocID, setQueryOptions(l.options))
 	if err != nil {
 		log.Error().Msgf("levant/failure_inspector: unable to query alloc %v: %v", allocID, err)
 		return

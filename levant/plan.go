@@ -18,6 +18,8 @@ const (
 type levantPlan struct {
 	nomad  *nomad.Client
 	config *PlanConfig
+
+	options *nomad.WriteOptions
 }
 
 // PlanConfig is the set of config structs required to run a Levant plan.
@@ -35,10 +37,31 @@ func newPlan(config *PlanConfig) (*levantPlan, error) {
 	plan.config = config
 
 	plan.nomad, err = client.NewNomadClient(config.Client.Addr)
+
+	plan.options = setWriteOptions(plan.config.Template)
+
 	if err != nil {
 		return nil, err
 	}
 	return plan, nil
+}
+
+func setWriteOptions(template *structs.TemplateConfig) *nomad.WriteOptions {
+	options := &nomad.WriteOptions{}
+	if template.Job.Namespace != nil {
+		options.Namespace = *template.Job.Namespace
+	}
+	if template.Job.Region != nil {
+		options.Region = *template.Job.Region
+	}
+	return options
+}
+
+func setQueryOptions(wopt *nomad.WriteOptions) *nomad.QueryOptions {
+	qopt := &nomad.QueryOptions{}
+	qopt.Namespace = wopt.Namespace
+	qopt.Region = wopt.Region
+	return qopt
 }
 
 // TriggerPlan initiates a Levant plan run.
@@ -74,7 +97,8 @@ func (lp *levantPlan) plan() (bool, error) {
 	log.Debug().Msg("levant/plan: triggering Nomad plan")
 
 	// Run a plan using the rendered job.
-	resp, _, err := lp.nomad.Jobs().Plan(lp.config.Template.Job, true, nil)
+	resp, _, err := lp.nomad.Jobs().Plan(lp.config.Template.Job, true, lp.options)
+	log.Info().Msg(fmt.Sprintf("%#v", resp.Diff))
 	if err != nil {
 		log.Error().Err(err).Msg("levant/plan: unable to run a job plan")
 		return false, err
