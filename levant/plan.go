@@ -2,6 +2,7 @@ package levant
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/hashicorp/levant/client"
 	"github.com/hashicorp/levant/levant/structs"
@@ -48,11 +49,20 @@ func newPlan(config *PlanConfig) (*levantPlan, error) {
 
 func setWriteOptions(template *structs.TemplateConfig) *nomad.WriteOptions {
 	options := &nomad.WriteOptions{}
+
 	if template.Job.Namespace != nil {
 		options.Namespace = *template.Job.Namespace
 	}
+	if os.Getenv("NOMAD_NAMESPACE") != "" {
+		log.Info().Msgf("levant/plan: using namespace from env-var: %s", os.Getenv("NOMAD_NAMESPACE"))
+		options.Namespace = os.Getenv("NOMAD_NAMESPACE")
+	}
 	if template.Job.Region != nil {
 		options.Region = *template.Job.Region
+	}
+	if os.Getenv("NOMAD_REGION") != "" {
+		log.Info().Msgf("levant/plan: using region from env-var: %s", os.Getenv("NOMAD_REGION"))
+		options.Namespace = os.Getenv("NOMAD_REGION")
 	}
 	return options
 }
@@ -98,7 +108,6 @@ func (lp *levantPlan) plan() (bool, error) {
 
 	// Run a plan using the rendered job.
 	resp, _, err := lp.nomad.Jobs().Plan(lp.config.Template.Job, true, lp.options)
-	log.Info().Msg(fmt.Sprintf("%#v", resp.Diff))
 	if err != nil {
 		log.Error().Err(err).Msg("levant/plan: unable to run a job plan")
 		return false, err
