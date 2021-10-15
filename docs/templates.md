@@ -184,6 +184,57 @@ yaml:
 ```
 
 
+#### include
+
+Reads the entire contents of the specified template file and renders it into the
+current template, using the specified data.
+
+This function can be used in templates that are themselves included from other
+templates, but cyclic includes are not supported.
+
+Example contents of "/etc/myapp/templates/docker-task.nomad":
+```
+    task "[[.name]]" {
+      driver = "docker"
+      config {
+        image = "[[.image]]"
+      }
+      ...
+    }
+```
+
+Example main template:
+```
+job "myapp" {
+  group "mygroup" {
+[[ include "/etc/myapp/templates/docker-task.nomad" .task ]]
+  }
+}
+```
+
+Example varables file:
+```yaml
+task:
+  name: mytask
+  image: registry/mytask:v1.1
+```
+
+Render:
+```
+job "myapp" {
+  group "maingroup" {
+    task "mytask" {
+      driver = "docker"
+      config {
+        image = "registry/mytask:v1.1"
+      }
+      ...
+    }
+  }
+}
+```
+
+
 #### loop
 
 Accepts varying parameters and differs its behavior based on those parameters as detailed below.

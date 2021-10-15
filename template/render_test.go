@@ -2,6 +2,7 @@ package template
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	nomad "github.com/hashicorp/nomad/api"
@@ -114,5 +115,72 @@ func TestTemplater_RenderTemplate(t *testing.T) {
 	}
 	if *job.TaskGroups[0].Name != testEnvValue {
 		t.Fatalf("expected %s but got %v", testEnvValue, *job.TaskGroups[0].Name)
+	}
+}
+
+func findService(task *nomad.Task, portLabel string) (*nomad.Service, bool) {
+	for _, service := range task.Services {
+		if portLabel == service.PortLabel {
+			return service, true
+		}
+	}
+	return nil, false
+}
+
+// Test templates composed of other templates via the include function.
+func TestTemplater_RenderTemplateInclude(t *testing.T) {
+	compositionTasks := []struct {
+		Name     string
+		Image    string
+		Memory   uint64
+		Services map[string]int // name: port
+	}{
+		{"task1", "registry/task1:v1.1", 250, map[string]int{"http": 80, "https": 443}},
+		{"task2", "registry/task2:v1.2", 300, map[string]int{"metrics": 8080}},
+	}
+
+	fVars := map[string]interface{}{
+		"tasks": compositionTasks,
+	}
+
+	job, err := RenderJob("test-fixtures/composition_templated.nomad", []string{"test-fixtures/test.yaml"}, "", &fVars)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, expectedTask := range compositionTasks {
+		actualTask := job.TaskGroups[0].Tasks[i]
+		if actualTask.Name != expectedTask.Name {
+			t.Fatalf("expected %s but got %v", expectedTask.Name, actualTask.Name)
+		}
+		actualTaskImage := actualTask.Config["image"].(string)
+		if actualTaskImage != expectedTask.Image {
+			t.Fatalf("expected %s but got %v", expectedTask.Image, actualTaskImage)
+		}
+
+		actualTaskPorts := actualTask.Config["port_map"].([]map[string]interface{})[0]
+		for portName, expectedPort := range expectedTask.Services {
+			if actualPort, ok := actualTaskPorts[portName]; !ok {
+				t.Fatalf("expected %s in port_map of task %v", portName, expectedTask.Name)
+			} else if actualPort.(int) != expectedPort {
+				t.Fatalf("expected port_map[%s]=%v but got %v", portName, expectedPort, actualPort)
+			}
+
+			actualService, found := findService(actualTask, portName)
+			if !found {
+				t.Fatalf("expected %s in services of task %v", portName, expectedTask.Name)
+			}
+			expectedServiceName := "global-" + portName + "-check"
+			if actualService.Name != expectedServiceName {
+				t.Fatalf("expected service %s but got %v", expectedServiceName, actualService.Name)
+			}
+		}
+	}
+
+	// Test that cyclic includes are detected as an error.
+	job, err = RenderJob("test-fixtures/recursive_include_template_1.nomad", nil, "", &fVars)
+	if err == nil {
+		t.Fatalf("expected error on cyclic includes")
+	} else if !strings.Contains(err.Error(), "cyclic include detected") {
+		t.Fatalf("expected error to contain 'cyclic include detected' but got %v", err)
 	}
 }
