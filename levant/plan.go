@@ -57,7 +57,7 @@ func TriggerPlan(config *PlanConfig) (bool, bool) {
 	}
 
 	if !changes && lp.config.Plan.IgnoreNoChanges {
-		log.Info().Msg("levant/plan: no changes found in job but ignore-changes flag set to true")
+		log.Info().Msg("levant/plan: no changes found in job but ignore-no-changes flag set to true")
 	} else if !changes && !lp.config.Plan.IgnoreNoChanges {
 		log.Info().Msg("levant/plan: no changes found in job")
 		return false, changes
