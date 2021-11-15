@@ -65,8 +65,8 @@ General Options:
     default is HUMAN.
 
   -var-file=<file>
-    Used in conjunction with the -job-file will plan a templated job against your
-    Nomad cluster. You can repeat this flag multiple times to supply multiple var-files.
+    Will plan a templated job against your Nomad cluster. You can repeat this
+    flag multiple times to supply multiple var-files.
     [default: levant.(json|yaml|yml|tf)]
 `
 	return strings.TrimSpace(helpText)
