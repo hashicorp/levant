@@ -12,7 +12,7 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/go-uuid v1.0.2 // indirect
 	github.com/hashicorp/nomad v1.1.0
-	github.com/hashicorp/nomad/api v0.0.0-20210527173017-41a43a98dc82
+	github.com/hashicorp/nomad/api v0.0.0-20211116191626-23c977c5b295
 	github.com/hashicorp/terraform v0.13.5
 	github.com/mattn/go-colorable v0.1.8 // indirect
 	github.com/mattn/go-isatty v0.0.12
