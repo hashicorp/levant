@@ -44,7 +44,7 @@ jobs:
     environment:
     - CIRCLECI_CLI_VERSION: 0.1.6772
     - GO_TAGS: ''
-    - GO_VERSION: 1.14.7
+    - GO_VERSION: 1.17.3
     - GO111MODULE: 'on'
   check-deps-go:
     machine: true
@@ -73,7 +73,7 @@ jobs:
     environment:
     - CIRCLECI_CLI_VERSION: 0.1.6772
     - GO_TAGS: ''
-    - GO_VERSION: 1.14.7
+    - GO_VERSION: 1.17.3
     - GO111MODULE: 'on'
   test-go:
     machine: true
@@ -102,7 +102,7 @@ jobs:
     environment:
     - CIRCLECI_CLI_VERSION: 0.1.6772
     - GO_TAGS: ''
-    - GO_VERSION: 1.14.7
+    - GO_VERSION: 1.17.3
     - GO111MODULE: 'on'
   build-go:
     machine: true
@@ -131,7 +131,7 @@ jobs:
     environment:
     - CIRCLECI_CLI_VERSION: 0.1.6772
     - GO_TAGS: ''
-    - GO_VERSION: 1.14.7
+    - GO_VERSION: 1.17.3
     - GO111MODULE: 'on'
 workflows:
   ci:
@@ -186,7 +186,7 @@ workflows:
 #         environment:
 #             CIRCLECI_CLI_VERSION: 0.1.6772
 #             GO_TAGS: \"\"
-#             GO_VERSION: 1.14.7
+#             GO_VERSION: 1.17.3
 #             GO111MODULE: \"on\"
 #         machine: true
 #         shell: /usr/bin/env bash -euo pipefail -c
