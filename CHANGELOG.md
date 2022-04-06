@@ -1,3 +1,8 @@
+## 0.3.1 (February 14, 2022)
+
+IMPROVEMENTS:
+* build: Updated Nomad dependency to 1.2.4. [[GH-438](https://github.com/hashicorp/levant/pull/438)]
+
 ## 0.3.0 (March 09, 2021)
 
 __BACKWARDS INCOMPATIBILITIES:__

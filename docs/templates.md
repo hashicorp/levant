@@ -188,7 +188,7 @@ yaml:
 
 Accepts varying parameters and differs its behavior based on those parameters as detailed below.
 
-If loop is given a signle int input, it will loop up to, but not including the given integer from index 0:
+If loop is given a single int input, it will loop up to, but not including the given integer from index 0:
 
 Example:
 ```
@@ -313,7 +313,7 @@ Replaces all occurrences of the search string with the replacement string.
 
 Example:
 ```
-[[ replace "Batman and Robin" "Robin" "Catwoman" ]]
+[[ "Batman and Robin" | replace "Robin" "Catwoman" ]]
 ```
 
 Render:
