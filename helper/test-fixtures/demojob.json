@@ -1,0 +1,298 @@
+{
+    "Job": {
+        "Region": "secondary",
+        "Namespace": "demo1",
+        "ID": "demojob",
+        "Name": "demojob",
+        "Type": "service",
+        "Priority": null,
+        "AllAtOnce": null,
+        "Datacenters": [
+            "dc1"
+        ],
+        "Constraints": [
+            {
+                "LTarget": "${meta.namespace}",
+                "RTarget": "demo1",
+                "Operand": "="
+            }
+        ],
+        "Affinities": null,
+        "TaskGroups": [
+            {
+                "Name": "demojob",
+                "Count": null,
+                "Constraints": [
+                    {
+                        "LTarget": "${node.class}",
+                        "RTarget": "demo1-app",
+                        "Operand": "="
+                    }
+                ],
+                "Affinities": null,
+                "Tasks": [
+                    {
+                        "Name": "redis",
+                        "Driver": "docker",
+                        "User": "",
+                        "Lifecycle": null,
+                        "Config": {
+                            "image": "redis:alpine",
+                            "ports": [
+                                "redis"
+                            ]
+                        },
+                        "Constraints": null,
+                        "Affinities": null,
+                        "Env": null,
+                        "Services": null,
+                        "Resources": null,
+                        "RestartPolicy": null,
+                        "Meta": null,
+                        "KillTimeout": null,
+                        "LogConfig": null,
+                        "Artifacts": null,
+                        "Vault": {
+                            "Policies": [
+                                "sudo"
+                            ],
+                            "Namespace": "demo1",
+                            "Env": true,
+                            "ChangeMode": "noop",
+                            "ChangeSignal": null
+                        },
+                        "Templates": null,
+                        "DispatchPayload": null,
+                        "VolumeMounts": null,
+                        "Leader": false,
+                        "ShutdownDelay": 0,
+                        "KillSignal": "",
+                        "Kind": "",
+                        "ScalingPolicies": null
+                    },
+                    {
+                        "Name": "demojob",
+                        "Driver": "docker",
+                        "User": "",
+                        "Lifecycle": null,
+                        "Config": {
+                            "dns_servers": [
+                                "${attr.unique.network.ip-address}"
+                            ],
+                            "image": "demojob:123",
+                            "ports": [
+                                "api"
+                            ]
+                        },
+                        "Constraints": null,
+                        "Affinities": null,
+                        "Env": null,
+                        "Services": null,
+                        "Resources": null,
+                        "RestartPolicy": null,
+                        "Meta": null,
+                        "KillTimeout": null,
+                        "LogConfig": null,
+                        "Artifacts": null,
+                        "Vault": {
+                            "Policies": [
+                                "sudo"
+                            ],
+                            "Namespace": "demo1",
+                            "Env": true,
+                            "ChangeMode": "noop",
+                            "ChangeSignal": null
+                        },
+                        "Templates": [
+                            {
+                                "SourcePath": null,
+                                "DestPath": "local/config.env",
+                                "EmbeddedTmpl": "        {{ with secret \"kv/postgres\" }}\n        DB_PASSWORD = {{ index .Data.data.password }}\n        {{ end }}\n        ENV_FOO = {{ key \"demojob/config/foo\" }}\nENV_BAR = \"bar\"\n\n",
+                                "ChangeMode": "restart",
+                                "ChangeSignal": null,
+                                "Splay": 5000000000,
+                                "Perms": "0644",
+                                "LeftDelim": null,
+                                "RightDelim": null,
+                                "Envvars": true,
+                                "VaultGrace": null
+                            }
+                        ],
+                        "DispatchPayload": null,
+                        "VolumeMounts": null,
+                        "Leader": false,
+                        "ShutdownDelay": 0,
+                        "KillSignal": "",
+                        "Kind": "",
+                        "ScalingPolicies": null
+                    }
+                ],
+                "Spreads": null,
+                "Volumes": null,
+                "RestartPolicy": null,
+                "ReschedulePolicy": null,
+                "EphemeralDisk": null,
+                "Update": null,
+                "Migrate": null,
+                "Networks": [
+                    {
+                        "Mode": "",
+                        "Device": "",
+                        "CIDR": "",
+                        "IP": "",
+                        "DNS": null,
+                        "ReservedPorts": null,
+                        "DynamicPorts": [
+                            {
+                                "Label": "api",
+                                "Value": 0,
+                                "To": 5000,
+                                "HostNetwork": ""
+                            },
+                            {
+                                "Label": "redis",
+                                "Value": 0,
+                                "To": 6379,
+                                "HostNetwork": ""
+                            }
+                        ],
+                        "MBits": null
+                    }
+                ],
+                "Meta": null,
+                "Services": [
+                    {
+                        "Id": "",
+                        "Name": "demojob",
+                        "Tags": [
+                            "traefik.enable=true",
+                            "traefik.http.routers.demojob-http.entrypoints=web",
+                            "traefik.http.routers.demojob-http.rule=Host(`demojob.demo1.dc1.domain.name`)",
+                            "traefik.http.routers.demojob-http.middlewares=demojob-https",
+                            "traefik.http.middlewares.demojob-https.redirectscheme.scheme=https",
+                            "traefik.http.routers.demojob.tls=true",
+                            "traefik.http.routers.demojob.entrypoints=websecure",
+                            "traefik.http.routers.demojob.rule=Host(`demojob.demo1.dc1.domain.name`)"
+                        ],
+                        "CanaryTags": null,
+                        "EnableTagOverride": false,
+                        "PortLabel": "api",
+                        "AddressMode": "host",
+                        "Checks": [
+                            {
+                                "Id": "",
+                                "Name": "",
+                                "Type": "tcp",
+                                "Command": "",
+                                "Args": null,
+                                "Path": "",
+                                "Protocol": "",
+                                "PortLabel": "api",
+                                "Expose": false,
+                                "AddressMode": "",
+                                "Interval": 10000000000,
+                                "Timeout": 5000000000,
+                                "InitialStatus": "",
+                                "TLSSkipVerify": false,
+                                "Header": null,
+                                "Method": "",
+                                "CheckRestart": null,
+                                "GRPCService": "",
+                                "GRPCUseTLS": false,
+                                "TaskName": "",
+                                "SuccessBeforePassing": 0,
+                                "FailuresBeforeCritical": 0,
+                                "Body": "",
+                                "OnUpdate": ""
+                            }
+                        ],
+                        "CheckRestart": null,
+                        "Connect": null,
+                        "Meta": null,
+                        "CanaryMeta": null,
+                        "TaskName": "",
+                        "OnUpdate": ""
+                    }
+                ],
+                "ShutdownDelay": null,
+                "StopAfterClientDisconnect": null,
+                "Scaling": {
+                    "Min": 1,
+                    "Max": 10,
+                    "Policy": {},
+                    "Enabled": true,
+                    "Type": "horizontal",
+                    "ID": "",
+                    "Namespace": "",
+                    "Target": null,
+                    "CreateIndex": 0,
+                    "ModifyIndex": 0
+                },
+                "Consul": null
+            }
+        ],
+        "Update": {
+            "Stagger": 30000000000,
+            "MaxParallel": 1,
+            "HealthCheck": "checks",
+            "MinHealthyTime": 20000000000,
+            "HealthyDeadline": 60000000000,
+            "ProgressDeadline": 120000000000,
+            "Canary": null,
+            "AutoRevert": false,
+            "AutoPromote": null
+        },
+        "Multiregion": null,
+        "Spreads": [
+            {
+                "Attribute": "${attr.platform.aws.placement.availability-zone}",
+                "Weight": 100,
+                "SpreadTarget": [
+                    {
+                        "Value": "row-1-1",
+                        "Percent": 25
+                    },
+                    {
+                        "Value": "row-1-2",
+                        "Percent": 25
+                    },
+                    {
+                        "Value": "row-2-1",
+                        "Percent": 25
+                    },
+                    {
+                        "Value": "row-2-2",
+                        "Percent": 25
+                    }
+                ]
+            }
+        ],
+        "Periodic": null,
+        "ParameterizedJob": null,
+        "Reschedule": null,
+        "Migrate": {
+            "MaxParallel": 1,
+            "HealthCheck": "checks",
+            "MinHealthyTime": 10000000000,
+            "HealthyDeadline": 120000000000
+        },
+        "Meta": null,
+        "ConsulToken": null,
+        "VaultToken": null,
+        "Stop": null,
+        "ParentID": null,
+        "Dispatched": false,
+        "Payload": null,
+        "ConsulNamespace": null,
+        "VaultNamespace": null,
+        "NomadTokenID": null,
+        "Status": null,
+        "StatusDescription": null,
+        "Stable": null,
+        "Version": null,
+        "SubmitTime": null,
+        "CreateIndex": null,
+        "ModifyIndex": null,
+        "JobModifyIndex": null
+    }
+}
