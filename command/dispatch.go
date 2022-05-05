@@ -25,7 +25,7 @@ Usage: levant dispatch [options] <parameterized job> [input source]
   Dispatch creates an instance of a parameterized job. A data payload to the
   dispatched instance can be provided via stdin by using "-" or by specifying a
   path to a file. Metadata can be supplied by using the meta flag one or more
-  times. 
+  times.
 
 General Options:
 
@@ -46,7 +46,7 @@ Dispatch Options:
   -meta <key>=<value>
     Meta takes a key/value pair separated by "=". The metadata key will be
     merged into the job's metadata. The job may define a default value for the
-    key which is overridden when dispatching. The flag can be provided more 
+    key which is overridden when dispatching. The flag can be provided more
     than once to inject multiple metadata key/value pairs. Arbitrary keys are
     not allowed. The parameterized job must allow the key to be merged.
 `

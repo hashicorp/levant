@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/levant/helper"
 	nomad "github.com/hashicorp/nomad/api"
 	"github.com/hashicorp/nomad/jobspec"
+	"github.com/hashicorp/nomad/jobspec2"
 	"github.com/hashicorp/terraform/configs"
 	"github.com/hashicorp/terraform/configs/hcl2shim"
 	"github.com/rs/zerolog/log"
@@ -19,11 +20,20 @@ import (
 
 // RenderJob takes in a template and variables performing a render of the
 // template followed by Nomad jobspec parse.
-func RenderJob(templateFile string, variableFiles []string, addr string, flagVars *map[string]interface{}) (job *nomad.Job, err error) {
+func RenderJob(templateFile string, variableFiles []string, addr string, flagVars *map[string]interface{}, hcl2 bool) (job *nomad.Job, err error) {
 	var tpl *bytes.Buffer
 	tpl, err = RenderTemplate(templateFile, variableFiles, addr, flagVars)
 	if err != nil {
 		return
+	}
+
+	if hcl2 {
+		return jobspec2.ParseWithConfig(&jobspec2.ParseConfig{
+			Path:    templateFile,
+			Body:    tpl.Bytes(),
+			AllowFS: false,
+			Strict:  true,
+		})
 	}
 
 	return jobspec.Parse(tpl)
