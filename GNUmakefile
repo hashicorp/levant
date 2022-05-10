@@ -12,6 +12,18 @@ tools: ## Install the tools used to test and build
 	GO111MODULE=off go get -u github.com/golangci/golangci-lint/cmd/golangci-lint
 	@echo "==> Done"
 
+
+# TODO: are GO_TAGS provided in the environment?
+pkg/%/levant: GO_OUT ?= $@
+pkg/%/levant: ## Build Levant for GOOS_GOARCH, e.g. pkg/linux_amd64/nomad
+	@echo "==> Building $@ with tags $(GO_TAGS)..."
+	@CGO_ENABLED=0 \
+		GOOS=$(firstword $(subst _, ,$*)) \
+		GOARCH=$(lastword $(subst _, ,$*)) \
+		go build -trimpath -ldflags $(GO_LDFLAGS) -tags "$(GO_TAGS)" -o $(GO_OUT)
+
+pkg/windows_%/levant: GO_OUT = $@.exe
+
 .PHONY: build
 build:
 	@echo "==> Building Levant..."
@@ -56,3 +68,7 @@ help: ## Display this usage information
 		sort | \
 		awk 'BEGIN {FS = ":.*?## "}; \
 			{printf $(HELP_FORMAT), $$1, $$2}'
+
+.PHONY: version
+version:
+	@$(CURDIR)/build-scripts/version.sh version/version.go version/version.go

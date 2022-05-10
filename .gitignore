@@ -35,3 +35,5 @@ levant-local
 
 .idea
 vendor/*/.hg/*
+
+.bob

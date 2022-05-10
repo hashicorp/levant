@@ -1,0 +1,208 @@
+name: build
+
+on: 
+  push:
+  workflow_dispatch:
+
+env:
+  PKG_NAME: "levant"
+
+jobs:
+  get-go-version:
+    name: "Determine Go toolchain version"
+    runs-on: ubuntu-20.04
+    outputs:
+      go-version: ${{ steps.get-go-version.outputs.go-version }}
+    steps:
+      - uses: actions/checkout@v2
+      - name: Determine Go version
+        id: get-go-version
+        # We use .go-version as our source of truth for current Go
+        # version, because "goenv" can react to it automatically.
+        run: |
+          echo "Building with Go $(cat .go-version)"
+          echo "::set-output name=go-version::$(cat .go-version)"
+
+  get-product-version:
+    runs-on: ubuntu-20.04
+    outputs:
+      product-version: ${{ steps.get-product-version.outputs.product-version }}
+    steps:
+      - uses: actions/checkout@v2
+      - name: get product version
+        id: get-product-version
+        run: |
+          make version
+          echo "::set-output name=product-version::$(make version)"
+
+  generate-metadata-file:
+    needs: get-product-version
+    runs-on: ubuntu-20.04
+    outputs:
+      filepath: ${{ steps.generate-metadata-file.outputs.filepath }}
+    steps:
+      - name: "Checkout directory"
+        uses: actions/checkout@v2
+      - name: Generate metadata file
+        id: generate-metadata-file
+        uses: hashicorp/actions-generate-metadata@v1
+        with:
+          version: ${{ needs.get-product-version.outputs.product-version }}
+          product: ${{ env.PKG_NAME }}
+          repositoryOwner: "hashicorp"
+      - uses: actions/upload-artifact@v2
+        if: ${{ !env.ACT }}
+        with:
+          name: metadata.json
+          path: ${{ steps.generate-metadata-file.outputs.filepath }}
+
+  build-linux:
+    needs:
+      - get-go-version
+      - get-product-version
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        goos: ["linux"]
+        goarch: ["386", "amd64", "arm", "arm64"]
+      fail-fast: true
+
+    name: Go ${{ needs.get-go-version.outputs.go-version }} ${{ matrix.goos }} ${{ matrix.goarch }} build
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ needs.get-go-version.outputs.go-version }}
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          mkdir -p out
+          make pkg/${{ matrix.goos }}_${{ matrix.goarch }}/${{ env.PKG_NAME }}
+          zip -r -j \
+            out/${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip \
+            pkg/${{ matrix.goos }}_${{ matrix.goarch }}/${{ env.PKG_NAME }}
+      - uses: actions/upload-artifact@v2
+        if: ${{ !env.ACT }}
+        with:
+          name: ${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
+          path: out/${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
+      - name: Package
+        if: ${{ matrix.goos == 'linux' }}
+        uses: hashicorp/actions-packaging-linux@v1
+        with:
+          name: "levant"
+          description: "Levant is a templating and deployment tool for HashiCorp Nomad"
+          arch: ${{ matrix.goarch }}
+          version: ${{ needs.get-product-version.outputs.product-version }}
+          maintainer: "HashiCorp"
+          homepage: "https://github.com/hashicorp/levant"
+          license: "MPL-2.0"
+          binary: pkg/${{ matrix.goos }}_${{ matrix.goarch }}/${{ env.PKG_NAME }}
+          # TODO: how do i know if a package depends on openssl?
+          deb_depends: "openssl"
+          rpm_depends: "openssl"
+      - name: Set Package Names
+        if: ${{ (matrix.goos == 'linux') && (!env.ACT) }}
+        run: |
+          echo "RPM_PACKAGE=$(basename out/*.rpm)" >> $GITHUB_ENV
+          echo "DEB_PACKAGE=$(basename out/*.deb)" >> $GITHUB_ENV
+      - uses: actions/upload-artifact@v2
+        if: ${{ (matrix.goos == 'linux') && (!env.ACT) }}
+        with:
+          name: ${{ env.RPM_PACKAGE }}
+          path: out/${{ env.RPM_PACKAGE }}
+      - uses: actions/upload-artifact@v2
+        if: ${{ (matrix.goos == 'linux') && (!env.ACT) }}
+        with:
+          name: ${{ env.DEB_PACKAGE }}
+          path: out/${{ env.DEB_PACKAGE }}
+
+  build-darwin:
+    needs:
+      - get-go-version
+      - get-product-version
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        goos: [darwin]
+        goarch: ["amd64", "arm64"]
+      fail-fast: true
+
+    name: Go ${{ needs.get-go-version.outputs.go-version }} ${{ matrix.goos }} ${{ matrix.goarch }} build
+
+    env:
+      GOOS: ${{ matrix.goos }}
+      GOARCH: ${{ matrix.goarch }}
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ needs.get-go-version.outputs.go-version }}
+      - name: Build
+        run: |
+          mkdir -p out
+          make pkg/${{ matrix.goos }}_${{ matrix.goarch }}/${{ env.PKG_NAME }}
+          zip -r -j \
+            out/${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip \
+            pkg/${{ matrix.goos }}_${{ matrix.goarch }}/${{ env.PKG_NAME }}
+      - uses: actions/upload-artifact@v2
+        if: ${{ !env.ACT }}
+        with:
+          name: ${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
+          path: out/${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
+
+  build-other:
+    needs:
+      - get-go-version
+      - get-product-version
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos:
+          - "freebsd"
+          - "windows"
+        goarch:
+          - "amd64"
+          - "arm"
+          - "arm64"
+        exclude:
+          - goos: "windows"
+            goarch: "arm"
+          - goos: "windows"
+            goarch: "arm64"
+      fail-fast: true
+
+    name: Go ${{ needs.get-go-version.outputs.go-version }} ${{ matrix.goos }} ${{ matrix.goarch }} build
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Setup go
+        uses: actions/setup-go@v3
+        with:
+          go-version: ${{ needs.get-go-version.outputs.go-version }}
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          mkdir -p out
+          make pkg/${{ matrix.goos }}_${{ matrix.goarch }}/${{ env.PKG_NAME }}
+          zip -r -j \
+            out/${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip \
+            pkg/${{ matrix.goos }}_${{ matrix.goarch }}/${{ env.PKG_NAME }}*
+      - uses: actions/upload-artifact@v2
+        if: ${{ !env.ACT }}
+        with:
+          name: ${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
+          path: out/${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
+
+
+
