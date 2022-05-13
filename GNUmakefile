@@ -18,7 +18,7 @@ PLATFORM = $(OS)/$(ARCH)
 DIST     = dist/$(PLATFORM)
 BIN      = $(DIST)/$(BIN_NAME)
 
-VERSION = $(shell ./build-scripts/version.sh version/version.go)
+VERSION = $(shell ./build-scripts/version.sh version/version.go version/version.go)
 
 # Get latest revision (no dirty check for now).
 REVISION = $(shell git rev-parse HEAD)
