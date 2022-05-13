@@ -225,7 +225,7 @@ jobs:
           # Add smoke test here. Below is a sample smoke test that runs the built image
           # and validates the version.
           smoke_test: |
-            TEST_VERSION="$(docker run "${IMAGE_NAME}" version | awk '/Levant/{print $3}')"
+            TEST_VERSION="$(docker run "${IMAGE_NAME}" version | awk '/Levant/{print $2}')"
             if [ "${TEST_VERSION}" != "v${version}" ]; then
               echo "Test FAILED"
               exit 1
