@@ -11,7 +11,7 @@ project "levant" {
     repository   = "levant"
     release_branches = [
       "main",
-      "crt",
+      "crt-onboarding",
     ]
   }
 }
