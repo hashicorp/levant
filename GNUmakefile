@@ -13,7 +13,6 @@ tools: ## Install the tools used to test and build
 	@echo "==> Done"
 
 
-# TODO: are GO_TAGS provided in the environment?
 pkg/%/levant: GO_OUT ?= $@
 pkg/%/levant: ## Build Levant for GOOS_GOARCH, e.g. pkg/linux_amd64/nomad
 	@echo "==> Building $@ with tags $(GO_TAGS)..."

@@ -1,0 +1,4 @@
+./bin/
+./plugins/test/bin/
+./pkg/
+.git

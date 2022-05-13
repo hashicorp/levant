@@ -1,4 +1,3 @@
-# TODO: do we need container if skipping docker steps?
 container {
   dependencies = true
   alpine_secdb = true

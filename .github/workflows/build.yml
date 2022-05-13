@@ -204,5 +204,59 @@ jobs:
           name: ${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
           path: out/${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
 
-
+  build-docker-default:
+    name: Docker ${{ matrix.arch }} default release build
+    needs:
+      - get-product-version
+      - build-linux
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        arch: ["arm", "arm64", "386", "amd64"]
+      fail-fast: false
+    env:
+      repo: ${{ github.event.repository.name }}
+      version: ${{ needs.get-product-version.outputs.product-version }}
+    steps:
+      - uses: actions/checkout@v2
+      - name: Docker Build (Action)
+        uses: hashicorp/actions-docker-build@v1
+        with:
+          # Add smoke test here. Below is a sample smoke test that runs the built image
+          # and validates the version.
+          smoke_test: |
+            TEST_VERSION="$(docker run "${IMAGE_NAME}" version | awk '/Levant/{print $3}')"
+            if [ "${TEST_VERSION}" != "v${version}" ]; then
+              echo "Test FAILED"
+              exit 1
+            fi
+            echo "Test PASSED"
+          version: ${{ env.version }}
+          target: release
+          arch: ${{ matrix.arch }}
+          tags: |
+            docker.io/hashicorp/${{ env.repo }}:${{ env.version }}
+            986891699432.dkr.ecr.us-east-1.amazonaws.com/hashicorp/${{ env.repo }}:${{ env.version }}
+          # dev_tags are tags that get automatically pushed whenever successful
+          # builds make it to the stable channel. The intention is for these tags
+          # to be used for early testing of new code prior to official releases
+          # going out. The stable channel implies that all tests and scans have
+          # completed successfully, so these images should be _stable_ but are not
+          # intended for production use.
+          #
+          # Here we have two example dev tags. The first (ending -dev) is a tag
+          # that will be updated over-and-over as new builds arrive in stable.
+          #
+          # The second (using the git SHA) will produce a new separate tag for
+          # each commit that is built. (These can still be overridden if the same
+          # commit is built successfully a second time, but that is a less likely
+          # scenario.) These kinds of dev tags are useful if you want to be able
+          # to use Docker images built from those specific commits.
+          #
+          # NOTE: dev_tags MUST publish to the 'hashicorppreview' DockerHub org, it
+          # will fail to any other DockerHub org or registry. You can optionally
+          # prepend docker.io
+          dev_tags: |
+            hashicorppreview/${{ env.repo }}:${{ env.version }}-dev
+            docker.io/hashicorppreview/${{ env.repo }}:${{ env.version }}-${{ github.sha }}
 

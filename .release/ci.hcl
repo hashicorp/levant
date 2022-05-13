@@ -150,6 +150,29 @@ event "verify" {
   }
 }
 
+event "promote-dev-docker" {
+  depends = ["verify"]
+  action "promote-dev-docker" {
+    organization = "hashicorp"
+    repository   = "crt-workflows-common"
+    workflow     = "promote-dev-docker"
+    depends      = ["verify"]
+  }
+
+  notification {
+    on = "fail"
+  }
+}
+
+event "fossa-scan" {
+  depends = ["promote-dev-docker"]
+  action "fossa-scan" {
+    organization = "hashicorp"
+    repository   = "crt-workflows-common"
+    workflow     = "fossa-scan"
+  }
+}
+
 ## These are promotion and post-publish events
 ## they should be added to the end of the file after the verify event stanza.
 
@@ -171,6 +194,19 @@ event "promote-staging" {
   }
 }
 
+event "promote-staging-docker" {
+  depends = ["promote-staging"]
+  action "promote-staging-docker" {
+    organization = "hashicorp"
+    repository   = "crt-workflows-common"
+    workflow     = "promote-staging-docker"
+  }
+
+  notification {
+    on = "always"
+  }
+}
+
 event "trigger-production" {
   // This event is dispatched by the bob trigger-promotion command
   // and is required - do not delete.
@@ -182,6 +218,19 @@ event "promote-production" {
     organization = "hashicorp"
     repository   = "crt-workflows-common"
     workflow     = "promote-production"
+  }
+
+  notification {
+    on = "always"
+  }
+}
+
+event "promote-production-docker" {
+  depends = ["promote-production"]
+  action "promote-production-docker" {
+    organization = "hashicorp"
+    repository   = "crt-workflows-common"
+    workflow     = "promote-production-docker"
   }
 
   notification {
