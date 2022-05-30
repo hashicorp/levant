@@ -17,7 +17,7 @@ jobs:
     uses: ./.github/workflows/build.yml
   github-release:
     needs: build-artifacts
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v2
       - name: Download built artifacts
@@ -79,7 +79,7 @@ jobs:
       - build-artifacts
       - github-release
     if: always() && (needs.build-artifacts.result == 'failure' || needs.github-release.result == 'failure')
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-20.04
     steps:
       - name: Send slack notification on failure
         uses: slackapi/slack-github-action@v1.18.0
