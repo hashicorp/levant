@@ -250,4 +250,3 @@ event "promote-production-packaging" {
     on = "always"
   }
 }
-

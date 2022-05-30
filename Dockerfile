@@ -7,7 +7,7 @@
 
 # devbuild compiles the binary
 # -----------------------------------
-FROM golang:latest AS devbuild
+FROM golang:1.17 AS devbuild
 
 # Disable CGO to make sure we build static binaries
 ENV CGO_ENABLED=0
@@ -17,21 +17,22 @@ WORKDIR /build
 COPY . ./
 RUN go build -o levant .
 
-
 # dev runs the binary from devbuild
 # -----------------------------------
-FROM alpine:latest AS dev
-COPY --from=devbuild /build/levant /bin/
+FROM alpine:3.15 AS dev
 
-ENTRYPOINT ["/bin/levant"]
-CMD ["-v"]
+COPY --from=devbuild /build/levant /bin/
+COPY ./scripts/docker-entrypoint.sh /
+
+ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["help"]
 
 
 # ===================================
 #   Release images.
 # ===================================
 
-FROM alpine:latest AS release
+FROM alpine:3.15 AS release
 
 ARG PRODUCT_NAME=levant
 ARG PRODUCT_VERSION
@@ -44,14 +45,15 @@ LABEL version=${PRODUCT_VERSION}
 LABEL revision=${PRODUCT_REVISION}
 
 COPY dist/$TARGETOS/$TARGETARCH/levant /bin/
+COPY ./scripts/docker-entrypoint.sh /
 
 # Create a non-root user to run the software.
 RUN addgroup $PRODUCT_NAME && \
     adduser -S -G $PRODUCT_NAME $PRODUCT_NAME
 
 USER $PRODUCT_NAME
-ENTRYPOINT ["/bin/levant"]
-CMD ["-v"]
+ENTRYPOINT ["/docker-entrypoint.sh"]
+CMD ["help"]
 
 # ===================================
 #   Set default target to 'dev'.

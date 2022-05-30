@@ -1,4 +1,3 @@
 # release configuration
-# /.release/                              @hashicorp/release-engineering
-# /.github/workflows/build.yml            @hashicorp/release-engineering
-
+/.release/                              @hashicorp/release-engineering
+/.github/workflows/build.yml            @hashicorp/release-engineering

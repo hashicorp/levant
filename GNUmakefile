@@ -6,76 +6,30 @@ GIT_DIRTY := $(if $(shell git status --porcelain),+CHANGES)
 
 GO_LDFLAGS := "-X github.com/hashicorp/levant/version.GitCommit=$(GIT_COMMIT)$(GIT_DIRTY)"
 
-REPO_NAME    ?= $(shell basename "$(CURDIR)")
-PRODUCT_NAME ?= $(REPO_NAME)
-BIN_NAME     ?= $(PRODUCT_NAME)
-
-# Get local ARCH; on Intel Mac, 'uname -m' returns x86_64 which we turn into amd64.
-# Not using 'go env GOOS/GOARCH' here so 'make docker' will work without local Go install.
-ARCH     = $(shell A=$$(uname -m); [ $$A = x86_64 ] && A=amd64; echo $$A)
-OS       = $(shell uname | tr [[:upper:]] [[:lower:]])
-PLATFORM = $(OS)/$(ARCH)
-DIST     = dist/$(PLATFORM)
-BIN      = $(DIST)/$(BIN_NAME)
-
-VERSION = $(shell ./build-scripts/version.sh version/version.go version/version.go)
-
-# Get latest revision (no dirty check for now).
-REVISION = $(shell git rev-parse HEAD)
-
-export DOCKER_BUILDKIT=1
-BUILD_ARGS = BIN_NAME=$(BIN_NAME) PRODUCT_VERSION=$(VERSION) PRODUCT_REVISION=$(REVISION)
-TAG        = $(PRODUCT_NAME)/$(TARGET):$(VERSION)
-BA_FLAGS   = $(addprefix --build-arg=,$(BUILD_ARGS))
-FLAGS      = --target $(TARGET) --platform $(PLATFORM) --tag $(TAG) $(BA_FLAGS)
-
-# Set OS to linux for all docker/* targets.
-docker/%: OS = linux
-
-# DOCKER_TARGET is a macro that generates the build and run make targets
-# for a given Dockerfile target.
-# Args: 1) Dockerfile target name (required).
-#       2) Build prerequisites (optional).
-define DOCKER_TARGET
-.PHONY: docker/$(1)
-docker/$(1): TARGET=$(1)
-docker/$(1): $(2)
-	docker build $$(FLAGS) .
-	@echo 'Image built; run "docker run --rm $$(TAG)" to try it out.'
-
-.PHONY: docker/$(1)/run
-docker/$(1)/run: TARGET=$(1)
-docker/$(1)/run: docker/$(1)
-	docker run --rm $$(TAG)
-endef
-
-# Create docker/<target>[/run] targets.
-$(eval $(call DOCKER_TARGET,dev,))
-$(eval $(call DOCKER_TARGET,default,bin))
-$(eval $(call DOCKER_TARGET,debian,bin))
-
-.PHONY: docker
-docker: docker/dev
-
 .PHONY: tools
 tools: ## Install the tools used to test and build
 	@echo "==> Installing tools..."
-	GO111MODULE=off go get -u github.com/golangci/golangci-lint/cmd/golangci-lint
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.45.0
+	go install github.com/hashicorp/hcl/v2/cmd/hclfmt@d0c4fa8b0bbc2e4eeccd1ed2a32c2089ed8c5cf1
 	@echo "==> Done"
 
 
 pkg/%/levant: GO_OUT ?= $@
-pkg/%/levant: ## Build Levant for GOOS_GOARCH, e.g. pkg/linux_amd64/nomad
+pkg/windows_%/levant: GO_OUT = $@.exe
+pkg/%/levant: ## Build Levant for GOOS_GOARCH, e.g. pkg/linux_amd64/levant
 	@echo "==> Building $@ with tags $(GO_TAGS)..."
 	@CGO_ENABLED=0 \
 		GOOS=$(firstword $(subst _, ,$*)) \
 		GOARCH=$(lastword $(subst _, ,$*)) \
 		go build -trimpath -ldflags $(GO_LDFLAGS) -tags "$(GO_TAGS)" -o $(GO_OUT)
 
-pkg/windows_%/levant: GO_OUT = $@.exe
+.PRECIOUS: pkg/%/levant
+pkg/%.zip: pkg/%/levant ## Build and zip Levant for GOOS_GOARCH, e.g. pkg/linux_amd64.zip
+	@echo "==> Packaging for $@..."
+	zip -j $@ $(dir $<)*
 
-.PHONY: build
-build:
+.PHONY: dev
+dev:
 	@echo "==> Building Levant..."
 	@CGO_ENABLED=0 GO111MODULE=on \
 	go build \
@@ -94,13 +48,25 @@ acceptance-test: ## Run the Levant acceptance tests
 	@echo "==> Running $@..."
 	go test -timeout 300s github.com/hashicorp/levant/test -v
 
+.PHONY: check
+check: tools lint check-mod ## Lint the source code and check other properties
+
 .PHONY: lint
-lint: ## Lint the source code
+lint: hclfmt ## Lint the source code
 	@echo "==> Linting source code..."
 	@golangci-lint run -j 1
 	@echo "==> Done"
 
-.PHONEY: check-mod
+.PHONY: hclfmt
+hclfmt: ## Format HCL files with hclfmt
+	@echo "--> Formatting HCL"
+	@find . -name '.git' -prune \
+					-o -name '*fixtures*' -prune \
+	        -o \( -name '*.nomad' -o -name '*.hcl' -o -name '*.tf' \) \
+	      -print0 | xargs -0 hclfmt -w
+	@if (git status -s | grep -q -e '\.hcl$$' -e '\.nomad$$' -e '\.tf$$'); then echo The following HCL files are out of sync; git status -s | grep -e '\.hcl$$' -e '\.nomad$$' -e '\.tf$$'; exit 1; fi
+
+.PHONY: check-mod
 check-mod: ## Checks the Go mod is tidy
 	@echo "==> Checking Go mod..."
 	@GO111MODULE=on go mod tidy
@@ -121,4 +87,8 @@ help: ## Display this usage information
 
 .PHONY: version
 version:
-	@$(CURDIR)/build-scripts/version.sh version/version.go version/version.go
+ifneq (,$(wildcard version/version_ent.go))
+	@$(CURDIR)/scripts/version.sh version/version.go version/version_ent.go
+else
+	@$(CURDIR)/scripts/version.sh version/version.go version/version.go
+endif

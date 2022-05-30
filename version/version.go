@@ -11,12 +11,12 @@ var (
 
 	// Version must conform to the format expected by
 	// github.com/hashicorp/go-version for tests to work.
-	Version = "0.3.1"
+	Version = "0.3.2"
 
 	// VersionPrerelease is the marker for the version. If this is ""
 	// (empty string) then it means that it is a final release. Otherwise, this
 	// is a pre-release such as "dev" (in development), "beta", "rc1", etc.
-	VersionPrerelease = "dev"
+	VersionPrerelease = "alpha"
 )
 
 // GetHumanVersion composes the parts of the version in a way that's suitable

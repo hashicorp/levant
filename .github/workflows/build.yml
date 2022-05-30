@@ -1,8 +1,9 @@
 name: build
 
-on: 
+on:
   push:
   workflow_dispatch:
+  workflow_call:
 
 env:
   PKG_NAME: "levant"
@@ -17,8 +18,6 @@ jobs:
       - uses: actions/checkout@v2
       - name: Determine Go version
         id: get-go-version
-        # We use .go-version as our source of truth for current Go
-        # version, because "goenv" can react to it automatically.
         run: |
           echo "Building with Go $(cat .go-version)"
           echo "::set-output name=go-version::$(cat .go-version)"
@@ -80,18 +79,16 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
-          mkdir -p out
-          make pkg/${{ matrix.goos }}_${{ matrix.goarch }}/${{ env.PKG_NAME }}
-          zip -r -j \
-            out/${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip \
-            pkg/${{ matrix.goos }}_${{ matrix.goarch }}/${{ env.PKG_NAME }}
+          make pkg/${{ matrix.goos }}_${{ matrix.goarch }}.zip
+          mv \
+            pkg/${{ matrix.goos }}_${{ matrix.goarch }}.zip \
+            ${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
       - uses: actions/upload-artifact@v2
         if: ${{ !env.ACT }}
         with:
           name: ${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
-          path: out/${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
+          path: ${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
       - name: Package
-        if: ${{ matrix.goos == 'linux' }}
         uses: hashicorp/actions-packaging-linux@v1
         with:
           name: "levant"
@@ -102,21 +99,20 @@ jobs:
           homepage: "https://github.com/hashicorp/levant"
           license: "MPL-2.0"
           binary: pkg/${{ matrix.goos }}_${{ matrix.goarch }}/${{ env.PKG_NAME }}
-          # TODO: how do i know if a package depends on openssl?
           deb_depends: "openssl"
           rpm_depends: "openssl"
       - name: Set Package Names
-        if: ${{ (matrix.goos == 'linux') && (!env.ACT) }}
+        if: ${{ !env.ACT }}
         run: |
           echo "RPM_PACKAGE=$(basename out/*.rpm)" >> $GITHUB_ENV
           echo "DEB_PACKAGE=$(basename out/*.deb)" >> $GITHUB_ENV
       - uses: actions/upload-artifact@v2
-        if: ${{ (matrix.goos == 'linux') && (!env.ACT) }}
+        if: ${{ !env.ACT }}
         with:
           name: ${{ env.RPM_PACKAGE }}
           path: out/${{ env.RPM_PACKAGE }}
       - uses: actions/upload-artifact@v2
-        if: ${{ (matrix.goos == 'linux') && (!env.ACT) }}
+        if: ${{ !env.ACT }}
         with:
           name: ${{ env.DEB_PACKAGE }}
           path: out/${{ env.DEB_PACKAGE }}
@@ -125,19 +121,15 @@ jobs:
     needs:
       - get-go-version
       - get-product-version
-    runs-on: macos-latest
+    runs-on: macos-11
     strategy:
       matrix:
-        goos: [darwin]
+        goos: ["darwin"]
         goarch: ["amd64", "arm64"]
       fail-fast: true
 
     name: Go ${{ needs.get-go-version.outputs.go-version }} ${{ matrix.goos }} ${{ matrix.goarch }} build
 
-    env:
-      GOOS: ${{ matrix.goos }}
-      GOARCH: ${{ matrix.goarch }}
-
     steps:
       - uses: actions/checkout@v2
       - name: Setup go
@@ -145,67 +137,58 @@ jobs:
         with:
           go-version: ${{ needs.get-go-version.outputs.go-version }}
       - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
         run: |
-          mkdir -p out
-          make pkg/${{ matrix.goos }}_${{ matrix.goarch }}/${{ env.PKG_NAME }}
-          zip -r -j \
-            out/${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip \
-            pkg/${{ matrix.goos }}_${{ matrix.goarch }}/${{ env.PKG_NAME }}
+          make pkg/${{ matrix.goos }}_${{ matrix.goarch }}.zip
+          mv \
+            pkg/${{ matrix.goos }}_${{ matrix.goarch }}.zip \
+            ${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
       - uses: actions/upload-artifact@v2
         if: ${{ !env.ACT }}
         with:
           name: ${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
-          path: out/${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
+          path: ${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
 
   build-other:
     needs:
       - get-go-version
       - get-product-version
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     strategy:
       matrix:
-        goos:
-          - "freebsd"
-          - "windows"
-        goarch:
-          - "amd64"
-          - "arm"
-          - "arm64"
+        goos: ["freebsd", "windows"]
+        goarch: ["amd64", "arm", "arm64"]
         exclude:
           - goos: "windows"
             goarch: "arm"
-          - goos: "windows"
-            goarch: "arm64"
       fail-fast: true
 
     name: Go ${{ needs.get-go-version.outputs.go-version }} ${{ matrix.goos }} ${{ matrix.goarch }} build
 
     steps:
       - uses: actions/checkout@v2
-
       - name: Setup go
         uses: actions/setup-go@v3
         with:
           go-version: ${{ needs.get-go-version.outputs.go-version }}
-
       - name: Build
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
-          mkdir -p out
-          make pkg/${{ matrix.goos }}_${{ matrix.goarch }}/${{ env.PKG_NAME }}
-          zip -r -j \
-            out/${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip \
-            pkg/${{ matrix.goos }}_${{ matrix.goarch }}/${{ env.PKG_NAME }}*
+          make pkg/${{ matrix.goos }}_${{ matrix.goarch }}.zip
+          mv \
+            pkg/${{ matrix.goos }}_${{ matrix.goarch }}.zip \
+            ${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
       - uses: actions/upload-artifact@v2
         if: ${{ !env.ACT }}
         with:
           name: ${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
-          path: out/${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
+          path: ${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
 
   build-docker-default:
-    name: Docker ${{ matrix.arch }} default release build
     needs:
       - get-product-version
       - build-linux
@@ -213,17 +196,18 @@ jobs:
     strategy:
       matrix:
         arch: ["arm", "arm64", "386", "amd64"]
-      fail-fast: false
+      fail-fast: true
     env:
       repo: ${{ github.event.repository.name }}
       version: ${{ needs.get-product-version.outputs.product-version }}
+
+    name: Docker ${{ matrix.arch }} default release build
+
     steps:
       - uses: actions/checkout@v2
       - name: Docker Build (Action)
         uses: hashicorp/actions-docker-build@v1
         with:
-          # Add smoke test here. Below is a sample smoke test that runs the built image
-          # and validates the version.
           smoke_test: |
             TEST_VERSION="$(docker run "${IMAGE_NAME}" version | awk '/Levant/{print $2}')"
             if [ "${TEST_VERSION}" != "v${version}" ]; then
@@ -237,26 +221,6 @@ jobs:
           tags: |
             docker.io/hashicorp/${{ env.repo }}:${{ env.version }}
             986891699432.dkr.ecr.us-east-1.amazonaws.com/hashicorp/${{ env.repo }}:${{ env.version }}
-          # dev_tags are tags that get automatically pushed whenever successful
-          # builds make it to the stable channel. The intention is for these tags
-          # to be used for early testing of new code prior to official releases
-          # going out. The stable channel implies that all tests and scans have
-          # completed successfully, so these images should be _stable_ but are not
-          # intended for production use.
-          #
-          # Here we have two example dev tags. The first (ending -dev) is a tag
-          # that will be updated over-and-over as new builds arrive in stable.
-          #
-          # The second (using the git SHA) will produce a new separate tag for
-          # each commit that is built. (These can still be overridden if the same
-          # commit is built successfully a second time, but that is a less likely
-          # scenario.) These kinds of dev tags are useful if you want to be able
-          # to use Docker images built from those specific commits.
-          #
-          # NOTE: dev_tags MUST publish to the 'hashicorppreview' DockerHub org, it
-          # will fail to any other DockerHub org or registry. You can optionally
-          # prepend docker.io
           dev_tags: |
-            hashicorppreview/${{ env.repo }}:${{ env.version }}-dev
+            docker.io/hashicorppreview/${{ env.repo }}:${{ env.version }}-dev
             docker.io/hashicorppreview/${{ env.repo }}:${{ env.version }}-${{ github.sha }}
-
