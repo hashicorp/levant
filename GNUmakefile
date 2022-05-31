@@ -29,7 +29,7 @@ pkg/%.zip: pkg/%/levant ## Build and zip Levant for GOOS_GOARCH, e.g. pkg/linux_
 	zip -j $@ $(dir $<)*
 
 .PHONY: dev
-dev:
+dev: check ## Build for the current development version
 	@echo "==> Building Levant..."
 	@CGO_ENABLED=0 GO111MODULE=on \
 	go build \
