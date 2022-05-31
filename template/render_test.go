@@ -116,3 +116,44 @@ func TestTemplater_RenderTemplate(t *testing.T) {
 		t.Fatalf("expected %s but got %v", testEnvValue, *job.TaskGroups[0].Name)
 	}
 }
+
+func TestTemplater_RenderTemplate_strict(t *testing.T) {
+	testCase := []struct {
+		description string
+		flagVars    map[string]interface{}
+		errExpected bool
+		strictMode  bool
+	}{
+		{
+			description: "non-strict mode with job_name missing",
+			flagVars:    map[string]interface{}{"task_resource_cpu": "1313"},
+			strictMode:  false,
+			errExpected: false,
+		},
+		{
+			description: "strict mode with missing vars",
+			flagVars:    map[string]interface{}{},
+			strictMode:  true,
+			errExpected: true,
+		},
+		{
+			description: "strict mode with all vars",
+			flagVars:    map[string]interface{}{"job_name": testJobName, "task_resource_cpu": "1313"},
+			strictMode:  true,
+			errExpected: false,
+		},
+	}
+
+	for _, tc := range testCase {
+		t.Run(tc.description, func(t *testing.T) {
+			_, err := RenderJob("test-fixtures/single_templated.nomad", []string{}, "", tc.strictMode, &tc.flagVars)
+
+			if tc.errExpected && err == nil {
+				t.Fatalf("expected error but got nil")
+			}
+			if !tc.errExpected && err != nil {
+				t.Fatalf("expected no error but got %v", err)
+			}
+		})
+	}
+}
