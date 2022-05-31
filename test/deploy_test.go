@@ -3,7 +3,7 @@ package test
 import (
 	"testing"
 
-	"github.com/jrasell/levant/test/acctest"
+	"github.com/hashicorp/levant/test/acctest"
 )
 
 func TestDeploy_basic(t *testing.T) {
@@ -70,7 +70,7 @@ func TestDeploy_count(t *testing.T) {
 			{
 				Runner: acctest.DeployTestStepRunner{
 					FixtureName: "deploy_count.nomad",
-					Vars: map[string]string{
+					Vars: map[string]interface{}{
 						"count": "3",
 					},
 				},
@@ -79,7 +79,7 @@ func TestDeploy_count(t *testing.T) {
 			{
 				Runner: acctest.DeployTestStepRunner{
 					FixtureName: "deploy_count.nomad",
-					Vars: map[string]string{
+					Vars: map[string]interface{}{
 						"count": "1",
 					},
 				},
@@ -92,7 +92,7 @@ func TestDeploy_count(t *testing.T) {
 			{
 				Runner: acctest.DeployTestStepRunner{
 					FixtureName: "deploy_count.nomad",
-					Vars: map[string]string{
+					Vars: map[string]interface{}{
 						"count": "1",
 					},
 					ForceCount: true,
@@ -114,7 +114,7 @@ func TestDeploy_canary(t *testing.T) {
 				Runner: acctest.DeployTestStepRunner{
 					FixtureName: "deploy_canary.nomad",
 					Canary:      10,
-					Vars: map[string]string{
+					Vars: map[string]interface{}{
 						"env_version": "1",
 					},
 				},
@@ -124,9 +124,37 @@ func TestDeploy_canary(t *testing.T) {
 				Runner: acctest.DeployTestStepRunner{
 					FixtureName: "deploy_canary.nomad",
 					Canary:      10,
-					Vars: map[string]string{
+					Vars: map[string]interface{}{
 						"env_version": "2",
 					},
+				},
+				Check: acctest.CheckDeploymentStatus("successful"),
+			},
+		},
+		CleanupFunc: acctest.CleanupPurgeJob,
+	})
+}
+
+func TestDeploy_lifecycle(t *testing.T) {
+	acctest.Test(t, acctest.TestCase{
+		Steps: []acctest.TestStep{
+			{
+				Runner: acctest.DeployTestStepRunner{
+					FixtureName: "deploy_lifecycle.nomad",
+				},
+				Check: acctest.CheckDeploymentStatus("successful"),
+			},
+		},
+		CleanupFunc: acctest.CleanupPurgeJob,
+	})
+}
+
+func TestDeploy_taskScalingStanza(t *testing.T) {
+	acctest.Test(t, acctest.TestCase{
+		Steps: []acctest.TestStep{
+			{
+				Runner: acctest.DeployTestStepRunner{
+					FixtureName: "deploy_task_scaling.nomad",
 				},
 				Check: acctest.CheckDeploymentStatus("successful"),
 			},

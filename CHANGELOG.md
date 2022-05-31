@@ -1,3 +1,36 @@
+## 0.3.1 (February 14, 2022)
+
+IMPROVEMENTS:
+* build: Updated Nomad dependency to 1.2.4. [[GH-438](https://github.com/hashicorp/levant/pull/438)]
+
+## 0.3.0 (March 09, 2021)
+
+__BACKWARDS INCOMPATIBILITIES:__
+ * template: existing Levant functions that share a name with [sprig](https://github.com/Masterminds/sprig) functions have been renamed to include the prefix `levant` such as `levantEnv`.
+
+BUG FIXES:
+ * cli: Fixed panic when dispatching a job. [[GH-348](https://github.com/hashicorp/levant/pull/348)]
+ * status-checker: Pass the namespace to the query options when calling the Nomad API [[GH-356](https://github.com/hashicorp/levant/pull/356)]
+ * template: Fixed issue with default variables file not being used. [[GH-353](https://github.com/hashicorp/levant/pull/353)]
+
+IMPROVEMENTS:
+ * build: Updated Nomad dependency to 1.0.4. [[GH-399](https://github.com/hashicorp/levant/pull/399)]
+ * cli: Added `log-level` and `log-format` flags to render command. [[GH-346](https://github.com/hashicorp/levant/pull/346)]
+ * render: when rendering, send logging to stderr if stdout is not a terminal [[GH-386](https://github.com/hashicorp/levant/pull/386)]
+ * template: Added [sprig](https://github.com/Masterminds/sprig) template functions. [[GH-347](https://github.com/hashicorp/levant/pull/347)]
+ * template: Added `spewDump` and `spewPrintf` functions for easier debugging. [[GH-344](https://github.com/hashicorp/levant/pull/344)]
+
+## 0.2.9 (27 December 2019)
+
+IMPROVEMENTS:
+ * Update vendoered version of Nomad to 0.9.6 [GH-313](https://github.com/jrasell/levant/pull/313)
+ * Update to go 1.13 and use modules rather than dep [GH-319](https://github.com/jrasell/levant/pull/319)
+ * Remove use of vendor nomad/structs import to allow easier vendor [GH-320](https://github.com/jrasell/levant/pull/320)
+ * Add template replace function [GH-291](https://github.com/jrasell/levant/pull/291)
+
+BUG FIXES:
+ * Use info level logs when no changes are detected [GH-303](https://github.com/jrasell/levant/pull/303)
+
 ## 0.2.8 (14 September 2019)
 
 IMPROVEMENTS:

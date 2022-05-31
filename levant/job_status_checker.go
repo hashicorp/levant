@@ -1,8 +1,8 @@
 package levant
 
 import (
+	nomadHelper "github.com/hashicorp/levant/helper/nomad"
 	nomad "github.com/hashicorp/nomad/api"
-	nomadStructs "github.com/hashicorp/nomad/nomad/structs"
 	"github.com/rs/zerolog/log"
 )
 
@@ -21,7 +21,7 @@ func (l *levantDeployment) jobStatusChecker(evalID *string) bool {
 
 	// Run the initial job status check to ensure the job reaches a state of
 	// running.
-	jStatus := l.simpleJobStatusChecker(*l.config.Template.Job.ID)
+	jStatus := l.simpleJobStatusChecker()
 
 	// Periodic and parameterized batch jobs do not produce evaluations and so
 	// can only go through the simplest of checks.
@@ -40,9 +40,9 @@ func (l *levantDeployment) jobStatusChecker(evalID *string) bool {
 
 // simpleJobStatusChecker is used to check that jobs which do not emit initial
 // evaluations at least reach a job status of running.
-func (l *levantDeployment) simpleJobStatusChecker(jobID string) bool {
+func (l *levantDeployment) simpleJobStatusChecker() bool {
 
-	q := &nomad.QueryOptions{WaitIndex: 1}
+	q := nomadHelper.GenerateBlockingQueryOptions(l.config.Template.Job.Namespace)
 
 	for {
 
@@ -60,14 +60,14 @@ func (l *levantDeployment) simpleJobStatusChecker(jobID string) bool {
 
 		// Checks the status of the job and proceed as expected depending on this.
 		switch *job.Status {
-		case nomadStructs.JobStatusRunning:
+		case "running":
 			log.Info().Msgf("levant/job_status_checker: job has status %s", *job.Status)
 			return true
-		case nomadStructs.JobStatusPending:
+		case "pending":
 			log.Debug().Msgf("levant/job_status_checker: job has status %s", *job.Status)
 			q.WaitIndex = meta.LastIndex
 			continue
-		case nomadStructs.JobStatusDead:
+		case "dead":
 			log.Error().Msgf("levant/job_status_checker: job has status %s", *job.Status)
 			return false
 		}
@@ -78,7 +78,7 @@ func (l *levantDeployment) simpleJobStatusChecker(jobID string) bool {
 // jobs that do not support Nomad deployments.
 func (l *levantDeployment) jobAllocationChecker(evalID *string) bool {
 
-	q := &nomad.QueryOptions{WaitIndex: 1}
+	q := nomadHelper.GenerateBlockingQueryOptions(l.config.Template.Job.Namespace)
 
 	// Build our small internal checking struct.
 	levantTasks := make(map[TaskCoordinate]string)
@@ -136,10 +136,10 @@ func allocationStatusChecker(levantTasks map[TaskCoordinate]string, allocs []*no
 			// then we have some case specific actions
 			switch levantTasks[TaskCoordinate{alloc.ID, taskName}] {
 			// if a task is still pendign we are not yet done
-			case nomadStructs.TaskStatePending:
+			case "pending":
 				complete = false
 				// if the task is dead we record that
-			case nomadStructs.TaskStateDead:
+			case "dead":
 				deadTasks++
 			}
 		}

@@ -3,16 +3,16 @@ package acctest
 import (
 	"fmt"
 
-	"github.com/jrasell/levant/levant"
-	"github.com/jrasell/levant/levant/structs"
-	"github.com/jrasell/levant/template"
+	"github.com/hashicorp/levant/levant"
+	"github.com/hashicorp/levant/levant/structs"
+	"github.com/hashicorp/levant/template"
 )
 
 // DeployTestStepRunner implements TestStepRunner to execute a levant deployment
 type DeployTestStepRunner struct {
 	FixtureName string
 
-	Vars map[string]string
+	Vars map[string]interface{}
 
 	Canary     int
 	ForceBatch bool
@@ -22,7 +22,7 @@ type DeployTestStepRunner struct {
 // Run renders the job fixture and triggers a deployment
 func (c DeployTestStepRunner) Run(s *TestState) error {
 	if c.Vars == nil {
-		c.Vars = map[string]string{}
+		c.Vars = map[string]interface{}{}
 	}
 	c.Vars["job_name"] = s.JobName
 

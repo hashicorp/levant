@@ -6,8 +6,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/jrasell/levant/helper"
-	"github.com/jrasell/levant/template"
+	"github.com/hashicorp/levant/helper"
+	"github.com/hashicorp/levant/logging"
+	"github.com/hashicorp/levant/template"
 )
 
 // RenderCommand is the command implementation that allows users to render a
@@ -37,7 +38,15 @@ General Options:
   -consul-address=<addr>
     The Consul host and port to use when making Consul KeyValue lookups for
     template rendering.
-	
+
+  -log-level=<level>
+    Specify the verbosity level of Levant's logs. Valid values include DEBUG,
+    INFO, and WARN, in decreasing order of verbosity. The default is INFO.
+
+  -log-format=<format>
+    Specify the format of Levant's logs. Valid values are HUMAN or JSON. The
+    default is HUMAN.
+
   -out=<file>
     Specify the path to write the rendered template out to, if a file exists at
     the specified path it will be truncated before rendering. The template will be
@@ -63,11 +72,14 @@ func (c *RenderCommand) Run(args []string) int {
 	var strictMode bool
 	var err error
 	var tpl *bytes.Buffer
+	var level, format string
 
 	flags := c.Meta.FlagSet("render", FlagSetVars)
 	flags.Usage = func() { c.UI.Output(c.Help()) }
 
 	flags.StringVar(&addr, "consul-address", "", "")
+	flags.StringVar(&level, "log-level", "INFO", "")
+	flags.StringVar(&format, "log-format", "HUMAN", "")
 	flags.Var((*helper.FlagStringSlice)(&variables), "var-file", "")
 	flags.StringVar(&outPath, "out", "", "")
 	flags.BoolVar(&strictMode, "strict", false, "")
@@ -77,6 +89,11 @@ func (c *RenderCommand) Run(args []string) int {
 	}
 
 	args = flags.Args()
+
+	if err = logging.SetupLogger(level, format); err != nil {
+		c.UI.Error(err.Error())
+		return 1
+	}
 
 	if len(args) == 1 {
 		templateFile = args[0]

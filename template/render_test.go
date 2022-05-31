@@ -22,7 +22,7 @@ func TestTemplater_RenderTemplate(t *testing.T) {
 	var err error
 
 	// Start with an empty passed var args map.
-	fVars := make(map[string]string)
+	fVars := make(map[string]interface{})
 
 	// Test basic TF template render.
 	job, err = RenderJob("test-fixtures/single_templated.nomad", []string{"test-fixtures/test.tf"}, "", false, &fVars)
@@ -32,6 +32,9 @@ func TestTemplater_RenderTemplate(t *testing.T) {
 	if *job.Name != testJobName {
 		t.Fatalf("expected %s but got %v", testJobName, *job.Name)
 	}
+	if *job.TaskGroups[0].Tasks[0].Resources.CPU != 1313 {
+		t.Fatalf("expected CPU resource %v but got %v", 1313, *job.TaskGroups[0].Tasks[0].Resources.CPU)
+	}
 
 	// Test basic YAML template render.
 	job, err = RenderJob("test-fixtures/single_templated.nomad", []string{"test-fixtures/test.yaml"}, "", false, &fVars)
@@ -40,6 +43,9 @@ func TestTemplater_RenderTemplate(t *testing.T) {
 	}
 	if *job.Name != testJobName {
 		t.Fatalf("expected %s but got %v", testJobName, *job.Name)
+	}
+	if *job.TaskGroups[0].Tasks[0].Resources.CPU != 1313 {
+		t.Fatalf("expected CPU resource %v but got %v", 1313, *job.TaskGroups[0].Tasks[0].Resources.CPU)
 	}
 
 	// Test multiple var-files
@@ -80,14 +86,16 @@ func TestTemplater_RenderTemplate(t *testing.T) {
 	}
 
 	// Test var-args only render.
-	delete(fVars, "job_name")
-	fVars["job_name"] = testJobName
+	fVars = map[string]interface{}{"job_name": testJobName, "task_resource_cpu": "1313"}
 	job, err = RenderJob("test-fixtures/single_templated.nomad", []string{}, "", false, &fVars)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if *job.Name != testJobName {
 		t.Fatalf("expected %s but got %v", testJobName, *job.Name)
+	}
+	if *job.TaskGroups[0].Tasks[0].Resources.CPU != 1313 {
+		t.Fatalf("expected CPU resource %v but got %v", 1313, *job.TaskGroups[0].Tasks[0].Resources.CPU)
 	}
 
 	// Test var-args and variables file render.

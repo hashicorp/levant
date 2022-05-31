@@ -1,0 +1,44 @@
+run:
+  deadline: 5m
+  issues-exit-code: 1
+  tests: true
+
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+
+linters:
+  enable:
+    - deadcode
+    - errcheck
+    - goimports
+    - gofmt
+    - golint
+    - govet
+    - ineffassign
+    - misspell
+    - structcheck
+    - unconvert
+    - varcheck
+    - interfacer
+    - unparam
+    - depguard
+    - goconst
+    - gocyclo
+    - gosec
+    - maligned
+    - prealloc
+  disable:
+    # - nakedret
+    # - gosimple
+    # - staticcheck
+    # - stylecheck
+    # - unused
+    # - dupl
+    # - gochecknoinits
+    # - gochecknoglobals
+    # - lll
+    # - typecheck
+  enable-all: false
+  disable-all: true

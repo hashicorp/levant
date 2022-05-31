@@ -188,7 +188,7 @@ yaml:
 
 Accepts varying parameters and differs its behavior based on those parameters as detailed below.
 
-If loop is given a signle int input, it will loop up to, but not including the given integer from index 0:
+If loop is given a single int input, it will loop up to, but not including the given integer from index 0:
 
 Example:
 ```
@@ -224,7 +224,7 @@ Takes the given string and parses it as a boolean value which can be helpful in 
 
 Example:
 ```
-[[ if key "service/config/beta" | parseBool ]][[ "beta-release" ]][[ end ]]
+[[ if "true" | parseBool ]][[ "beta-release" ]][[ end ]]
 ```
 
 Render:
@@ -307,6 +307,20 @@ Render:
 100
 ```
 
+#### replace
+
+Replaces all occurrences of the search string with the replacement string.
+
+Example:
+```
+[[ "Batman and Robin" | replace "Robin" "Catwoman" ]]
+```
+
+Render:
+```
+Batman and Catwoman
+```
+
 #### timeNow
 
 Returns the current ISO_8601 standard timestamp as a string in the timezone of the machine the rendering was triggered on.
@@ -355,7 +369,7 @@ Takes the argument as a string and converts it to lowercase.
 
 Example:
 ```
-[[ key "service/config/queue-name" | toLower ]]
+[[ "QUEUE-NAME" | toLower ]]
 ```
 
 Render:
@@ -369,7 +383,7 @@ Takes the argument as a string and converts it to uppercase.
 
 Example:
 ```
-[[ key "service/config/queue-name" | toUpper ]]
+[[ "queue-name" | toUpper ]]
 ```
 
 Render:
@@ -445,4 +459,63 @@ Example:
 Render:
 ```
 1
+```
+
+#### Access Variable Globally
+
+Example config file:
+```yaml
+my_i32: 1
+my_array:
+  - "a"
+  - "b"
+  - "c"
+my_nested:
+  my_data1: "lorempium"
+  my_data2: "faker"
+```
+
+Template:
+```
+[[ $.my_i32 ]]
+[[ range $c := $.my_array ]][[ $c ]]-[[ $.my_i32 ]],[[ end ]]
+```
+
+Render:
+```
+1
+a1,b1,c1,
+```
+
+#### Sprig Template
+More about Sprig here: [Sprig](https://masterminds.github.io/sprig/)
+
+#### Sprig Join String
+
+Template: 
+```
+[[ $.my_array | sprigJoin `-` ]]
+```
+
+Render:
+```
+a-b-c
+```
+
+#### Define variable
+
+Template:
+```
+[[ with $data := $.my_nested ]]
+ENV_x1=[[ $data.my_data1 ]]
+ENV_x2=[[ $data.my_data2 ]]
+[[ end ]] 
+```
+
+Render:
+```
+
+ENV_x1=lorempium
+ENV_x2=faker
+
 ```

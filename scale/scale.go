@@ -1,12 +1,10 @@
 package scale
 
 import (
+	"github.com/hashicorp/levant/client"
+	"github.com/hashicorp/levant/levant"
+	"github.com/hashicorp/levant/levant/structs"
 	nomad "github.com/hashicorp/nomad/api"
-	nomadStructs "github.com/hashicorp/nomad/nomad/structs"
-
-	"github.com/jrasell/levant/client"
-	"github.com/jrasell/levant/levant"
-	"github.com/jrasell/levant/levant/structs"
 	"github.com/rs/zerolog/log"
 )
 
@@ -47,12 +45,7 @@ func TriggerScalingEvent(config *Config) bool {
 	// Trigger a deployment of the updated job which results in the scaling of
 	// the job and will go through all the deployment tracking until an end
 	// state is reached.
-	success := levant.TriggerDeployment(deploymentConfig, nomadClient)
-	if !success {
-		return false
-	}
-
-	return true
+	return levant.TriggerDeployment(deploymentConfig, nomadClient)
 }
 
 // updateJob gathers information on the current state of the running job and
@@ -68,8 +61,8 @@ func updateJob(client *nomad.Client, config *Config) *nomad.Job {
 
 	// You can't scale a job that isn't running; or at least you shouldn't in
 	// my current opinion.
-	if *job.Status != nomadStructs.JobStatusRunning {
-		log.Error().Msgf("levant/scale: job is not in %s state", nomadStructs.JobStatusRunning)
+	if *job.Status != "running" {
+		log.Error().Msgf("levant/scale: job is not in running state")
 		return nil
 	}
 

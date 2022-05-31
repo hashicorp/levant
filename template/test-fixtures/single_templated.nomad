@@ -39,7 +39,7 @@ job "[[.job_name]]" {
         }
       }
       resources {
-        cpu    = 500
+        cpu    = [[.task_resource_cpu]]
         memory = 256
         network {
           mbits = 10

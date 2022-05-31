@@ -3,17 +3,16 @@ package levant
 import (
 	"fmt"
 
+	"github.com/hashicorp/levant/client"
+	"github.com/hashicorp/levant/levant/structs"
 	nomad "github.com/hashicorp/nomad/api"
-	nomadStructs "github.com/hashicorp/nomad/nomad/structs"
-	"github.com/jrasell/levant/client"
-	"github.com/jrasell/levant/levant/structs"
 	"github.com/rs/zerolog/log"
 )
 
-var (
-	diffTypeAdded  = string(nomadStructs.DiffTypeAdded)
-	diffTypeEdited = string(nomadStructs.DiffTypeEdited)
-	diffTypeNone   = string(nomadStructs.DiffTypeNone)
+const (
+	diffTypeAdded  = "Added"
+	diffTypeEdited = "Edited"
+	diffTypeNone   = "None"
 )
 
 type levantPlan struct {
@@ -58,7 +57,7 @@ func TriggerPlan(config *PlanConfig) (bool, bool) {
 	}
 
 	if !changes && lp.config.Plan.IgnoreNoChanges {
-		log.Info().Msg("levant/plan: no changes found in job but ignore-changes flag set to true")
+		log.Info().Msg("levant/plan: no changes found in job but ignore-no-changes flag set to true")
 	} else if !changes && !lp.config.Plan.IgnoreNoChanges {
 		log.Info().Msg("levant/plan: no changes found in job")
 		return false, changes
@@ -89,10 +88,10 @@ func (lp *levantPlan) plan() (bool, error) {
 		log.Info().Msg("levant/plan: job is a new addition to the cluster")
 		return true, nil
 
-		// If there are no changes, then log an error so the user can see this and
+		// If there are no changes, log the message so the user can see this and
 		// exit the deployment.
 	case diffTypeNone:
-		log.Error().Msg("levant/plan: no changes detected for job")
+		log.Info().Msg("levant/plan: no changes detected for job")
 		return false, nil
 
 		// If there are changes, run the planDiff function which is responsible for

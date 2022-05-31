@@ -1,8 +1,9 @@
 package levant
 
 import (
+	"github.com/hashicorp/levant/client"
+	"github.com/hashicorp/levant/levant/structs"
 	nomad "github.com/hashicorp/nomad/api"
-	"github.com/jrasell/levant/client"
 	"github.com/rs/zerolog/log"
 )
 
@@ -53,9 +54,14 @@ func (l *levantDeployment) dispatch(job string, metaMap map[string]string, paylo
 
 	// In order to correctly run the jobStatusChecker we need to correctly
 	// assign the dispatched job ID/Name based on the invoked job.
-	l.config.Template.Job = &nomad.Job{}
-	l.config.Template.Job.ID = &eval.DispatchedJobID
-	l.config.Template.Job.Name = &eval.DispatchedJobID
+	l.config = &DeployConfig{
+		Template: &structs.TemplateConfig{
+			Job: &nomad.Job{
+				ID:   &eval.DispatchedJobID,
+				Name: &eval.DispatchedJobID,
+			},
+		},
+	}
 
 	// Perform the evaluation inspection to ensure to check for any possible
 	// errors in triggering the dispatch job.

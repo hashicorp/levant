@@ -1,0 +1,17 @@
+---
+description: >
+  Ensure golangci-lint is installed.
+steps:
+  - run:
+      working_directory: ~/
+      name: Setup golangci-lint
+      command: |
+        # Install golangci-lint
+        curl -sSLO "https://github.com/golangci/golangci-lint/releases/download/v1.24.0/golangci-lint-1.24.0-linux-amd64.tar.gz"
+        tar -xzf "golangci-lint-1.24.0-linux-amd64.tar.gz"
+        sudo mv golangci-lint-1.24.0-linux-amd64/golangci-lint /usr/local/bin/golangci-lint
+        rm -f golangci-lint-1.24.0-linux-amd64.tar.gz
+        rm -rf golangci-lint-1.24.0-linux-amd64/
+        chmod +x /usr/local/bin/golangci-lint
+        echo "$ golangci-lint version"
+        golangci-lint version

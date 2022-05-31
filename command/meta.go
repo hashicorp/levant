@@ -5,7 +5,7 @@ import (
 	"flag"
 	"io"
 
-	"github.com/jrasell/levant/helper"
+	"github.com/hashicorp/levant/helper"
 	"github.com/mitchellh/cli"
 )
 
@@ -26,7 +26,7 @@ type Meta struct {
 	UI cli.Ui
 
 	// These are set by command-line flags
-	flagVars map[string]string
+	flagVars map[string]interface{}
 }
 
 // FlagSet returns a FlagSet with the common flags that every
