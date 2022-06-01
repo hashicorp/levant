@@ -198,7 +198,6 @@ jobs:
         arch: ["arm", "arm64", "386", "amd64"]
       fail-fast: true
     env:
-      repo: ${{ github.event.repository.name }}
       version: ${{ needs.get-product-version.outputs.product-version }}
 
     name: Docker ${{ matrix.arch }} default release build
@@ -219,8 +218,8 @@ jobs:
           target: release
           arch: ${{ matrix.arch }}
           tags: |
-            docker.io/hashicorp/${{ env.repo }}:${{ env.version }}
-            986891699432.dkr.ecr.us-east-1.amazonaws.com/hashicorp/${{ env.repo }}:${{ env.version }}
+            docker.io/hashicorp/${{ env.PKG_NAME }}:${{ env.version }}
+            986891699432.dkr.ecr.us-east-1.amazonaws.com/hashicorp/${{ env.PKG_NAME }}:${{ env.version }}
           dev_tags: |
-            docker.io/hashicorppreview/${{ env.repo }}:${{ env.version }}-dev
-            docker.io/hashicorppreview/${{ env.repo }}:${{ env.version }}-${{ github.sha }}
+            docker.io/hashicorppreview/${{ env.PKG_NAME }}:${{ env.version }}-dev
+            docker.io/hashicorppreview/${{ env.PKG_NAME }}:${{ env.version }}-${{ github.sha }}
