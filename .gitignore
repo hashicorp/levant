@@ -35,3 +35,6 @@ levant-local
 
 .idea
 vendor/*/.hg/*
+
+# assets download path when using bob CLI
+.bob

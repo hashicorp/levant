@@ -40,7 +40,7 @@ jobs:
         working_directory: ~/
     - checkout
     - run:
-        command: make lint
+        command: make check
     environment:
     - CIRCLECI_CLI_VERSION: 0.1.6772
     - GO_TAGS: ''
@@ -127,7 +127,7 @@ jobs:
         working_directory: ~/
     - checkout
     - run:
-        command: make build
+        command: make dev
     environment:
     - CIRCLECI_CLI_VERSION: 0.1.6772
     - GO_TAGS: ''
@@ -197,7 +197,7 @@ workflows:
 #         steps:
 #             - install-go
 #             - checkout
-#             - run: make build
+#             - run: make dev
 #     check-deps-go:
 #         executor: go
 #         steps:
@@ -210,7 +210,7 @@ workflows:
 #             - install-go
 #             - install-golangci-lint
 #             - checkout
-#             - run: make lint
+#             - run: make check
 #     test-go:
 #         executor: go
 #         steps:
