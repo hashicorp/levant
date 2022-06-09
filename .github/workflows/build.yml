@@ -55,10 +55,24 @@ jobs:
           name: metadata.json
           path: ${{ steps.generate-metadata-file.outputs.filepath }}
 
+  generate-ldflags:
+    needs: get-product-version
+    runs-on: ubuntu-20.04
+    outputs:
+      ldflags: ${{ steps.generate-ldflags.outputs.ldflags }}
+    steps:
+      - uses: actions/checkout@v2
+      - name: Generate ld flags
+        id: generate-ldflags
+        run: |
+          project="$(go list -m)"
+          echo "::set-output name=ldflags::"-X \'$project/version.GitDescribe=v${{ needs.get-product-version.outputs.product-version }}\'""
+
   build-linux:
     needs:
       - get-go-version
       - get-product-version
+      - generate-ldflags
     runs-on: ubuntu-20.04
     strategy:
       matrix:
@@ -78,6 +92,7 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
+          GO_LDFLAGS: ${{ needs.generate-ldflags.outputs.ldflags }}
         run: |
           make pkg/${{ matrix.goos }}_${{ matrix.goarch }}.zip
           mv \
@@ -121,6 +136,7 @@ jobs:
     needs:
       - get-go-version
       - get-product-version
+      - generate-ldflags
     runs-on: macos-11
     strategy:
       matrix:
@@ -140,6 +156,7 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
+          GO_LDFLAGS: ${{ needs.generate-ldflags.outputs.ldflags }}
         run: |
           make pkg/${{ matrix.goos }}_${{ matrix.goarch }}.zip
           mv \
@@ -155,6 +172,7 @@ jobs:
     needs:
       - get-go-version
       - get-product-version
+      - generate-ldflags
     runs-on: ubuntu-20.04
     strategy:
       matrix:
@@ -177,6 +195,7 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
+          GO_LDFLAGS: ${{ needs.generate-ldflags.outputs.ldflags }}
         run: |
           make pkg/${{ matrix.goos }}_${{ matrix.goarch }}.zip
           mv \
