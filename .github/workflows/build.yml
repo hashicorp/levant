@@ -238,7 +238,6 @@ jobs:
           arch: ${{ matrix.arch }}
           tags: |
             docker.io/hashicorp/${{ env.PKG_NAME }}:${{ env.version }}
-            986891699432.dkr.ecr.us-east-1.amazonaws.com/hashicorp/${{ env.PKG_NAME }}:${{ env.version }}
           dev_tags: |
             docker.io/hashicorppreview/${{ env.PKG_NAME }}:${{ env.version }}-dev
             docker.io/hashicorppreview/${{ env.PKG_NAME }}:${{ env.version }}-${{ github.sha }}
