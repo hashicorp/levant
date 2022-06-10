@@ -4,7 +4,7 @@ default: lint test build check-mod
 GIT_COMMIT := $(shell git rev-parse --short HEAD)
 GIT_DIRTY := $(if $(shell git status --porcelain),+CHANGES)
 
-GO_LDFLAGS := "-X github.com/hashicorp/levant/version.GitCommit=$(GIT_COMMIT)$(GIT_DIRTY)"
+GO_LDFLAGS := "$(GO_LDFLAGS) -X github.com/hashicorp/levant/version.GitCommit=$(GIT_COMMIT)$(GIT_DIRTY)"
 
 .PHONY: tools
 tools: ## Install the tools used to test and build
