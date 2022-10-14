@@ -155,16 +155,7 @@ func (l *levantDeployment) deploy() (success bool) {
 
 	switch *l.config.Template.Job.Type {
 	case nomad.JobTypeService:
-
-		// If the service job doesn't have an update stanza, the job will not use
-		// Nomad deployments.
-		if l.config.Template.Job.Update == nil {
-			log.Info().Msg("levant/deploy: job is not configured with update stanza, consider adding to use deployments")
-			return l.jobStatusChecker(&eval.EvalID)
-		}
-
 		log.Info().Msgf("levant/deploy: beginning deployment watcher for job")
-
 		// Get the deploymentID from the evaluationID so that we can watch the
 		// deployment for end status.
 		depID, err := l.getDeploymentID(eval.EvalID)
@@ -173,6 +164,12 @@ func (l *levantDeployment) deploy() (success bool) {
 			return
 		}
 
+		if depID == "" {
+			log.Info().Msgf("levant/deploy: no deploy ID found for evaluation %s", eval.EvalID)
+			return l.jobStatusChecker(&eval.EvalID)
+		}
+
+		log.Info().Msgf("levant/deploy: watching deployment %s for job", depID)
 		// Get the success of the deployment and return if we have success.
 		if success = l.deploymentWatcher(depID); success {
 			return
@@ -184,15 +181,17 @@ func (l *levantDeployment) deploy() (success bool) {
 			return
 		}
 
-		// If the job is not a canary job, then run the auto-revert checker, the
-		// current checking mechanism is slightly hacky and should be updated.
-		// The reason for this is currently the config.Job is populate from the
-		// rendered job and so a user could potentially not set canary meaning
-		// the field shows a null.
-		if l.config.Template.Job.Update.Canary == nil {
-			l.checkAutoRevert(dep)
-		} else if *l.config.Template.Job.Update.Canary == 0 {
-			l.checkAutoRevert(dep)
+		if l.config.Template.Job.Update != nil {
+			// If the job is not a canary job, then run the auto-revert checker, the
+			// current checking mechanism is slightly hacky and should be updated.
+			// The reason for this is currently the config.Job is populates from the
+			// rendered job and so a user could potentially not set canary meaning
+			// the field shows a null.
+			if l.config.Template.Job.Update.Canary == nil {
+				l.checkAutoRevert(dep)
+			} else if *l.config.Template.Job.Update.Canary == 0 {
+				l.checkAutoRevert(dep)
+			}
 		}
 
 	case nomad.JobTypeBatch:
