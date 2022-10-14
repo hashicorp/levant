@@ -135,6 +135,21 @@ func TestDeploy_canary(t *testing.T) {
 	})
 }
 
+func TestDeploy_failed_deploy_with_no_update(t *testing.T) {
+	acctest.Test(t, acctest.TestCase{
+		Steps: []acctest.TestStep{
+			{
+				Runner: acctest.DeployTestStepRunner{
+					FixtureName: "deploy_fail_with_no_update.nomad",
+				},
+				ExpectErr: true,
+				Check:     acctest.CheckDeploymentStatus("failed"),
+			},
+		},
+		CleanupFunc: acctest.CleanupPurgeJob,
+	})
+}
+
 func TestDeploy_lifecycle(t *testing.T) {
 	acctest.Test(t, acctest.TestCase{
 		Steps: []acctest.TestStep{
