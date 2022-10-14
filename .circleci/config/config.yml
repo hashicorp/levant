@@ -8,6 +8,6 @@ executors:
     environment:
       GO111MODULE: "on"
       CIRCLECI_CLI_VERSION: 0.1.6772
-      GO_VERSION: 1.17.3
+      GO_VERSION: 1.19.1
       GO_TAGS: ""
     working_directory: /go/src/github.com/hashicorp/levant
