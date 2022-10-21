@@ -1,3 +1,12 @@
+## UNRELEASED
+
+## 0.3.2 (October 20, 2022)
+
+IMPROVEMENTS:
+ * build: Now builds with go v1.19.1 [[GH-464](https://github.com/hashicorp/levant/pull/464)]
+ * deps: Updated Nomad dependency to v1.4.1. [[GH-464](https://github.com/hashicorp/levant/pull/464)]
+ * deps: Updated golang.org/x/text to v0.4.0 [[GH-465](https://github.com/hashicorp/levant/pull/465)]
+
 ## 0.3.1 (February 14, 2022)
 
 IMPROVEMENTS:
