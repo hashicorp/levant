@@ -11,7 +11,6 @@ project "levant" {
     repository   = "levant"
     release_branches = [
       "main",
-      "release/0.3.2",
     ]
   }
 }
