@@ -34,22 +34,21 @@ realtime feedback and detailed failure messages upon deployment issues.
 
 ## Download & Install
 
-- Levant can be installed via go toolkit using `go get github.com/hashicorp/levant && go install github.com/hashicorp/levant`
+- Official Levant binaries can be downloaded from the [HashiCorp releases site][releases-hashicorp].
 
-- The Levant binary can be downloaded from the [GitHub releases page][releases] using
-  `curl -L https://github.com/hashicorp/levant/releases/download/0.2.9/linux-amd64-levant -o levant`
-  if you are using a release prior to the migration to the HashiCorp organisation. Releases after
-  the migration can be found on the [HashiCorp releases site][releases-hashicorp].
+- Levant can be installed via the go toolkit using `go get github.com/hashicorp/levant && go install github.com/hashicorp/levant`
 
-- A docker image can be found on [Docker Hub][levant-docker], the latest version can be downloaded
+- A docker image can be found on [Docker Hub][levant-docker]. The latest version can be downloaded
   using `docker pull hashicorp/levant`.
 
 - Levant can be built from source by firstly cloning the repository `git clone git://github.com/hashicorp/levant.git`.
-  Once cloned, a binary can be built using the `make build` command which will be available at
+  Once cloned, a binary can be built using the `make dev` command which will be available at
   `./bin/levant`.
 
 - There is a [Levant Ansible role][levant-ansible] available to help installation on machines. Thanks
   to @stevenscg for this.
+
+- Pre-built binaries of Levant from versions 0.2.9 and earlier can be downloaded from the [GitHub releases page][releases] page. These binaries were released prior to the migration to the HashiCorp organization. For example: `curl -L https://github.com/hashicorp/levant/releases/download/0.2.9/linux-amd64-levant -o levant`
 
 ## Templating
 
