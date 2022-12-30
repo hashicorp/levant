@@ -31,7 +31,7 @@ func RenderJob(templateFile string, variableFiles []string, addr string, flagVar
 		return jobspec2.ParseWithConfig(&jobspec2.ParseConfig{
 			Path:    templateFile,
 			Body:    tpl.Bytes(),
-			AllowFS: false,
+			AllowFS: true,
 			Strict:  true,
 		})
 	}
