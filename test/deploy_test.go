@@ -1,9 +1,11 @@
 package test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/hashicorp/levant/test/acctest"
+	"github.com/hashicorp/nomad/api"
 )
 
 func TestDeploy_basic(t *testing.T) {
@@ -17,6 +19,35 @@ func TestDeploy_basic(t *testing.T) {
 			},
 		},
 		CleanupFunc: acctest.CleanupPurgeJob,
+	})
+}
+
+func TestDeploy_namespace(t *testing.T) {
+	acctest.Test(t, acctest.TestCase{
+		SetupFunc: func(s *acctest.TestState) error {
+			if _, err := s.Nomad.Namespaces().Register(&api.Namespace{Name: "test"}, nil); err != nil {
+				return fmt.Errorf("could not create test namespace: %w", err)
+			}
+			return nil
+		},
+		Steps: []acctest.TestStep{
+			{
+				Runner: acctest.DeployTestStepRunner{
+					FixtureName: "deploy_namespace.nomad",
+				},
+				Check: acctest.CheckDeploymentStatus("successful"),
+			},
+		},
+		CleanupFunc: func(s *acctest.TestState) error {
+			if err := acctest.CleanupPurgeJob(s); err != nil {
+				return err
+			}
+
+			if _, err := s.Nomad.Namespaces().Delete("test", nil); err != nil {
+				return fmt.Errorf("could not delete namespace test: %w", err)
+			}
+			return nil
+		},
 	})
 }
 
