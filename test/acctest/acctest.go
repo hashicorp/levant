@@ -12,6 +12,9 @@ type TestCase struct {
 	// Steps are ran in order stopping on failure
 	Steps []TestStep
 
+	// SetupFunc is called at before the steps
+	SetupFunc TestStateFunc
+
 	// CleanupFunc is called at the end of the TestCase
 	CleanupFunc TestStateFunc
 }
@@ -42,8 +45,9 @@ type TestStateFunc func(*TestState) error
 
 // TestState is the configuration for the TestCase
 type TestState struct {
-	JobName string
-	Nomad   *nomad.Client
+	JobName   string
+	Namespace string
+	Nomad     *nomad.Client
 }
 
 // Test executes a single TestCase
@@ -60,6 +64,12 @@ func Test(t *testing.T, c TestCase) {
 	state := &TestState{
 		JobName: fmt.Sprintf("levant-%s", t.Name()),
 		Nomad:   nomad,
+	}
+
+	if c.SetupFunc != nil {
+		if err := c.SetupFunc(state); err != nil {
+			t.Errorf("setup failed: %s", err)
+		}
 	}
 
 	for i, step := range c.Steps {
@@ -102,7 +112,7 @@ func Test(t *testing.T, c TestCase) {
 
 // CleanupPurgeJob is a cleanup func to purge the TestCase job from Nomad
 func CleanupPurgeJob(s *TestState) error {
-	_, _, err := s.Nomad.Jobs().Deregister(s.JobName, true, nil)
+	_, _, err := s.Nomad.Jobs().Deregister(s.JobName, true, &nomad.WriteOptions{Namespace: s.Namespace})
 	return err
 }
 
@@ -110,7 +120,7 @@ func CleanupPurgeJob(s *TestState) error {
 // the TestCase job matches the desired status
 func CheckDeploymentStatus(status string) TestStateFunc {
 	return func(s *TestState) error {
-		deploy, _, err := s.Nomad.Jobs().LatestDeployment(s.JobName, nil)
+		deploy, _, err := s.Nomad.Jobs().LatestDeployment(s.JobName, &nomad.QueryOptions{Namespace: s.Namespace})
 		if err != nil {
 			return err
 		}
