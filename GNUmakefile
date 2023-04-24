@@ -1,5 +1,5 @@
 SHELL = bash
-default: lint test build check-mod
+default: lint test check-mod dev
 
 GIT_COMMIT := $(shell git rev-parse --short HEAD)
 GIT_DIRTY := $(if $(shell git status --porcelain),+CHANGES)
