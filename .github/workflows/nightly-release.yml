@@ -56,7 +56,7 @@ jobs:
       # If a release with this name already exists, it will overwrite the existing data
       - name: Create a nightly GitHub prerelease
         id: create_prerelease
-        uses: ncipollo/release-action@v1 # TSCCR: no entry for repository "ncipollo/release-action"
+        uses: ncipollo/release-action@a2e71bdd4e7dab70ca26a852f29600c98b33153e # v1.12.0
         with:
           name: nightly
           artifacts: "${{ env.BUILD_OUTPUT_LIST }}"
@@ -68,7 +68,7 @@ jobs:
           draft: false
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish nightly GitHub prerelease
-        uses: eregon/publish-release@v1 # TSCCR: no entry for repository "eregon/publish-release"
+        uses: eregon/publish-release@46913fa2b3f7edc7345ae3c17f6d1b093a54916d # v1.0.5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:

@@ -45,7 +45,7 @@ jobs:
         echo "$ golangci-lint version"
         golangci-lint version
       working-directory: "~/"
-    - uses: actions/checkout@v3.5.0
+    - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
     - run: make check
   check-deps-go:
     defaults:
@@ -76,7 +76,7 @@ jobs:
         echo "$ go version"
         go version
       working-directory: "~/"
-    - uses: actions/checkout@v3.5.0
+    - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
     - run: make check-mod
   test-go:
     defaults:
@@ -107,7 +107,7 @@ jobs:
         echo "$ go version"
         go version
       working-directory: "~/"
-    - uses: actions/checkout@v3.5.0
+    - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
     - run: make test
   build-go:
     defaults:
@@ -138,5 +138,5 @@ jobs:
         echo "$ go version"
         go version
       working-directory: "~/"
-    - uses: actions/checkout@v3.5.0
+    - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
     - run: make dev
