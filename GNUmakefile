@@ -21,12 +21,17 @@ pkg/%/levant: ## Build Levant for GOOS_GOARCH, e.g. pkg/linux_amd64/levant
 	@CGO_ENABLED=0 \
 		GOOS=$(firstword $(subst _, ,$*)) \
 		GOARCH=$(lastword $(subst _, ,$*)) \
-		go build -trimpath -ldflags $(GO_LDFLAGS) -tags "$(GO_TAGS)" -o $(GO_OUT)
+		go build -trimpath -ldflags $(GO_LDFLAGS) -tags "$(GO_TAGS)" -o "$(GO_OUT)"
 
 .PRECIOUS: pkg/%/levant
 pkg/%.zip: pkg/%/levant ## Build and zip Levant for GOOS_GOARCH, e.g. pkg/linux_amd64.zip
 	@echo "==> Packaging for $@..."
 	zip -j $@ $(dir $<)*
+
+.PHONY: crt
+crt:
+	@CGO_ENABLED=0 go build -trimpath -ldflags $(GO_LDFLAGS) -tags "$(GO_TAGS)" -o "$(BIN_PATH)"
+
 
 .PHONY: dev
 dev: check ## Build for the current development version

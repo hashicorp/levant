@@ -77,46 +77,14 @@ jobs:
       - build-artifacts
       - github-release
     if: always() && (needs.build-artifacts.result == 'failure' || needs.github-release.result == 'failure')
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
-      - name: Send slack notification on failure
-        uses: slackapi/slack-github-action@007b2c3c751a190b6f0f040e47ed024deaa72844 # v1.23.0
+      - name: Notify Slack on failed Backport PRs
+        uses: hashicorp/actions-slack-status@v1
         with:
-          payload: |
-            {
-              "text": ":x::moon::nomad-sob: Levant Nightly Release *FAILED*",
-              "attachments": [
-                {
-                  "color": "#C41E3A",
-                  "blocks": [
-                    {
-                      "type": "section",
-                      "fields": [
-                        {
-                          "type": "mrkdwn",
-                          "text": "*Branch:*\n`${{ github.ref_name }}`"
-                        },
-                        {
-                          "type": "mrkdwn",
-                          "text": "*Ref:*\n${{ github.sha }}"
-                        }
-                      ]
-                    },
-                    {
-                      "type": "section",
-                      "fields": [
-                        {
-                          "type": "mrkdwn",
-                          "text": "*Workflow:*\n${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                        }
-                      ]
-                    }
-                  ]
-                }
-              ]
-            }
-        env:
-          # the slack webhook url links to #feed-nomad-releases
+          failure-message: |-
+            :x::moon::nomad-sob: Levant Nightly Release *FAILED* on
+          status: failure
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
 permissions:
