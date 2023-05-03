@@ -1,144 +1,52 @@
-name: hashicorp/levant/ci
+name: ci
 on:
   push:
-    branches:
-      - main
 jobs:
   lint-go:
-    defaults:
-      run:
-        working-directory: "/go/src/github.com/hashicorp/levant"
-        #       # This item was not transformed because there is no suitable equivalent in GitHub Actions
-        #       run:
-        #         shell: "/usr/bin/env bash -euo pipefail -c"
     runs-on: ubuntu-latest
     env:
-      CIRCLECI_CLI_VERSION: 0.1.6772
       GO_TAGS: ''
-      GO_VERSION: 1.20.3
       GO111MODULE: 'on'
     steps:
-      - name: Setup Go
-        run: |-
-          [ -n "$GO_VERSION" ] || { echo "You must set GO_VERSION"; exit 1; }
-          # Install Go
-          curl -sSLO "https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz"
-          sudo rm -rf /usr/local/go
-          sudo tar -C /usr/local -xzf "go${GO_VERSION}.linux-amd64.tar.gz"
-          rm -f "go${GO_VERSION}.linux-amd64.tar.gz"
-          GOPATH="/go"
-          mkdir $GOPATH 2>/dev/null || { sudo mkdir $GOPATH && sudo chmod 777 $GOPATH; }
-          echo "export GOPATH='$GOPATH'" >> "$BASH_ENV"
-          echo "export PATH='$PATH:$GOPATH/bin:/usr/local/go/bin'" >> "$BASH_ENV"
-          echo "$ go version"
-          go version
-        working-directory: "~/"
+      - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+      - uses: actions/setup-go@4d34df0c2316fe8122ab82dc22947d607c0c91f9 # v4.0.0
+        with:
+          go-version-file: ".go-version"
       - name: Setup golangci-lint
         run: |-
-          # Install golangci-lint
-          curl -sSLO "https://github.com/golangci/golangci-lint/releases/download/v1.51.2/golangci-lint-1.51.2-linux-amd64.tar.gz"
-          tar -xzf "golangci-lint-1.51.2-linux-amd64.tar.gz"
-          sudo mv golangci-lint-1.51.2-linux-amd64/golangci-lint /usr/local/bin/golangci-lint
-          rm -f golangci-lint-1.51.2-linux-amd64.tar.gz
-          rm -rf golangci-lint-1.51.2-linux-amd64/
-          chmod +x /usr/local/bin/golangci-lint
-          echo "$ golangci-lint version"
-          golangci-lint version
-        working-directory: "~/"
-      - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+          download=https://raw.githubusercontent.com/golangci/golangci-lint/9a8a056e9fe49c0e9ed2287aedce1022c79a115b/install.sh  # v1.52.2
+          curl -sSf "$download" | sh -s v1.51.2
+          ./bin/golangci-lint version
       - run: make check
   check-deps-go:
-    defaults:
-      run:
-        working-directory: "/go/src/github.com/hashicorp/levant"
-        #       # This item was not transformed because there is no suitable equivalent in GitHub Actions
-        #       run:
-        #         shell: "/usr/bin/env bash -euo pipefail -c"
     runs-on: ubuntu-latest
-    env:
-      CIRCLECI_CLI_VERSION: 0.1.6772
-      GO_TAGS: ''
-      GO_VERSION: 1.20.3
-      GO111MODULE: 'on'
     steps:
-      - name: Setup Go
-        run: |-
-          [ -n "$GO_VERSION" ] || { echo "You must set GO_VERSION"; exit 1; }
-          # Install Go
-          curl -sSLO "https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz"
-          sudo rm -rf /usr/local/go
-          sudo tar -C /usr/local -xzf "go${GO_VERSION}.linux-amd64.tar.gz"
-          rm -f "go${GO_VERSION}.linux-amd64.tar.gz"
-          GOPATH="/go"
-          mkdir $GOPATH 2>/dev/null || { sudo mkdir $GOPATH && sudo chmod 777 $GOPATH; }
-          echo "export GOPATH='$GOPATH'" >> "$BASH_ENV"
-          echo "export PATH='$PATH:$GOPATH/bin:/usr/local/go/bin'" >> "$BASH_ENV"
-          echo "$ go version"
-          go version
-        working-directory: "~/"
       - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+      - uses: actions/setup-go@4d34df0c2316fe8122ab82dc22947d607c0c91f9 # v4.0.0
+        with:
+          go-version-file: ".go-version"
       - run: make check-mod
   test-go:
-    defaults:
-      run:
-        working-directory: "/go/src/github.com/hashicorp/levant"
-        #       # This item was not transformed because there is no suitable equivalent in GitHub Actions
-        #       run:
-        #         shell: "/usr/bin/env bash -euo pipefail -c"
     runs-on: ubuntu-latest
     env:
-      CIRCLECI_CLI_VERSION: 0.1.6772
       GO_TAGS: ''
-      GO_VERSION: 1.20.3
       GO111MODULE: 'on'
     steps:
-      - name: Setup Go
-        run: |-
-          [ -n "$GO_VERSION" ] || { echo "You must set GO_VERSION"; exit 1; }
-          # Install Go
-          curl -sSLO "https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz"
-          sudo rm -rf /usr/local/go
-          sudo tar -C /usr/local -xzf "go${GO_VERSION}.linux-amd64.tar.gz"
-          rm -f "go${GO_VERSION}.linux-amd64.tar.gz"
-          GOPATH="/go"
-          mkdir $GOPATH 2>/dev/null || { sudo mkdir $GOPATH && sudo chmod 777 $GOPATH; }
-          echo "export GOPATH='$GOPATH'" >> "$BASH_ENV"
-          echo "export PATH='$PATH:$GOPATH/bin:/usr/local/go/bin'" >> "$BASH_ENV"
-          echo "$ go version"
-          go version
-        working-directory: "~/"
       - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+      - uses: actions/setup-go@4d34df0c2316fe8122ab82dc22947d607c0c91f9 # v4.0.0
+        with:
+          go-version-file: ".go-version"
       - run: make test
   build-go:
-    defaults:
-      run:
-        working-directory: "/go/src/github.com/hashicorp/levant"
-        #       # This item was not transformed because there is no suitable equivalent in GitHub Actions
-        #       run:
-        #         shell: "/usr/bin/env bash -euo pipefail -c"
     runs-on: ubuntu-latest
     env:
-      CIRCLECI_CLI_VERSION: 0.1.6772
       GO_TAGS: ''
-      GO_VERSION: 1.20.3
       GO111MODULE: 'on'
     steps:
-      - name: Setup Go
-        run: |-
-          [ -n "$GO_VERSION" ] || { echo "You must set GO_VERSION"; exit 1; }
-          # Install Go
-          curl -sSLO "https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz"
-          sudo rm -rf /usr/local/go
-          sudo tar -C /usr/local -xzf "go${GO_VERSION}.linux-amd64.tar.gz"
-          rm -f "go${GO_VERSION}.linux-amd64.tar.gz"
-          GOPATH="/go"
-          mkdir $GOPATH 2>/dev/null || { sudo mkdir $GOPATH && sudo chmod 777 $GOPATH; }
-          echo "export GOPATH='$GOPATH'" >> "$BASH_ENV"
-          echo "export PATH='$PATH:$GOPATH/bin:/usr/local/go/bin'" >> "$BASH_ENV"
-          echo "$ go version"
-          go version
-        working-directory: "~/"
       - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+      - uses: actions/setup-go@4d34df0c2316fe8122ab82dc22947d607c0c91f9 # v4.0.0
+        with:
+          go-version-file: ".go-version"
       - run: make dev
 permissions:
   contents: read
