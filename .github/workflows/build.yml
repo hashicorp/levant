@@ -1,13 +1,10 @@
 name: build
-
 on:
   push:
   workflow_dispatch:
   workflow_call:
-
 env:
   PKG_NAME: "levant"
-
 jobs:
   get-go-version:
     name: "Determine Go toolchain version"
@@ -21,7 +18,6 @@ jobs:
         run: |
           echo "Building with Go $(cat .go-version)"
           echo "::set-output name=go-version::$(cat .go-version)"
-
   get-product-version:
     runs-on: ubuntu-20.04
     outputs:
@@ -33,7 +29,6 @@ jobs:
         run: |
           make version
           echo "::set-output name=product-version::$(make version)"
-
   generate-metadata-file:
     needs: get-product-version
     runs-on: ubuntu-20.04
@@ -54,7 +49,6 @@ jobs:
         with:
           name: metadata.json
           path: ${{ steps.generate-metadata-file.outputs.filepath }}
-
   generate-ldflags:
     needs: get-product-version
     runs-on: ubuntu-20.04
@@ -67,7 +61,6 @@ jobs:
         run: |
           project="$(go list -m)"
           echo "::set-output name=ldflags::"-X \'$project/version.GitDescribe=v${{ needs.get-product-version.outputs.product-version }}\'""
-
   build-linux:
     needs:
       - get-go-version
@@ -79,9 +72,7 @@ jobs:
         goos: ["linux"]
         goarch: ["386", "amd64", "arm", "arm64"]
       fail-fast: true
-
     name: Go ${{ needs.get-go-version.outputs.go-version }} ${{ matrix.goos }} ${{ matrix.goarch }} build
-
     steps:
       - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
       - name: Setup go
@@ -131,7 +122,6 @@ jobs:
         with:
           name: ${{ env.DEB_PACKAGE }}
           path: out/${{ env.DEB_PACKAGE }}
-
   build-darwin:
     needs:
       - get-go-version
@@ -143,9 +133,7 @@ jobs:
         goos: ["darwin"]
         goarch: ["amd64", "arm64"]
       fail-fast: true
-
     name: Go ${{ needs.get-go-version.outputs.go-version }} ${{ matrix.goos }} ${{ matrix.goarch }} build
-
     steps:
       - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
       - name: Setup go
@@ -167,7 +155,6 @@ jobs:
         with:
           name: ${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
           path: ${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
-
   build-other:
     needs:
       - get-go-version
@@ -182,9 +169,7 @@ jobs:
           - goos: "windows"
             goarch: "arm"
       fail-fast: true
-
     name: Go ${{ needs.get-go-version.outputs.go-version }} ${{ matrix.goos }} ${{ matrix.goarch }} build
-
     steps:
       - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
       - name: Setup go
@@ -206,7 +191,6 @@ jobs:
         with:
           name: ${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
           path: ${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip
-
   build-docker-default:
     needs:
       - get-product-version
@@ -218,9 +202,7 @@ jobs:
       fail-fast: true
     env:
       version: ${{ needs.get-product-version.outputs.product-version }}
-
     name: Docker ${{ matrix.arch }} default release build
-
     steps:
       - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
       - name: Docker Build (Action)
@@ -241,3 +223,5 @@ jobs:
           dev_tags: |
             docker.io/hashicorppreview/${{ env.PKG_NAME }}:${{ env.version }}-dev
             docker.io/hashicorppreview/${{ env.PKG_NAME }}:${{ env.version }}-${{ github.sha }}
+permissions:
+  contents: read

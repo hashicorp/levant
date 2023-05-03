@@ -4,13 +4,11 @@
 # notarized.
 # Failures are reported to slack.
 name: Nightly Release
-
 on:
   schedule:
     # Runs against the default branch every day overnight
     - cron: "18 3 * * *"
   workflow_dispatch:
-
 jobs:
   # Build a fresh set of artifacts
   build-artifacts:
@@ -121,3 +119,5 @@ jobs:
           # the slack webhook url links to #feed-nomad-releases
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+permissions:
+  contents: read
