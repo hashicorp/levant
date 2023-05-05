@@ -2,6 +2,7 @@
 name: Lint GitHub Actions Workflows
 on:
   pull_request:
+  push:
 permissions:
   contents: read
 jobs:

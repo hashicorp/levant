@@ -1,8 +1,8 @@
 name: build
 on:
-  push:
-  workflow_dispatch:
-  workflow_call:
+  #push:
+  #workflow_dispatch:
+  #workflow_call:
 env:
   PKG_NAME: "levant"
 jobs:
@@ -84,7 +84,7 @@ jobs:
         with:
           go-version-file: ".go-version"
       - name: Determine artifact basename
-        run: echo "ARTIFACT_BASENAME=${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip" >> $GITHUB_ENV
+        run: echo "ARTIFACT_BASENAME=\"${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip\"" >> $GITHUB_ENV
       - name: Build Levant
         env:
           GOOS: ${{ matrix.goos }}
@@ -115,19 +115,19 @@ jobs:
           binary: out/${{ env.ARTIFACT_BASENAME }}
           deb_depends: "openssl"
           rpm_depends: "openssl"
-      - if: ${{ inputs.goos == 'linux' }}
+      - if: ${{ matrix.goos == 'linux' }}
         name: Determine package file names
         run: |
           echo "RPM_PACKAGE=$(basename pkg/*.rpm)" >> $GITHUB_ENV
           echo "DEB_PACKAGE=$(basename pkg/*.deb)" >> $GITHUB_ENV
-      - if: ${{ inputs.goos == 'linux' }}
-        uses: actions/upload-artifact@v3
+      - if: ${{ matrix.goos == 'linux' }}
+        uses: actions/upload-artifact@v0b7f8abb1508181956e8e162db84b466c27e18ce # v3.1.2
         with:
           name: ${{ env.RPM_PACKAGE }}
           path: pkg/${{ env.RPM_PACKAGE }}
           if-no-files-found: error
-      - if: ${{ inputs.goos == 'linux' }}
-        uses: actions/upload-artifact@v3
+      - if: ${{ matrix.goos == 'linux' }}
+        uses: actions/upload-artifact@v0b7f8abb1508181956e8e162db84b466c27e18ce # v3.1.2
         with:
           name: ${{ env.DEB_PACKAGE }}
           path: pkg/${{ env.DEB_PACKAGE }}
