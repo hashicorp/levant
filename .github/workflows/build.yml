@@ -118,19 +118,19 @@ jobs:
       - if: ${{ matrix.goos == 'linux' }}
         name: Determine package file names
         run: |
-          echo "RPM_PACKAGE=$(basename pkg/*.rpm)" >> "$GITHUB_ENV"
-          echo "DEB_PACKAGE=$(basename pkg/*.deb)" >> "$GITHUB_ENV"
+          echo "RPM_PACKAGE=$(basename out/*.rpm)" >> "$GITHUB_ENV"
+          echo "DEB_PACKAGE=$(basename out/*.deb)" >> "$GITHUB_ENV"
       - if: ${{ matrix.goos == 'linux' }}
         uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce # v3.1.2
         with:
           name: ${{ env.RPM_PACKAGE }}
-          path: pkg/${{ env.RPM_PACKAGE }}
+          path: out/${{ env.RPM_PACKAGE }}
           if-no-files-found: error
       - if: ${{ matrix.goos == 'linux' }}
         uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce # v3.1.2
         with:
           name: ${{ env.DEB_PACKAGE }}
-          path: pkg/${{ env.DEB_PACKAGE }}
+          path: out/${{ env.DEB_PACKAGE }}
           if-no-files-found: error
   build-docker-default:
     needs:
