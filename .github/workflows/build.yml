@@ -84,7 +84,7 @@ jobs:
         with:
           go-version-file: ".go-version"
       - name: Determine artifact basename
-        run: echo "ARTIFACT_BASENAME=\"${{ env.PKG_NAME }}\"_\"${{ needs.get-product-version.outputs.product-version }}\"_\"${{ matrix.goos }}\"_\"${{ matrix.goarch }}\".zip" >> $GITHUB_ENV
+        run: echo "ARTIFACT_BASENAME="${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip"" >> $GITHUB_ENV
       - name: Build Levant
         env:
           GOOS: ${{ matrix.goos }}
