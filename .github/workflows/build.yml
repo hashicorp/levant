@@ -1,8 +1,8 @@
 name: build
 on:
-  #push:
-  #workflow_dispatch:
-  #workflow_call:
+  push:
+  workflow_dispatch:
+  workflow_call:
 env:
   PKG_NAME: "levant"
 jobs:

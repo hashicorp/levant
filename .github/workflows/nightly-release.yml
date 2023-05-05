@@ -12,7 +12,7 @@ on:
 jobs:
   # Build a fresh set of artifacts
   build-artifacts:
-    uses: ./.github/workflows/build.yml
+    uses: .github/workflows/build.yml
   github-release:
     needs: build-artifacts
     runs-on: ubuntu-20.04
