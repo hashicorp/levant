@@ -85,6 +85,6 @@ jobs:
           failure-message: |-
             :x::moon::nomad-sob: Levant Nightly Release *FAILED* on
           status: failure
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
 permissions:
   contents: read
