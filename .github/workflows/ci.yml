@@ -1,0 +1,52 @@
+name: ci
+on:
+  push:
+jobs:
+  lint-go:
+    runs-on: ubuntu-latest
+    env:
+      GO_TAGS: ''
+      GO111MODULE: 'on'
+    steps:
+      - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+      - uses: actions/setup-go@4d34df0c2316fe8122ab82dc22947d607c0c91f9 # v4.0.0
+        with:
+          go-version-file: ".go-version"
+      - name: Setup golangci-lint
+        run: |-
+          download=https://raw.githubusercontent.com/golangci/golangci-lint/9a8a056e9fe49c0e9ed2287aedce1022c79a115b/install.sh  # v1.52.2
+          curl -sSf "$download" | sh -s v1.51.2
+          ./bin/golangci-lint version
+      - run: make check
+  check-deps-go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+      - uses: actions/setup-go@4d34df0c2316fe8122ab82dc22947d607c0c91f9 # v4.0.0
+        with:
+          go-version-file: ".go-version"
+      - run: make check-mod
+  test-go:
+    runs-on: ubuntu-latest
+    env:
+      GO_TAGS: ''
+      GO111MODULE: 'on'
+    steps:
+      - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+      - uses: actions/setup-go@4d34df0c2316fe8122ab82dc22947d607c0c91f9 # v4.0.0
+        with:
+          go-version-file: ".go-version"
+      - run: make test
+  build-go:
+    runs-on: ubuntu-latest
+    env:
+      GO_TAGS: ''
+      GO111MODULE: 'on'
+    steps:
+      - uses: actions/checkout@8e5e7e5ab8b370d6c329ec480221332ada57f0ab # v3.5.2
+      - uses: actions/setup-go@4d34df0c2316fe8122ab82dc22947d607c0c91f9 # v4.0.0
+        with:
+          go-version-file: ".go-version"
+      - run: make dev
+permissions:
+  contents: read
