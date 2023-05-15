@@ -1,3 +1,6 @@
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
 job "periodic_batch_test" {
   datacenters = ["dc1"]
   region      = "global"
