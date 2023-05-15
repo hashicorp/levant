@@ -1,2 +1,5 @@
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
 job_name: levantExample
 task_resource_cpu: 1313

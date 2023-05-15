@@ -1,3 +1,6 @@
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
 # tests driver error with an invalid docker image tag
 
 job "[[.job_name]]" {
