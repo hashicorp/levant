@@ -23,8 +23,9 @@ const (
 // levantDeployment is the all deployment related objects for this Levant
 // deployment invocation.
 type levantDeployment struct {
-	nomad  *nomad.Client
-	config *DeployConfig
+	nomad   *nomad.Client
+	config  *DeployConfig
+	options *nomad.WriteOptions
 }
 
 // DeployConfig is the set of config structs required to run a Levant deploy.
@@ -46,6 +47,7 @@ func newLevantDeployment(config *DeployConfig, nomadClient *nomad.Client) (*leva
 
 	dep := &levantDeployment{}
 	dep.config = config
+	dep.options = setWriteOptions(dep.config.Template)
 
 	if nomadClient == nil {
 		dep.nomad, err = client.NewNomadClient(config.Client.Addr)
@@ -94,7 +96,7 @@ func TriggerDeployment(config *DeployConfig, nomadClient *nomad.Client) bool {
 func (l *levantDeployment) preDeployValidate() (success bool) {
 
 	// Validate the job to check it is syntactically correct.
-	if _, _, err := l.nomad.Jobs().Validate(l.config.Template.Job, nil); err != nil {
+	if _, _, err := l.nomad.Jobs().Validate(l.config.Template.Job, l.options); err != nil {
 		log.Error().Err(err).Msg("levant/deploy: job validation failed")
 		return
 	}
@@ -123,7 +125,7 @@ func (l *levantDeployment) deploy() (success bool) {
 
 	l.config.Template.Job.VaultToken = &l.config.Deploy.VaultToken
 
-	eval, _, err := l.nomad.Jobs().Register(l.config.Template.Job, nil)
+	eval, _, err := l.nomad.Jobs().Register(l.config.Template.Job, l.options)
 	if err != nil {
 		log.Error().Err(err).Msg("levant/deploy: unable to register job with Nomad")
 		return
@@ -181,7 +183,7 @@ func (l *levantDeployment) deploy() (success bool) {
 			return
 		}
 
-		dep, _, err := l.nomad.Deployments().Info(depID, nil)
+		dep, _, err := l.nomad.Deployments().Info(depID, setQueryOptions(l.options))
 		if err != nil {
 			log.Error().Err(err).Msgf("levant/deploy: unable to query deployment %s for auto-revert check", depID)
 			return
