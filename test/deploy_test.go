@@ -23,6 +23,30 @@ func TestDeploy_basic(t *testing.T) {
 	})
 }
 
+func TestDeploy_autorevert_namespaced_job(t *testing.T) {
+	acctest.Test(t, acctest.TestCase{
+		SetupFunc: acctest.SetupTestNamespace("test"),
+		Steps: []acctest.TestStep{
+			{
+				Runner: acctest.DeployTestStepRunner{
+					FixtureName: "deploy_autorevert.nomad",
+					Vars:        map[string]interface{}{"to": "1234"},
+				},
+				Check: acctest.CheckDeploymentStatus("successful"),
+			},
+			{
+				Runner: acctest.DeployTestStepRunner{
+					FixtureName: "deploy_autorevert.nomad",
+					Vars:        map[string]interface{}{"to": "9999"},
+				},
+				ExpectErr: true,
+				Check:     acctest.CheckDeploymentStatus("successful"),
+			},
+		},
+		CleanupFunc: acctest.CleanupPurgeJobAndNamespace,
+	})
+}
+
 func TestDeploy_driverError(t *testing.T) {
 	acctest.Test(t, acctest.TestCase{
 		Steps: []acctest.TestStep{

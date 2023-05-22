@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/hashicorp/go-multierror"
 	nomad "github.com/hashicorp/nomad/api"
 )
 
@@ -14,6 +15,9 @@ import (
 type TestCase struct {
 	// Steps are ran in order stopping on failure
 	Steps []TestStep
+
+	// SetupFunc is called at before the steps
+	SetupFunc TestStateFunc
 
 	// CleanupFunc is called at the end of the TestCase
 	CleanupFunc TestStateFunc
@@ -45,8 +49,9 @@ type TestStateFunc func(*TestState) error
 
 // TestState is the configuration for the TestCase
 type TestState struct {
-	JobName string
-	Nomad   *nomad.Client
+	JobName   string
+	Namespace string
+	Nomad     *nomad.Client
 }
 
 // Test executes a single TestCase
@@ -63,6 +68,21 @@ func Test(t *testing.T, c TestCase) {
 	state := &TestState{
 		JobName: fmt.Sprintf("levant-%s", t.Name()),
 		Nomad:   nomad,
+	}
+
+	if c.CleanupFunc != nil {
+		t.Cleanup(func() {
+			err = c.CleanupFunc(state)
+			if err != nil {
+				t.Errorf("cleanup failed: %s", err)
+			}
+		})
+	}
+
+	if c.SetupFunc != nil {
+		if err := c.SetupFunc(state); err != nil {
+			t.Errorf("setup failed: %s", err)
+		}
 	}
 
 	for i, step := range c.Steps {
@@ -95,27 +115,53 @@ func Test(t *testing.T, c TestCase) {
 		}
 	}
 
-	if c.CleanupFunc != nil {
-		err = c.CleanupFunc(state)
-		if err != nil {
-			t.Errorf("cleanup failed: %s", err)
-		}
-	}
 }
 
 // CleanupPurgeJob is a cleanup func to purge the TestCase job from Nomad
 func CleanupPurgeJob(s *TestState) error {
-	_, _, err := s.Nomad.Jobs().Deregister(s.JobName, true, nil)
+	_, _, err := s.Nomad.Jobs().Deregister(s.JobName, true, &nomad.WriteOptions{Namespace: s.Namespace})
 	return err
+}
+
+// CleanupPurgeJobAndNamespace is a cleanup func to purge the TestCase job and
+// test namespace from Nomad
+func CleanupPurgeJobAndNamespace(s *TestState) error {
+	var mErr error
+	if _, _, err := s.Nomad.Jobs().Deregister(s.JobName, true, &nomad.WriteOptions{Namespace: s.Namespace}); err != nil {
+		mErr = multierror.Append(mErr, err)
+	}
+	if _, err := s.Nomad.Namespaces().Delete(s.Namespace, nil); err != nil {
+		mErr = multierror.Append(mErr, err)
+	}
+	return mErr
+}
+
+func SetupTestNamespace(ns string) func(s *TestState) error {
+	return func(s *TestState) error {
+		_, err := s.Nomad.Namespaces().Register(
+			&nomad.Namespace{
+				Name:        ns,
+				Description: "Levant acceptance testing namespace",
+			}, nil)
+		if err != nil {
+			return err
+		}
+		s.Namespace = ns
+		return nil
+	}
 }
 
 // CheckDeploymentStatus is a TestStateFunc to check if the latest deployment of
 // the TestCase job matches the desired status
 func CheckDeploymentStatus(status string) TestStateFunc {
 	return func(s *TestState) error {
-		deploy, _, err := s.Nomad.Jobs().LatestDeployment(s.JobName, nil)
+		deploy, _, err := s.Nomad.Jobs().LatestDeployment(s.JobName, &nomad.QueryOptions{Namespace: s.Namespace})
 		if err != nil {
 			return err
+		}
+
+		if deploy == nil {
+			return fmt.Errorf("no deployment found for job %s", s.JobName)
 		}
 
 		if deploy.Status != status {
