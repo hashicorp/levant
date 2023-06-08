@@ -1,8 +1,11 @@
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
 # tests a canary deployment
 
 job "[[.job_name]]" {
   datacenters = ["dc1"]
-  type = "service"
+  type        = "service"
   update {
     max_parallel     = 1
     min_healthy_time = "2s"
@@ -16,8 +19,8 @@ job "[[.job_name]]" {
     restart {
       attempts = 10
       interval = "5m"
-      delay = "25s"
-      mode = "delay"
+      delay    = "25s"
+      mode     = "delay"
     }
     ephemeral_disk {
       size = 300
@@ -25,11 +28,9 @@ job "[[.job_name]]" {
     task "alpine" {
       driver = "docker"
       config {
-        image = "alpine"
+        image   = "alpine"
         command = "tail"
-        args = [
-          "-f", "/dev/null"
-        ]
+        args    = ["-f", "/dev/null"]
       }
       env {
         version = "[[ .env_version ]]"
@@ -37,9 +38,6 @@ job "[[.job_name]]" {
       resources {
         cpu    = 100
         memory = 128
-        network {
-          mbits = 10
-        }
       }
     }
   }

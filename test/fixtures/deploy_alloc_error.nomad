@@ -1,12 +1,15 @@
+# Copyright (c) HashiCorp, Inc.
+# SPDX-License-Identifier: MPL-2.0
+
 # test alloc error with a command failure
 
 job "[[.job_name]]" {
   datacenters = ["dc1"]
-  type = "service"
+  type        = "service"
   update {
-    max_parallel     = 1
-    min_healthy_time = "10s"
-    healthy_deadline = "15s"
+    max_parallel      = 1
+    min_healthy_time  = "10s"
+    healthy_deadline  = "15s"
     progress_deadline = "20s"
   }
 
@@ -15,8 +18,8 @@ job "[[.job_name]]" {
     restart {
       attempts = 1
       interval = "10s"
-      delay = "5s"
-      mode = "fail"
+      delay    = "5s"
+      mode     = "fail"
     }
     ephemeral_disk {
       size = 300
@@ -24,15 +27,12 @@ job "[[.job_name]]" {
     task "alpine" {
       driver = "docker"
       config {
-        image = "alpine"
+        image   = "alpine"
         command = "badcommandname"
       }
       resources {
         cpu    = 100
         memory = 128
-        network {
-          mbits = 10
-        }
       }
     }
   }
