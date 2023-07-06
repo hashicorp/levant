@@ -3,15 +3,15 @@ module github.com/hashicorp/levant
 go 1.19
 
 require (
-	github.com/Masterminds/sprig/v3 v3.2.0
+	github.com/Masterminds/sprig/v3 v3.2.1
 	github.com/davecgh/go-spew v1.1.1
-	github.com/hashicorp/consul/api v1.15.2
+	github.com/hashicorp/consul/api v1.15.3
 	github.com/hashicorp/go-multierror v1.1.1
-	github.com/hashicorp/nomad v1.4.1
+	github.com/hashicorp/nomad v1.4.6
 	github.com/hashicorp/nomad/api v0.0.0-20230404200950-434f7a1745c6
 	github.com/hashicorp/terraform v0.13.5
-	github.com/mattn/go-isatty v0.0.14
-	github.com/mitchellh/cli v1.1.4
+	github.com/mattn/go-isatty v0.0.16
+	github.com/mitchellh/cli v1.1.5
 	github.com/pkg/errors v0.9.1
 	github.com/rs/zerolog v1.6.0
 	github.com/sean-/conswriter v0.0.0-20180208195008-f5ae3917a627
@@ -45,11 +45,11 @@ require (
 	github.com/hashicorp/hcl v1.0.1-vault-3 // indirect
 	github.com/hashicorp/hcl/v2 v2.9.2-0.20220525143345-ab3cae0737bc // indirect
 	github.com/hashicorp/hil v0.0.0-20190212112733-ab17b08d6590 // indirect
-	github.com/hashicorp/serf v0.10.0 // indirect
+	github.com/hashicorp/serf v0.10.1 // indirect
 	github.com/hashicorp/terraform-svchost v0.0.0-20191011084731-65d371908596 // indirect
 	github.com/huandu/xstrings v1.3.2 // indirect
 	github.com/imdario/mergo v0.3.13 // indirect
-	github.com/mattn/go-colorable v0.1.12 // indirect
+	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
@@ -62,12 +62,12 @@ require (
 	github.com/shopspring/decimal v1.2.0 // indirect
 	github.com/spf13/afero v1.6.0 // indirect
 	github.com/spf13/cast v1.3.1 // indirect
-	github.com/zclconf/go-cty v1.11.0 // indirect
-	golang.org/x/crypto v0.1.0 // indirect
+	github.com/zclconf/go-cty v1.12.1 // indirect
+	golang.org/x/crypto v0.6.0 // indirect
 	golang.org/x/exp v0.0.0-20230108222341-4b8118a2686a // indirect
 	golang.org/x/mod v0.6.0 // indirect
 	golang.org/x/net v0.7.0 // indirect
-	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8 // indirect
+	golang.org/x/oauth2 v0.4.0 // indirect
 	golang.org/x/sys v0.5.0 // indirect
 	golang.org/x/text v0.7.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
