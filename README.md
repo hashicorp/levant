@@ -42,7 +42,7 @@ realtime feedback and detailed failure messages upon deployment issues.
   using `docker pull hashicorp/levant`.
 
 - Levant can be built from source by firstly cloning the repository `git clone git://github.com/hashicorp/levant.git`.
-  Once cloned, a binary can be built using the `make build` command which will be available at
+  Once cloned, a binary can be built using the `make dev` command which will be available at
   `./bin/levant`.
 
 - There is a [Levant Ansible role][levant-ansible] available to help installation on machines. Thanks

@@ -1,3 +1,6 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package command
 
 import (
@@ -65,8 +68,9 @@ General Options:
     default is HUMAN.
 
   -var-file=<file>
-    Used in conjunction with the -job-file will plan a templated job against your
-    Nomad cluster. You can repeat this flag multiple times to supply multiple var-files.
+    Path to a file containing user variables used when rendering the job
+    template. You can repeat this flag multiple times to supply multiple
+    var-files. Defaults to levant.(json|yaml|yml|tf).
     [default: levant.(json|yaml|yml|tf)]
 `
 	return strings.TrimSpace(helpText)

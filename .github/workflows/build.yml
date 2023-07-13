@@ -1,0 +1,168 @@
+name: build
+on:
+  push:
+  workflow_dispatch:
+  workflow_call:
+env:
+  PKG_NAME: "levant"
+jobs:
+  get-go-version:
+    name: "Determine Go toolchain version"
+    runs-on: ubuntu-20.04
+    outputs:
+      go-version: ${{ steps.get-go-version.outputs.go-version }}
+    steps:
+      - uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
+      - name: Determine Go version
+        id: get-go-version
+        run: |
+          echo "Building with Go $(cat .go-version)"
+          echo "go-version=$(cat .go-version)" >> "$GITHUB_OUTPUT"
+  get-product-version:
+    runs-on: ubuntu-20.04
+    outputs:
+      product-version: ${{ steps.get-product-version.outputs.product-version }}
+    steps:
+      - uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
+      - name: get product version
+        id: get-product-version
+        run: |
+          make version
+          echo "product-version=$(make version)" >> "$GITHUB_OUTPUT"
+  generate-metadata-file:
+    needs: get-product-version
+    runs-on: ubuntu-20.04
+    outputs:
+      filepath: ${{ steps.generate-metadata-file.outputs.filepath }}
+    steps:
+      - name: "Checkout directory"
+        uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
+      - name: Generate metadata file
+        id: generate-metadata-file
+        uses: hashicorp/actions-generate-metadata@v1
+        with:
+          version: ${{ needs.get-product-version.outputs.product-version }}
+          product: ${{ env.PKG_NAME }}
+          repositoryOwner: "hashicorp"
+      - uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce # v3.1.2
+        if: ${{ !env.ACT }}
+        with:
+          name: metadata.json
+          path: ${{ steps.generate-metadata-file.outputs.filepath }}
+  generate-ldflags:
+    needs: get-product-version
+    runs-on: ubuntu-20.04
+    outputs:
+      ldflags: ${{ steps.generate-ldflags.outputs.ldflags }}
+    steps:
+      - uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
+      - name: Generate ld flags
+        id: generate-ldflags
+        run: |
+          echo "ldflags=-X 'github.com/hashicorp/levant/version.GitDescribe=v${{ needs.get-product-version.outputs.product-version }}'" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs:
+      - get-go-version
+      - get-product-version
+      - generate-ldflags
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        goos: ["linux", "darwin", "windows", "freebsd"]
+        goarch: [ "amd64", "arm64"]
+        include:
+          - { goos: "linux", goarch: "386" }
+          - { goos: "linux", goarch: "arm" }
+          - { goos: "freebsd", goarch: "arm" }
+      fail-fast: true
+    name: Go ${{ needs.get-go-version.outputs.go-version }} ${{ matrix.goos }} ${{ matrix.goarch }} build
+    steps:
+      - uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
+      - name: Setup go
+        uses: actions/setup-go@fac708d6674e30b6ba41289acaab6d4b75aa0753 # v4.0.1
+        with:
+          go-version-file: ".go-version"
+      - name: Determine artifact basename
+        run: echo "ARTIFACT_BASENAME=${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip" >> "$GITHUB_ENV"
+      - name: Build Levant
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          GO_LDFLAGS: ${{ needs.generate-ldflags.outputs.ldflags }}
+          CGO_ENABLED: "0"
+          BIN_PATH: ${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}
+        uses: hashicorp/actions-go-build@v0.1.9
+        with:
+          product_name: ${{ env.PKG_NAME }}
+          product_version: ${{ needs.get-product-version.outputs.product-version }}
+          go_version: ${{ needs.get-go-version.outputs.go-version }}
+          os: ${{ matrix.goos }}
+          arch: ${{ matrix.goarch }}
+          reproducible: nope
+          instructions: |-
+            make crt
+      - if: ${{ matrix.goos == 'linux' }}
+        uses: hashicorp/actions-packaging-linux@v1
+        with:
+          name: "levant"
+          description: "Levant is a templating and deployment tool for HashiCorp Nomad"
+          arch: ${{ matrix.goarch }}
+          version: ${{ needs.get-product-version.outputs.product-version }}
+          maintainer: "HashiCorp"
+          homepage: "https://github.com/hashicorp/levant"
+          license: "MPL-2.0"
+          binary: out/${{ env.ARTIFACT_BASENAME }}
+          deb_depends: "openssl"
+          rpm_depends: "openssl"
+      - if: ${{ matrix.goos == 'linux' }}
+        name: Determine package file names
+        run: |
+          echo "RPM_PACKAGE=$(basename out/*.rpm)" >> "$GITHUB_ENV"
+          echo "DEB_PACKAGE=$(basename out/*.deb)" >> "$GITHUB_ENV"
+      - if: ${{ matrix.goos == 'linux' }}
+        uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce # v3.1.2
+        with:
+          name: ${{ env.RPM_PACKAGE }}
+          path: out/${{ env.RPM_PACKAGE }}
+          if-no-files-found: error
+      - if: ${{ matrix.goos == 'linux' }}
+        uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce # v3.1.2
+        with:
+          name: ${{ env.DEB_PACKAGE }}
+          path: out/${{ env.DEB_PACKAGE }}
+          if-no-files-found: error
+  build-docker-default:
+    needs:
+      - get-product-version
+      - build
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        arch: ["arm", "arm64", "386", "amd64"]
+      fail-fast: true
+    env:
+      version: ${{ needs.get-product-version.outputs.product-version }}
+    name: Docker ${{ matrix.arch }} default release build
+    steps:
+      - uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
+      - name: Docker Build (Action)
+        uses: hashicorp/actions-docker-build@v1
+        with:
+          smoke_test: |
+            TEST_VERSION="$(docker run "${IMAGE_NAME}" version | awk '/Levant/{print $2}')"
+            if [ "${TEST_VERSION}" != "v${version}" ]; then
+              echo "Test FAILED"
+              exit 1
+            fi
+            echo "Test PASSED"
+          version: ${{ needs.get-product-version.outputs.product-version }}
+          target: release
+          arch: ${{ matrix.arch }}
+          tags: |
+            docker.io/hashicorp/${{ env.PKG_NAME }}:${{ env.version }}
+          dev_tags: |
+            docker.io/hashicorppreview/${{ env.PKG_NAME }}:${{ env.version }}-dev
+            docker.io/hashicorppreview/${{ env.PKG_NAME }}:${{ env.version }}-${{ github.sha }}
+permissions:
+  contents: read

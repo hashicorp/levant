@@ -1,6 +1,0 @@
-executor: go
-steps:
-  - install-go
-  - install-golangci-lint
-  - checkout
-  - run: make lint
