@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"reflect"
 	"strconv"
@@ -298,7 +297,7 @@ func fileContents() func(string) (string, error) {
 		if s == "" {
 			return "", nil
 		}
-		contents, err := ioutil.ReadFile(s)
+		contents, err := os.ReadFile(s)
 		if err != nil {
 			return "", err
 		}

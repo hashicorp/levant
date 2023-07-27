@@ -4,7 +4,6 @@
 package helper
 
 import (
-	"io/ioutil"
 	"os"
 	"reflect"
 	"testing"
@@ -32,7 +31,7 @@ func TestHelper_GetDefaultTmplFile(t *testing.T) {
 
 			// Use write file as tmpfile adds a prefix which doesn't work with the
 			// GetDefaultTmplFile function.
-			err := ioutil.WriteFile(f, d1, 0600)
+			err := os.WriteFile(f, d1, 0600)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -70,7 +69,7 @@ func TestHelper_GetDefaultVarFile(t *testing.T) {
 
 			// Use write file as tmpfile adds a prefix which doesn't work with the
 			// GetDefaultTmplFile function.
-			err := ioutil.WriteFile(tc.VarFile, d1, 0600)
+			err := os.WriteFile(tc.VarFile, d1, 0600)
 			if err != nil {
 				t.Fatal(err)
 			}
