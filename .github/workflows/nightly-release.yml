@@ -87,4 +87,4 @@ jobs:
           status: failure
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
 permissions:
-  contents: read
+  contents: write
