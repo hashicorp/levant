@@ -1,7 +1,7 @@
 ## UNRELEASED
 
 IMPROVEMENTS:
-* deps: Updated Nomad dependency to v1.5.3 [[GH-480](https://github.com/hashicorp/levant/pull/480)]
+* deps: Updated Nomad dependency to v1.6.1 [[GH-502](https://github.com/hashicorp/levant/pull/502)]
 
 ## 0.3.2 (October 20, 2022)
 

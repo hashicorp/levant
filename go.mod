@@ -8,7 +8,7 @@ require (
 	github.com/hashicorp/consul/api v1.18.0
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/nomad v1.6.0
-	github.com/hashicorp/nomad/api v0.0.0-20230718173136-3a687930bd3e
+	github.com/hashicorp/nomad/api v0.0.0-20230718185111-87d411f4e3a6
 	github.com/hashicorp/terraform v0.13.5
 	github.com/mattn/go-isatty v0.0.17
 	github.com/mitchellh/cli v1.1.5
