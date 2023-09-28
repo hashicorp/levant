@@ -1,14 +1,14 @@
 module github.com/hashicorp/levant
 
-go 1.20
+go 1.21
 
 require (
 	github.com/Masterminds/sprig/v3 v3.2.3
-	github.com/davecgh/go-spew v1.1.1
-	github.com/hashicorp/consul/api v1.18.0
+	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
+	github.com/hashicorp/consul/api v1.23.0
 	github.com/hashicorp/go-multierror v1.1.1
-	github.com/hashicorp/nomad v1.6.0
-	github.com/hashicorp/nomad/api v0.0.0-20230718185111-87d411f4e3a6
+	github.com/hashicorp/nomad v1.6.2
+	github.com/hashicorp/nomad/api v0.0.0-20230913164725-73e372ad9403
 	github.com/hashicorp/terraform v0.13.5
 	github.com/mattn/go-isatty v0.0.17
 	github.com/mitchellh/cli v1.1.5
@@ -55,8 +55,7 @@ require (
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
-	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
-	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/posener/complete v1.2.3 // indirect
 	github.com/sean-/pager v0.0.0-20180208200047-666be9bf53b5 // indirect
 	github.com/shopspring/decimal v1.3.1 // indirect
@@ -64,14 +63,14 @@ require (
 	github.com/spf13/cast v1.5.0 // indirect
 	github.com/zclconf/go-cty v1.12.1 // indirect
 	golang.org/x/crypto v0.12.0 // indirect
-	golang.org/x/exp v0.0.0-20230321023759-10a507213a29 // indirect
-	golang.org/x/mod v0.8.0 // indirect
+	golang.org/x/exp v0.0.0-20230728194245-b0cb94b80691 // indirect
+	golang.org/x/mod v0.11.0 // indirect
 	golang.org/x/net v0.14.0 // indirect
 	golang.org/x/oauth2 v0.4.0 // indirect
 	golang.org/x/sys v0.11.0 // indirect
 	golang.org/x/text v0.12.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/protobuf v1.30.0 // indirect
-	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
+	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
