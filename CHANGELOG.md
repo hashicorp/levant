@@ -1,4 +1,4 @@
-## UNRELEASED
+## 0.3.3 (October 5, 2023)
 
 IMPROVEMENTS:
 * build: Now builds with Go v1.21.1 [[GH-507](https://github.com/hashicorp/levant/pull/507)]
