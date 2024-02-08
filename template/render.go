@@ -7,7 +7,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path"
 
 	"github.com/hashicorp/levant/client"
@@ -85,7 +85,7 @@ func RenderTemplate(templateFile string, variableFiles []string, addr string, fl
 		}
 	}
 
-	src, err := ioutil.ReadFile(t.jobTemplateFile)
+	src, err := os.ReadFile(t.jobTemplateFile)
 	if err != nil {
 		return
 	}
@@ -103,7 +103,7 @@ func RenderTemplate(templateFile string, variableFiles []string, addr string, fl
 
 func (t *tmpl) parseJSONVars(variableFile string) (variables map[string]interface{}, err error) {
 
-	jsonFile, err := ioutil.ReadFile(variableFile)
+	jsonFile, err := os.ReadFile(variableFile)
 	if err != nil {
 		return
 	}
@@ -136,7 +136,7 @@ func (t *tmpl) parseTFVars(variableFile string) (map[string]interface{}, error) 
 
 func (t *tmpl) parseYAMLVars(variableFile string) (variables map[string]interface{}, err error) {
 
-	yamlFile, err := ioutil.ReadFile(variableFile)
+	yamlFile, err := os.ReadFile(variableFile)
 	if err != nil {
 		return
 	}
