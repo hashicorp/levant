@@ -4,6 +4,7 @@
 package helper
 
 import (
+	"bytes"
 	"io/ioutil"
 	"os"
 	"reflect"
@@ -82,5 +83,52 @@ func TestHelper_GetDefaultVarFile(t *testing.T) {
 		}
 
 		os.Remove(tc.VarFile)
+	}
+}
+
+func TestHelper_GetJobspecFromFile(t *testing.T) {
+	cases := []struct {
+		JobFile string
+		JobName string
+	}{
+		{"test-fixtures/demojob.json", "demojob"},
+	}
+
+	for i, tc := range cases {
+		job, err := GetJobspecFromFile(tc.JobFile)
+		if err != nil {
+			t.Fatalf("case %d failed: %v", i, err)
+		}
+
+		if !reflect.DeepEqual(*job.Name, tc.JobName) {
+			t.Fatalf("got: %#v, expected %#v", *job.Name, tc.JobName)
+		}
+
+	}
+}
+
+func TestHelper_GetJobspecFromIOReader(t *testing.T) {
+	cases := []struct {
+		JobFile string
+		JobName string
+	}{
+		{"test-fixtures/demojob.json", "demojob"},
+	}
+
+	for i, tc := range cases {
+		src, err := ioutil.ReadFile(tc.JobFile)
+		if err != nil {
+			t.Fatalf("case %d failed: %v", i, err)
+		}
+
+		job, err := GetJobspecFromIOReader(bytes.NewBuffer(src))
+		if err != nil {
+			t.Fatalf("case %d failed: %v", i, err)
+		}
+
+		if !reflect.DeepEqual(*job.Name, tc.JobName) {
+			t.Fatalf("got: %#v, expected %#v", *job.Name, tc.JobName)
+		}
+
 	}
 }

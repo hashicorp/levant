@@ -5,6 +5,7 @@ package command
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/hashicorp/levant/helper"
@@ -36,6 +37,9 @@ Arguments:
 
   TEMPLATE nomad job template
     If no argument is given we look for a single *.nomad file
+    Note that the -pre-rendered flag changes the expectation for this arg
+        (See below).
+
 
 General Options:
 
@@ -87,6 +91,12 @@ General Options:
     Specify the format of Levant's logs. Valid values are HUMAN or JSON. The
     default is HUMAN.
 
+  -pre-rendered
+    When used, TEMPLATE arg must instead specify a .json file, which must
+    contain a pre-rendered jobspec.
+    Alternatively you can omit the TEMPLATE arg and pipe JSON to levant deploy.
+    Not compatible with -var, -var-file, -vault, -vault-token, -consul-address.
+
   -var-file=<file>
     Path to a file containing user variables used when rendering the job
     template. You can repeat this flag multiple times to supply multiple
@@ -106,6 +116,7 @@ func (c *DeployCommand) Run(args []string) int {
 
 	var err error
 	var level, format string
+	var preRendered bool
 
 	config := &levant.DeployConfig{
 		Client:   &structs.ClientConfig{},
@@ -127,12 +138,14 @@ func (c *DeployCommand) Run(args []string) int {
 	flags.BoolVar(&config.Plan.IgnoreNoChanges, "ignore-no-changes", false, "")
 	flags.StringVar(&level, "log-level", "INFO", "")
 	flags.StringVar(&format, "log-format", "HUMAN", "")
+	flags.BoolVar(&preRendered, "pre-rendered", false, "")
 	flags.StringVar(&config.Deploy.VaultToken, "vault-token", "", "")
 	flags.BoolVar(&config.Deploy.EnvVault, "vault", false, "")
 
 	flags.Var((*helper.FlagStringSlice)(&config.Template.VariableFiles), "var-file", "")
 
 	if err = flags.Parse(args); err != nil {
+		c.UI.Error("ERROR: CLI flag parsing error.")
 		return 1
 	}
 
@@ -149,24 +162,72 @@ func (c *DeployCommand) Run(args []string) int {
 		return 1
 	}
 
-	if len(args) == 1 {
-		config.Template.TemplateFile = args[0]
-	} else if len(args) == 0 {
-		if config.Template.TemplateFile = helper.GetDefaultTmplFile(); config.Template.TemplateFile == "" {
+	if preRendered {
+		if config.Deploy.EnvVault ||
+			config.Client.ConsulAddr != "" ||
+			config.Deploy.VaultToken != "" ||
+			len(c.Meta.flagVars) > 0 ||
+			len(config.Template.VariableFiles) > 0 {
+
 			c.UI.Error(c.Help())
-			c.UI.Error("\nERROR: Template arg missing and no default template found")
+			c.UI.Error("\nERROR: -pre-rendered cannot be used with -consul-addr, -var, -var-file, -vault, or -vault-token.")
 			return 1
 		}
-	} else {
-		c.UI.Error(c.Help())
-		return 1
-	}
 
-	config.Template.Job, err = template.RenderJob(config.Template.TemplateFile,
-		config.Template.VariableFiles, config.Client.ConsulAddr, &c.Meta.flagVars)
-	if err != nil {
-		c.UI.Error(fmt.Sprintf("[ERROR] levant/command: %v", err))
-		return 1
+		isPipedInput, err := helper.IsPipedInput()
+		if err != nil {
+			c.UI.Error(err.Error())
+			return 1
+		}
+
+		if len(args) == 1 {
+			if isPipedInput {
+				c.UI.Error(c.Help())
+				c.UI.Error("\nERROR: Cannot pass rendered JSON file and piped input at the same time.")
+				return 1
+			}
+			jobFile := args[0]
+			config.Template.Job, err = helper.GetJobspecFromFile(jobFile)
+
+		} else if len(args) == 0 {
+			if isPipedInput {
+				config.Template.Job, err = helper.GetJobspecFromIOReader(os.Stdin)
+			} else {
+				c.UI.Error(c.Help())
+				c.UI.Error("\nERROR: No rendered JSON file specified and no piped input found.")
+				return 1
+			}
+
+		} else {
+			c.UI.Error(c.Help())
+			return 1
+		}
+
+		if err != nil {
+			c.UI.Error(fmt.Sprintf("[ERROR] levant/command: %v", err))
+			return 1
+		}
+
+	} else {
+		if len(args) == 1 {
+			config.Template.TemplateFile = args[0]
+		} else if len(args) == 0 {
+			if config.Template.TemplateFile = helper.GetDefaultTmplFile(); config.Template.TemplateFile == "" {
+				c.UI.Error(c.Help())
+				c.UI.Error("\nERROR: Template arg missing and no default template found")
+				return 1
+			}
+		} else {
+			c.UI.Error(c.Help())
+			return 1
+		}
+
+		config.Template.Job, err = template.RenderJob(config.Template.TemplateFile,
+			config.Template.VariableFiles, config.Client.ConsulAddr, &c.Meta.flagVars)
+		if err != nil {
+			c.UI.Error(fmt.Sprintf("[ERROR] levant/command: %v", err))
+			return 1
+		}
 	}
 
 	if config.Deploy.Canary > 0 {
