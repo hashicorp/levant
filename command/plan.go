@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/levant/levant"
 	"github.com/hashicorp/levant/levant/structs"
 	"github.com/hashicorp/levant/logging"
+	"github.com/hashicorp/levant/output"
 	"github.com/hashicorp/levant/template"
 )
 
@@ -51,7 +52,15 @@ General Options:
 
   -force-count
     Use the taskgroup count from the Nomad jobfile instead of the count that
-    is currently set in a running job.
+	is currently set in a running job.
+
+  -output-format
+	Specify the format of plan to be emitted. Valid values include JSON, DIFF,
+	and NDJSON. The default is DIFF.
+
+  -output-to
+	Specify the destination for the diff. Valid values include CLI, LOG, STDOUT,
+	and STDERR. The default is LOG.
 
   -ignore-no-changes
     By default if no changes are detected when running a plan Levant will
@@ -85,11 +94,14 @@ func (c *PlanCommand) Synopsis() string {
 func (c *PlanCommand) Run(args []string) int {
 
 	var err error
-	var level, format string
-	config := &levant.PlanConfig{
+	var logLevel, logFormat, outFormat, outDest string
+	config := &structs.LevantPlanConfig{
 		Client:   &structs.ClientConfig{},
 		Plan:     &structs.PlanConfig{},
 		Template: &structs.TemplateConfig{},
+		Output: &structs.DiffOutputConfig{
+			UI: &c.UI,
+		},
 	}
 
 	flags := c.Meta.FlagSet("plan", FlagSetVars)
@@ -99,8 +111,10 @@ func (c *PlanCommand) Run(args []string) int {
 	flags.BoolVar(&config.Client.AllowStale, "allow-stale", false, "")
 	flags.StringVar(&config.Client.ConsulAddr, "consul-address", "", "")
 	flags.BoolVar(&config.Plan.IgnoreNoChanges, "ignore-no-changes", false, "")
-	flags.StringVar(&level, "log-level", "INFO", "")
-	flags.StringVar(&format, "log-format", "HUMAN", "")
+	flags.StringVar(&logLevel, "log-level", "INFO", "")
+	flags.StringVar(&logFormat, "log-format", "HUMAN", "")
+	flags.StringVar(&outFormat, "output-format", "DIFF", "")
+	flags.StringVar(&outDest, "output-to", "LOG", "")
 	flags.Var((*helper.FlagStringSlice)(&config.Template.VariableFiles), "var-file", "")
 
 	if err = flags.Parse(args); err != nil {
@@ -109,7 +123,12 @@ func (c *PlanCommand) Run(args []string) int {
 
 	args = flags.Args()
 
-	if err = logging.SetupLogger(level, format); err != nil {
+	if err = logging.SetupLogger(logLevel, logFormat); err != nil {
+		c.UI.Error(err.Error())
+		return 1
+	}
+
+	if err = output.ConfigureOutputSettings(config, &outFormat, &outDest); err != nil {
 		c.UI.Error(err.Error())
 		return 1
 	}
