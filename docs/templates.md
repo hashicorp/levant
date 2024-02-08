@@ -265,7 +265,7 @@ conn-pool-id-2
 
 #### parseJSON
 
-Takes the given input and parses the result as JSON. This can allow you to wrap an entire job template as shown below and pull variables from Consul KV for template rendering. The below example is based on the template substition above and expects the Consul KV to be `{"resources":{"cpu":250,"memory":512,"network":{"mbits":10}}}`:
+Takes the given input and parses the result as JSON. This can allow you to wrap an entire job template as shown below and pull variables from Consul KV for template rendering. The below example is based on the template substitution above and expects the Consul KV to be `{"resources":{"cpu":250,"memory":512,"network":{"mbits":10}}}`:
 
 Example:
 ```
