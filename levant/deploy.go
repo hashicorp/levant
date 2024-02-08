@@ -161,7 +161,7 @@ func (l *levantDeployment) deploy() (success bool) {
 
 		// If the service job doesn't have an update stanza, the job will not use
 		// Nomad deployments.
-		if l.config.Template.Job.Update == nil {
+		if !l.hasUpdateStanza() {
 			log.Info().Msg("levant/deploy: job is not configured with update stanza, consider adding to use deployments")
 			return l.jobStatusChecker(&eval.EvalID)
 		}
@@ -521,4 +521,24 @@ func (l *levantDeployment) isJobZeroCount() bool {
 		}
 	}
 	return true
+}
+
+// hasUpdateStanza checks if the job has an update stanza at the job level or for all task groups
+func (l *levantDeployment) hasUpdateStanza() (hasUpdate bool) {
+	if l.config.Template.Job.Update != nil {
+		hasUpdate = true
+		return
+	}
+
+	// Check if all task groups have an update stanza
+	if l.config.Template.Job.TaskGroups != nil {
+		hasUpdate = true
+		for _, taskGroup := range l.config.Template.Job.TaskGroups {
+			if taskGroup.Update == nil {
+				hasUpdate = false
+				return
+			}
+		}
+	}
+	return
 }
