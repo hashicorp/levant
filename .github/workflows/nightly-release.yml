@@ -66,7 +66,7 @@ jobs:
           draft: false
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish nightly GitHub prerelease
-        uses: eregon/publish-release@46913fa2b3f7edc7345ae3c17f6d1b093a54916d # v1.0.5
+        uses: eregon/publish-release@01df127f5e9a3c26935118e22e738d95b59d10ce # v1.0.6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
