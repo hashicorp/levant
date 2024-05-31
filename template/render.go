@@ -22,11 +22,35 @@ import (
 
 // RenderJob takes in a template and variables performing a render of the
 // template followed by Nomad jobspec parse.
-func RenderJob(templateFile string, variableFiles []string, addr string, flagVars *map[string]interface{}) (job *nomad.Job, err error) {
+func RenderJob(templateFile string, variableFiles []string, addr string, flagVars *map[string]interface{}, isJSON bool) (job *nomad.Job, err error) {
 	var tpl *bytes.Buffer
 	tpl, err = RenderTemplate(templateFile, variableFiles, addr, flagVars)
 	if err != nil {
 		return
+	}
+
+	if isJSON {
+		// Support JSON files with both a top-level Job key as well as
+		// ones without.
+		eitherJob := struct {
+			NestedJob *nomad.Job `json:"Job"`
+			nomad.Job
+		}{}
+
+		if err := json.NewDecoder(tpl).Decode(&eitherJob); err != nil {
+			return nil, fmt.Errorf("Failed to parse JSON job: %w", err)
+		}
+
+		if eitherJob.NestedJob != nil {
+			if eitherJob.NestedJob.Name == nil && eitherJob.NestedJob.ID != nil {
+				eitherJob.NestedJob.Name = eitherJob.NestedJob.ID
+			}
+			if eitherJob.NestedJob.ID == nil {
+				return nil, fmt.Errorf("JSON is missing ID field")
+			}
+			return eitherJob.NestedJob, nil
+		}
+		return &eitherJob.Job, nil
 	}
 
 	return jobspec.Parse(tpl)

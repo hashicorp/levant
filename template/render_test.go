@@ -28,7 +28,7 @@ func TestTemplater_RenderTemplate(t *testing.T) {
 	fVars := make(map[string]interface{})
 
 	// Test basic TF template render.
-	job, err = RenderJob("test-fixtures/single_templated.nomad", []string{"test-fixtures/test.tf"}, "", &fVars)
+	job, err = RenderJob("test-fixtures/single_templated.nomad", []string{"test-fixtures/test.tf"}, "", &fVars, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func TestTemplater_RenderTemplate(t *testing.T) {
 	}
 
 	// Test basic YAML template render.
-	job, err = RenderJob("test-fixtures/single_templated.nomad", []string{"test-fixtures/test.yaml"}, "", &fVars)
+	job, err = RenderJob("test-fixtures/single_templated.nomad", []string{"test-fixtures/test.yaml"}, "", &fVars, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +52,7 @@ func TestTemplater_RenderTemplate(t *testing.T) {
 	}
 
 	// Test multiple var-files
-	job, err = RenderJob("test-fixtures/single_templated.nomad", []string{"test-fixtures/test.yaml", "test-fixtures/test-overwrite.yaml"}, "", &fVars)
+	job, err = RenderJob("test-fixtures/single_templated.nomad", []string{"test-fixtures/test.yaml", "test-fixtures/test-overwrite.yaml"}, "", &fVars, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestTemplater_RenderTemplate(t *testing.T) {
 	}
 
 	// Test multiple var-files of different types
-	job, err = RenderJob("test-fixtures/single_templated.nomad", []string{"test-fixtures/test.tf", "test-fixtures/test-overwrite.yaml"}, "", &fVars)
+	job, err = RenderJob("test-fixtures/single_templated.nomad", []string{"test-fixtures/test.tf", "test-fixtures/test-overwrite.yaml"}, "", &fVars, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestTemplater_RenderTemplate(t *testing.T) {
 
 	// Test multiple var-files with var-args
 	fVars["job_name"] = testJobNameOverwrite2
-	job, err = RenderJob("test-fixtures/single_templated.nomad", []string{"test-fixtures/test.tf", "test-fixtures/test-overwrite.yaml"}, "", &fVars)
+	job, err = RenderJob("test-fixtures/single_templated.nomad", []string{"test-fixtures/test.tf", "test-fixtures/test-overwrite.yaml"}, "", &fVars, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestTemplater_RenderTemplate(t *testing.T) {
 	}
 
 	// Test empty var-args and empty variable file render.
-	job, err = RenderJob("test-fixtures/none_templated.nomad", []string{}, "", &fVars)
+	job, err = RenderJob("test-fixtures/none_templated.nomad", []string{}, "", &fVars, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ func TestTemplater_RenderTemplate(t *testing.T) {
 
 	// Test var-args only render.
 	fVars = map[string]interface{}{"job_name": testJobName, "task_resource_cpu": "1313"}
-	job, err = RenderJob("test-fixtures/single_templated.nomad", []string{}, "", &fVars)
+	job, err = RenderJob("test-fixtures/single_templated.nomad", []string{}, "", &fVars, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestTemplater_RenderTemplate(t *testing.T) {
 	delete(fVars, "job_name")
 	fVars["datacentre"] = testDCName
 	os.Setenv(testEnvName, testEnvValue)
-	job, err = RenderJob("test-fixtures/multi_templated.nomad", []string{"test-fixtures/test.yaml"}, "", &fVars)
+	job, err = RenderJob("test-fixtures/multi_templated.nomad", []string{"test-fixtures/test.yaml"}, "", &fVars, false)
 	if err != nil {
 		t.Fatal(err)
 	}
