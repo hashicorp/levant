@@ -3,8 +3,10 @@ on:
   push:
   workflow_dispatch:
   workflow_call:
+
 env:
   PKG_NAME: "levant"
+
 jobs:
   get-go-version:
     name: "Determine Go toolchain version"
@@ -18,6 +20,7 @@ jobs:
         run: |
           echo "Building with Go $(cat .go-version)"
           echo "go-version=$(cat .go-version)" >> "$GITHUB_OUTPUT"
+
   get-product-version:
     runs-on: ubuntu-20.04
     outputs:
@@ -29,6 +32,7 @@ jobs:
         run: |
           make version
           echo "product-version=$(make version)" >> "$GITHUB_OUTPUT"
+
   generate-metadata-file:
     needs: get-product-version
     runs-on: ubuntu-20.04
@@ -39,16 +43,18 @@ jobs:
         uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.6
       - name: Generate metadata file
         id: generate-metadata-file
-        uses: hashicorp/actions-generate-metadata@v1
+        uses: hashicorp/actions-generate-metadata@fdbc8803a0e53bcbb912ddeee3808329033d6357 # v1.1.1
         with:
           version: ${{ needs.get-product-version.outputs.product-version }}
           product: ${{ env.PKG_NAME }}
+          repository: ${{ env.PKG_NAME }}
           repositoryOwner: "hashicorp"
       - uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
         if: ${{ !env.ACT }}
         with:
           name: metadata.json
           path: ${{ steps.generate-metadata-file.outputs.filepath }}
+
   generate-ldflags:
     needs: get-product-version
     runs-on: ubuntu-20.04
@@ -88,7 +94,7 @@ jobs:
           GO_LDFLAGS: ${{ needs.generate-ldflags.outputs.ldflags }}
           CGO_ENABLED: "0"
           BIN_PATH: ${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}
-        uses: hashicorp/actions-go-build@v0.1.9
+        uses: hashicorp/actions-go-build@37358f6098ef21b09542d84a9814ebb843aa4e3e # v1.0.0
         with:
           product_name: ${{ env.PKG_NAME }}
           product_version: ${{ needs.get-product-version.outputs.product-version }}
@@ -99,7 +105,7 @@ jobs:
           instructions: |-
             make crt
       - if: ${{ matrix.goos == 'linux' }}
-        uses: hashicorp/actions-packaging-linux@v1
+        uses: hashicorp/actions-packaging-linux@0596d94121d44bd00463ac9d245efea64ee282d0 # v1.7.0
         with:
           name: "levant"
           description: "Levant is a templating and deployment tool for HashiCorp Nomad"
@@ -128,6 +134,7 @@ jobs:
           name: ${{ env.DEB_PACKAGE }}
           path: out/${{ env.DEB_PACKAGE }}
           if-no-files-found: error
+
   build-docker-default:
     needs:
       - get-product-version
@@ -143,7 +150,7 @@ jobs:
     steps:
       - uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.6
       - name: Docker Build (Action)
-        uses: hashicorp/actions-docker-build@v1
+        uses: hashicorp/actions-docker-build@11d43ef520c65f58683d048ce9b47d6617893c9a # v2.0.0
         with:
           smoke_test: |
             TEST_VERSION="$(docker run "${IMAGE_NAME}" version | awk '/Levant/{print $2}')"
@@ -160,5 +167,6 @@ jobs:
           dev_tags: |
             docker.io/hashicorppreview/${{ env.PKG_NAME }}:${{ env.version }}-dev
             docker.io/hashicorppreview/${{ env.PKG_NAME }}:${{ env.version }}-${{ github.sha }}
+
 permissions:
   contents: read
