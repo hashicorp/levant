@@ -71,10 +71,6 @@ jobs:
       matrix:
         goos: ["linux", "darwin", "windows", "freebsd"]
         goarch: [ "amd64", "arm64"]
-        include:
-          - { goos: "linux", goarch: "386" }
-          - { goos: "linux", goarch: "arm" }
-          - { goos: "freebsd", goarch: "arm" }
       fail-fast: true
     name: Go ${{ needs.get-go-version.outputs.go-version }} ${{ matrix.goos }} ${{ matrix.goarch }} build
     steps:
@@ -139,7 +135,7 @@ jobs:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        arch: ["arm", "arm64", "386", "amd64"]
+        arch: ["arm64", "amd64"]
       fail-fast: true
     env:
       version: ${{ needs.get-product-version.outputs.product-version }}
