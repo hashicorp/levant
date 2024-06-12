@@ -22,7 +22,7 @@ RUN go build -o levant .
 
 # dev runs the binary from devbuild
 # -----------------------------------
-FROM alpine:3.15 AS dev
+FROM alpine:3.20.0 AS dev
 
 COPY --from=devbuild /build/levant /bin/
 COPY ./scripts/docker-entrypoint.sh /
@@ -35,7 +35,7 @@ CMD ["help"]
 #   Release images.
 # ===================================
 
-FROM alpine:3.15 AS release
+FROM alpine:3.20.0 AS release
 
 ARG PRODUCT_NAME=levant
 ARG PRODUCT_VERSION
