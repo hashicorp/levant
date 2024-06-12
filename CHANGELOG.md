@@ -1,5 +1,11 @@
 ## UNRELEASED
 
+## 0.3.3 (October 5, 2023)
+
+IMPROVEMENTS:
+* build: Now builds with Go v1.21.1 [[GH-507](https://github.com/hashicorp/levant/pull/507)]
+* deps: Updated Nomad dependency to v1.6.2 [[GH-507](https://github.com/hashicorp/levant/pull/507)]
+
 ## 0.3.2 (October 20, 2022)
 
 IMPROVEMENTS:
