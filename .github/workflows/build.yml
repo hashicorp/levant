@@ -3,8 +3,10 @@ on:
   push:
   workflow_dispatch:
   workflow_call:
+
 env:
   PKG_NAME: "levant"
+
 jobs:
   get-go-version:
     name: "Determine Go toolchain version"
@@ -12,23 +14,25 @@ jobs:
     outputs:
       go-version: ${{ steps.get-go-version.outputs.go-version }}
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.6
       - name: Determine Go version
         id: get-go-version
         run: |
           echo "Building with Go $(cat .go-version)"
           echo "go-version=$(cat .go-version)" >> "$GITHUB_OUTPUT"
+
   get-product-version:
     runs-on: ubuntu-20.04
     outputs:
       product-version: ${{ steps.get-product-version.outputs.product-version }}
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.6
       - name: get product version
         id: get-product-version
         run: |
           make version
           echo "product-version=$(make version)" >> "$GITHUB_OUTPUT"
+
   generate-metadata-file:
     needs: get-product-version
     runs-on: ubuntu-20.04
@@ -36,26 +40,28 @@ jobs:
       filepath: ${{ steps.generate-metadata-file.outputs.filepath }}
     steps:
       - name: "Checkout directory"
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+        uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.6
       - name: Generate metadata file
         id: generate-metadata-file
-        uses: hashicorp/actions-generate-metadata@v1
+        uses: hashicorp/actions-generate-metadata@fdbc8803a0e53bcbb912ddeee3808329033d6357 # v1.1.1
         with:
           version: ${{ needs.get-product-version.outputs.product-version }}
           product: ${{ env.PKG_NAME }}
+          repository: ${{ env.PKG_NAME }}
           repositoryOwner: "hashicorp"
-      - uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4.3.1
+      - uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
         if: ${{ !env.ACT }}
         with:
           name: metadata.json
           path: ${{ steps.generate-metadata-file.outputs.filepath }}
+
   generate-ldflags:
     needs: get-product-version
     runs-on: ubuntu-20.04
     outputs:
       ldflags: ${{ steps.generate-ldflags.outputs.ldflags }}
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.6
       - name: Generate ld flags
         id: generate-ldflags
         run: |
@@ -74,9 +80,9 @@ jobs:
       fail-fast: true
     name: Go ${{ needs.get-go-version.outputs.go-version }} ${{ matrix.goos }} ${{ matrix.goarch }} build
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.6
       - name: Setup go
-        uses: actions/setup-go@93397bea11091df50f3d7e59dc26a7711a8bcfbe # v4.1.0
+        uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7 # v5.0.1
         with:
           go-version-file: ".go-version"
       - name: Determine artifact basename
@@ -88,7 +94,7 @@ jobs:
           GO_LDFLAGS: ${{ needs.generate-ldflags.outputs.ldflags }}
           CGO_ENABLED: "0"
           BIN_PATH: ${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}
-        uses: hashicorp/actions-go-build@v0.1.9
+        uses: hashicorp/actions-go-build@37358f6098ef21b09542d84a9814ebb843aa4e3e # v1.0.0
         with:
           product_name: ${{ env.PKG_NAME }}
           product_version: ${{ needs.get-product-version.outputs.product-version }}
@@ -99,7 +105,7 @@ jobs:
           instructions: |-
             make crt
       - if: ${{ matrix.goos == 'linux' }}
-        uses: hashicorp/actions-packaging-linux@v1
+        uses: hashicorp/actions-packaging-linux@0596d94121d44bd00463ac9d245efea64ee282d0 # v1.7.0
         with:
           name: "levant"
           description: "Levant is a templating and deployment tool for HashiCorp Nomad"
@@ -117,17 +123,18 @@ jobs:
           echo "RPM_PACKAGE=$(basename out/*.rpm)" >> "$GITHUB_ENV"
           echo "DEB_PACKAGE=$(basename out/*.deb)" >> "$GITHUB_ENV"
       - if: ${{ matrix.goos == 'linux' }}
-        uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4.3.1
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
         with:
           name: ${{ env.RPM_PACKAGE }}
           path: out/${{ env.RPM_PACKAGE }}
           if-no-files-found: error
       - if: ${{ matrix.goos == 'linux' }}
-        uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3 # v4.3.1
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808 # v4.3.3
         with:
           name: ${{ env.DEB_PACKAGE }}
           path: out/${{ env.DEB_PACKAGE }}
           if-no-files-found: error
+
   build-docker-default:
     needs:
       - get-product-version
@@ -141,9 +148,9 @@ jobs:
       version: ${{ needs.get-product-version.outputs.product-version }}
     name: Docker ${{ matrix.arch }} default release build
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29 # v4.1.6
       - name: Docker Build (Action)
-        uses: hashicorp/actions-docker-build@v1
+        uses: hashicorp/actions-docker-build@11d43ef520c65f58683d048ce9b47d6617893c9a # v2.0.0
         with:
           smoke_test: |
             TEST_VERSION="$(docker run "${IMAGE_NAME}" version | awk '/Levant/{print $2}')"
@@ -160,5 +167,6 @@ jobs:
           dev_tags: |
             docker.io/hashicorppreview/${{ env.PKG_NAME }}:${{ env.version }}-dev
             docker.io/hashicorppreview/${{ env.PKG_NAME }}:${{ env.version }}-${{ github.sha }}
+
 permissions:
   contents: read
