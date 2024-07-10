@@ -26,6 +26,8 @@ Levant supports a number of command line arguments which provide control over th
 
 * **-log-format** (string: "HUMAN") Specify the format of Levant's logs. Valid values are HUMAN or JSON
 
+* **-pre-rendered** (bool: "false") Pass a pre-rendered jobspec to levant instead of a template file. TEMPLATE arg must instead refer to a JSON file containing valid jobspec JSON. Alternatively you can omit the TEMPLATE arg and pipe JSON directly to levant deploy. **Not compatible with -var, -var-file, -vault, -vault-token, -consul-address**. See full example below.
+
 * **-var-file** (string: "") The variables file to render the template with. This flag can be specified multiple times to supply multiple variables files.
 
 * **-vault** (bool: false) This flag makes Levant load the Vault token from the current ENV. It can not be used at the same time as the `vault-token` flag.
@@ -38,6 +40,12 @@ Full example:
 
 ```
 levant deploy -log-level=debug -address=nomad.devoops -var-file=var.yaml -var 'var=test' example.nomad
+```
+
+Example of -pre-rendered, using nomad/HCL2 to render and levant to deploy:
+
+```
+nomad job run -output -var-file=vars/dev.hcl job.hcl | levant deploy -pre-rendered -log-level=DEBUG -force-count
 ```
 
 ### Dispatch: `dispatch`
