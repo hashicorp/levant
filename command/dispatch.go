@@ -5,7 +5,7 @@ package command
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"strings"
 
@@ -96,9 +96,9 @@ func (c *DispatchCommand) Run(args []string) int {
 	if len(args) == 2 {
 		switch args[1] {
 		case "-":
-			payload, readErr = ioutil.ReadAll(os.Stdin)
+			payload, readErr = io.ReadAll(os.Stdin)
 		default:
-			payload, readErr = ioutil.ReadFile(args[1])
+			payload, readErr = os.ReadFile(args[1])
 		}
 		if readErr != nil {
 			c.UI.Error(fmt.Sprintf("Error reading input data: %v", readErr))
