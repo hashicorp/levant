@@ -83,6 +83,9 @@ func Test(t *testing.T, c TestCase) {
 						break
 					}
 				}
+			} else if step.ExpectErr {
+				t.Errorf("step %d/%d failed not but was expected to fail", stepNum, len(c.Steps))
+				break
 			}
 		}
 

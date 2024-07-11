@@ -1,0 +1,48 @@
+{
+    "Job": {
+        "ID": "[[.job_name]]",
+        "Type": ["service"],
+        "Datacenters": [
+            "dc1"
+        ],
+        "TaskGroups": [
+            {
+                "Name": "test",
+                "Count": 1,
+                "Tasks": [
+                    {
+                        "Name": "alpine",
+                        "Driver": "docker",
+                        "Config": {
+                            "args": [
+                                "-f",
+                                "/dev/null"
+                            ],
+                            "command": "tail",
+                            "image": "alpine"
+                        },
+                        "Resources": {
+                            "CPU": 100,
+                            "MemoryMB": 128
+                        }
+                    }
+                ],
+                "RestartPolicy": {
+                    "Interval": 300000000000,
+                    "Attempts": 10,
+                    "Delay": 25000000000,
+                    "Mode": "delay"
+                },
+                "EphemeralDisk": {
+                    "SizeMB": 300
+                }
+            }
+        ],
+        "Update": {
+            "MaxParallel": 1,
+            "MinHealthyTime": 10000000000,
+            "HealthyDeadline": 60000000000,
+            "AutoRevert": true
+        }
+    }
+}

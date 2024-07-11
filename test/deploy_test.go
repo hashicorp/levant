@@ -23,6 +23,75 @@ func TestDeploy_basic(t *testing.T) {
 	})
 }
 
+func TestDeploy_basicJson(t *testing.T) {
+	acctest.Test(t, acctest.TestCase{
+		Steps: []acctest.TestStep{
+			{
+				Runner: acctest.DeployTestStepRunner{
+					FixtureName: "deploy_basic.nomad.json",
+					IsJSON:      true,
+				},
+				Check: acctest.CheckDeploymentStatus("successful"),
+			},
+		},
+		CleanupFunc: acctest.CleanupPurgeJob,
+	})
+}
+
+func TestDeploy_invalidJson(t *testing.T) {
+	acctest.Test(t, acctest.TestCase{
+		Steps: []acctest.TestStep{
+			{
+				Runner: acctest.DeployTestStepRunner{
+					FixtureName: "deploy_basic_invalid.nomad.json",
+					IsJSON:      true,
+				},
+				ExpectErr: true,
+				CheckErr: func(err error) bool {
+					return err.Error() == "error rendering template: Failed to parse JSON job: json: cannot unmarshal array into Go struct field Job.Job.Type of type string"
+				},
+			},
+		},
+		CleanupFunc: acctest.CleanupPurgeJob,
+	})
+}
+
+func TestDeploy_jsonWithoutIdName(t *testing.T) {
+	acctest.Test(t, acctest.TestCase{
+		Steps: []acctest.TestStep{
+			{
+				Runner: acctest.DeployTestStepRunner{
+					FixtureName: "deploy_jsonWithoutIdName.nomad.json",
+					IsJSON:      true,
+				},
+				ExpectErr: true,
+				CheckErr: func(err error) bool {
+					return err.Error() == "error rendering template: JSON is missing ID field"
+				},
+			},
+		},
+		CleanupFunc: acctest.CleanupPurgeJob,
+	})
+}
+
+func TestDeploy_notJson(t *testing.T) {
+	acctest.Test(t, acctest.TestCase{
+		Steps: []acctest.TestStep{
+			{
+				Runner: acctest.DeployTestStepRunner{
+					FixtureName: "deploy_basic.nomad",
+					IsJSON:      true,
+				},
+				ExpectErr: true,
+				CheckErr: func(err error) bool {
+					return err.Error() == "error rendering template: Detected JSON but failed to parse JSON job: invalid character '#' looking for beginning of value"
+				},
+			},
+		},
+		CleanupFunc: acctest.CleanupPurgeJob,
+	})
+}
+
 func TestDeploy_driverError(t *testing.T) {
 	acctest.Test(t, acctest.TestCase{
 		Steps: []acctest.TestStep{
