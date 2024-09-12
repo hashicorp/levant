@@ -105,7 +105,7 @@ jobs:
           instructions: |-
             make crt
       - if: ${{ matrix.goos == 'linux' }}
-        uses: hashicorp/actions-packaging-linux@0596d94121d44bd00463ac9d245efea64ee282d0 # v1.7.0
+        uses: hashicorp/actions-packaging-linux@8d55a640bb30b5508f16757ea908b274564792d4 # v1.7.0
         with:
           name: "levant"
           description: "Levant is a templating and deployment tool for HashiCorp Nomad"
