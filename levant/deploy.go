@@ -229,7 +229,7 @@ func (l *levantDeployment) evaluationInspector(evalID *string) error {
 
 			for group, metrics := range evalInfo.FailedTGAllocs {
 
-				// Check if any nodes have been exhausted of resources and therefor are
+				// Check if any nodes have been exhausted of resources and therefore are
 				// unable to place allocs.
 				if metrics.NodesExhausted > 0 {
 					var exhausted, dimension []string
