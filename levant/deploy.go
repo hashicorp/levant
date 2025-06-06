@@ -476,7 +476,7 @@ func (l *levantDeployment) dynamicGroupCountUpdater() error {
 
 	// Gather information about the current state, if any, of the job on the
 	// Nomad cluster.
-	rJob, _, err := l.nomad.Jobs().Info(*l.config.Template.Job.Name, &nomad.QueryOptions{})
+	rJob, _, err := l.nomad.Jobs().Info(*l.config.Template.Job.Name, &nomad.QueryOptions{Namespace: *l.config.Template.Job.Namespace})
 
 	// This is a hack due to GH-1849; we check the error string for 404, which
 	// indicates the job is not running, not that there was an error in the API
