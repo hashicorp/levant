@@ -10,7 +10,7 @@
 
 # devbuild compiles the binary
 # -----------------------------------
-FROM golang:1.17 AS devbuild
+FROM golang:1.21 AS devbuild
 
 # Disable CGO to make sure we build static binaries
 ENV CGO_ENABLED=0
