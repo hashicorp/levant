@@ -92,6 +92,7 @@ func (c *PlanCommand) Run(args []string) int {
 		Template: &structs.TemplateConfig{},
 	}
 
+	var strictMode bool
 	flags := c.Meta.FlagSet("plan", FlagSetVars)
 	flags.Usage = func() { c.UI.Output(c.Help()) }
 
@@ -102,6 +103,7 @@ func (c *PlanCommand) Run(args []string) int {
 	flags.StringVar(&level, "log-level", "INFO", "")
 	flags.StringVar(&format, "log-format", "HUMAN", "")
 	flags.Var((*helper.FlagStringSlice)(&config.Template.VariableFiles), "var-file", "")
+	flags.BoolVar(&strictMode, "strict", false, "")
 
 	if err = flags.Parse(args); err != nil {
 		return 1
@@ -128,7 +130,7 @@ func (c *PlanCommand) Run(args []string) int {
 	}
 
 	config.Template.Job, err = template.RenderJob(config.Template.TemplateFile,
-		config.Template.VariableFiles, config.Client.ConsulAddr, &c.Meta.flagVars)
+		config.Template.VariableFiles, config.Client.ConsulAddr, strictMode, &c.Meta.flagVars)
 
 	if err != nil {
 		c.UI.Error(fmt.Sprintf("[ERROR] levant/command: %v", err))
