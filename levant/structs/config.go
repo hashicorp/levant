@@ -86,6 +86,10 @@ type TemplateConfig struct {
 	// VariableFiles contains the variables which will be substituted into the
 	// templateFile before deployment.
 	VariableFiles []string
+
+	// VariableFiles contains the variables which will be substituted into the
+	// templateFile before deployment.
+	IsJSON bool
 }
 
 // ScaleConfig contains all the scaling specific configuration options.

@@ -20,6 +20,7 @@ type DeployTestStepRunner struct {
 	Canary     int
 	ForceBatch bool
 	ForceCount bool
+	IsJSON     bool
 }
 
 // Run renders the job fixture and triggers a deployment
@@ -29,7 +30,7 @@ func (c DeployTestStepRunner) Run(s *TestState) error {
 	}
 	c.Vars["job_name"] = s.JobName
 
-	job, err := template.RenderJob("fixtures/"+c.FixtureName, []string{}, "", &c.Vars)
+	job, err := template.RenderJob("fixtures/"+c.FixtureName, []string{}, "", &c.Vars, c.IsJSON)
 	if err != nil {
 		return fmt.Errorf("error rendering template: %s", err)
 	}
@@ -42,7 +43,8 @@ func (c DeployTestStepRunner) Run(s *TestState) error {
 		},
 		Client: &structs.ClientConfig{},
 		Template: &structs.TemplateConfig{
-			Job: job,
+			Job:    job,
+			IsJSON: c.IsJSON,
 		},
 	}
 

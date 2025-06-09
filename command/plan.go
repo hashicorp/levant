@@ -67,6 +67,9 @@ General Options:
     Specify the format of Levant's logs. Valid values are HUMAN or JSON. The
     default is HUMAN.
 
+  -json
+    Process template file as JSON
+
   -var-file=<file>
     Path to a file containing user variables used when rendering the job
     template. You can repeat this flag multiple times to supply multiple
@@ -101,6 +104,7 @@ func (c *PlanCommand) Run(args []string) int {
 	flags.BoolVar(&config.Plan.IgnoreNoChanges, "ignore-no-changes", false, "")
 	flags.StringVar(&level, "log-level", "INFO", "")
 	flags.StringVar(&format, "log-format", "HUMAN", "")
+	flags.BoolVar(&config.Template.IsJSON, "json", false, "")
 	flags.Var((*helper.FlagStringSlice)(&config.Template.VariableFiles), "var-file", "")
 
 	if err = flags.Parse(args); err != nil {
@@ -128,7 +132,7 @@ func (c *PlanCommand) Run(args []string) int {
 	}
 
 	config.Template.Job, err = template.RenderJob(config.Template.TemplateFile,
-		config.Template.VariableFiles, config.Client.ConsulAddr, &c.Meta.flagVars)
+		config.Template.VariableFiles, config.Client.ConsulAddr, &c.Meta.flagVars, config.Template.IsJSON)
 
 	if err != nil {
 		c.UI.Error(fmt.Sprintf("[ERROR] levant/command: %v", err))
