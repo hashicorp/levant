@@ -84,7 +84,7 @@ func (l *levantDeployment) jobAllocationChecker(evalID *string) bool {
 	q := nomadHelper.GenerateBlockingQueryOptions(l.config.Template.Job.Namespace)
 
 	// Build our small internal checking struct.
-	levantTasks := make(map[TaskCoordinate]string)
+	levantTasks := make(map[TaskCoordinate]*nomad.TaskState)
 
 	for {
 
@@ -103,15 +103,15 @@ func (l *levantDeployment) jobAllocationChecker(evalID *string) bool {
 		// If we get here, set the wi to the latest Index.
 		q.WaitIndex = meta.LastIndex
 
-		complete, deadTasks := allocationStatusChecker(levantTasks, allocs)
+		complete, failedTasks := allocationStatusChecker(levantTasks, allocs)
 
 		// depending on how we finished up we report our status
 		// If we have no allocations left to track then we can exit and log
 		// information depending on the success.
-		if complete && deadTasks == 0 {
-			log.Info().Msg("levant/job_status_checker: all allocations in deployment of job are running")
+		if complete && failedTasks == 0 {
+			log.Info().Msg("levant/job_status_checker: all allocations in deployment of job are running or finished successfully")
 			return true
-		} else if complete && deadTasks > 0 {
+		} else if complete && failedTasks > 0 {
 			return false
 		}
 	}
@@ -121,31 +121,31 @@ func (l *levantDeployment) jobAllocationChecker(evalID *string) bool {
 // job deployment, an update Levants internal tracking on task status based on
 // this. This functionality exists as Nomad does not currently support
 // deployments across all job types.
-func allocationStatusChecker(levantTasks map[TaskCoordinate]string, allocs []*nomad.AllocationListStub) (bool, int) {
+func allocationStatusChecker(levantTasks map[TaskCoordinate]*nomad.TaskState, allocs []*nomad.AllocationListStub) (bool, int) {
 
 	complete := true
-	deadTasks := 0
+	failedTasks := 0
 
 	for _, alloc := range allocs {
-		for taskName, task := range alloc.TaskStates {
+		for taskName, taskState := range alloc.TaskStates {
 			// if the state is one we haven't seen yet then we print a message
-			if levantTasks[TaskCoordinate{alloc.ID, taskName}] != task.State {
+			if levantTasks[TaskCoordinate{alloc.ID, taskName}] != taskState {
 				log.Info().Msgf("levant/job_status_checker: task %s in allocation %s now in %s state",
-					taskName, alloc.ID, task.State)
+					taskName, alloc.ID, taskState.State)
 				// then we record the new state
-				levantTasks[TaskCoordinate{alloc.ID, taskName}] = task.State
+				levantTasks[TaskCoordinate{alloc.ID, taskName}] = taskState
 			}
 
-			// then we have some case specific actions
-			switch levantTasks[TaskCoordinate{alloc.ID, taskName}] {
 			// if a task is still pendign we are not yet done
-			case "pending":
+			if levantTasks[TaskCoordinate{alloc.ID, taskName}].State == "pending" {
 				complete = false
-				// if the task is dead we record that
-			case "dead":
-				deadTasks++
+			}
+
+			// if a task failed we record that
+			if levantTasks[TaskCoordinate{alloc.ID, taskName}].Failed {
+				failedTasks++
 			}
 		}
 	}
-	return complete, deadTasks
+	return complete, failedTasks
 }
