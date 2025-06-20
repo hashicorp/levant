@@ -80,9 +80,7 @@ func RenderTemplate(templateFile string, variableFiles []string, addr string, fl
 		if err != nil {
 			return
 		}
-		for k, v := range variables {
-			mergedVariables[k] = v
-		}
+		deepMerge(mergedVariables, variables)
 	}
 
 	src, err := ioutil.ReadFile(t.jobTemplateFile)
@@ -145,6 +143,9 @@ func (t *tmpl) parseYAMLVars(variableFile string) (variables map[string]interfac
 	if err = yaml.Unmarshal(yamlFile, &variables); err != nil {
 		return
 	}
+	
+	// Convert any map[interface{}]interface{} to map[string]interface{} for proper deep merge
+	variables = convertYAMLMap(variables)
 	return variables, nil
 }
 
@@ -168,4 +169,65 @@ func (t *tmpl) renderTemplate(src string, variables map[string]interface{}) (tpl
 	}
 
 	return tpl, err
+}
+
+// convertYAMLMap recursively converts map[interface{}]interface{} to map[string]interface{}
+// This is needed because YAML unmarshaling can create mixed key types
+func convertYAMLMap(input map[string]interface{}) map[string]interface{} {
+	result := make(map[string]interface{})
+	for key, value := range input {
+		result[key] = convertYAMLValue(value)
+	}
+	return result
+}
+
+// convertYAMLValue converts interface{} values, handling nested maps and slices
+func convertYAMLValue(value interface{}) interface{} {
+	switch v := value.(type) {
+	case map[interface{}]interface{}:
+		// Convert map[interface{}]interface{} to map[string]interface{}
+		result := make(map[string]interface{})
+		for k, val := range v {
+			if keyStr, ok := k.(string); ok {
+				result[keyStr] = convertYAMLValue(val)
+			}
+		}
+		return result
+	case map[string]interface{}:
+		// Already the right type, but recursively convert values
+		result := make(map[string]interface{})
+		for k, val := range v {
+			result[k] = convertYAMLValue(val)
+		}
+		return result
+	case []interface{}:
+		// Convert slice elements
+		result := make([]interface{}, len(v))
+		for i, val := range v {
+			result[i] = convertYAMLValue(val)
+		}
+		return result
+	default:
+		// Return as-is for primitive types
+		return value
+	}
+}
+
+// deepMerge recursively merges src map into dst map, handling nested structures
+func deepMerge(dst, src map[string]interface{}) {
+	for key, srcVal := range src {
+		if dstVal, exists := dst[key]; exists {
+			// Both values exist, check if they are both maps
+			if dstMap, dstIsMap := dstVal.(map[string]interface{}); dstIsMap {
+				if srcMap, srcIsMap := srcVal.(map[string]interface{}); srcIsMap {
+					// Both are maps, merge recursively
+					deepMerge(dstMap, srcMap)
+					continue
+				}
+			}
+		}
+		// Either key doesn't exist in dst, or one of the values is not a map
+		// In either case, overwrite with src value
+		dst[key] = srcVal
+	}
 }
