@@ -34,6 +34,10 @@ func (c DeployTestStepRunner) Run(s *TestState) error {
 		return fmt.Errorf("error rendering template: %s", err)
 	}
 
+	if job.Namespace != nil {
+		s.Namespace = *job.Namespace
+	}
+
 	cfg := &levant.DeployConfig{
 		Deploy: &structs.DeployConfig{
 			Canary:     c.Canary,
