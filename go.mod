@@ -8,7 +8,7 @@ require (
 	github.com/hashicorp/consul/api v1.23.0
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/nomad v1.6.2
-	github.com/hashicorp/nomad/api v0.0.0-20230913164725-73e372ad9403
+	github.com/hashicorp/nomad/api v0.0.0-20250620152331-1030760d3f77
 	github.com/hashicorp/terraform v0.13.5
 	github.com/mattn/go-isatty v0.0.20
 	github.com/mitchellh/cli v1.1.5
@@ -30,9 +30,9 @@ require (
 	github.com/bgentry/speakeasy v0.1.0 // indirect
 	github.com/fatih/color v1.16.0 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
-	github.com/google/go-cmp v0.5.9 // indirect
+	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/uuid v1.3.0 // indirect
-	github.com/gorilla/websocket v1.5.0 // indirect
+	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/hashicorp/cronexpr v1.1.2 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
