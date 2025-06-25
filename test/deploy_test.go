@@ -62,7 +62,7 @@ func TestDeploy_driverError(t *testing.T) {
 					FixtureName: "deploy_driver_error.nomad",
 				},
 				ExpectErr: true,
-				CheckErr: func(err error) bool {
+				CheckErr: func(_ error) bool {
 					// this is a bit pointless without the error bubbled up from levant
 					return true
 				},
@@ -84,7 +84,7 @@ func TestDeploy_allocError(t *testing.T) {
 					FixtureName: "deploy_alloc_error.nomad",
 				},
 				ExpectErr: true,
-				CheckErr: func(err error) bool {
+				CheckErr: func(_ error) bool {
 					// this is a bit pointless without the error bubbled up from levant
 					return true
 				},

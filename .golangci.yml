@@ -7,41 +7,25 @@ run:
   tests: true
 
 output:
-  format: colored-line-number
+  formats: colored-line-number
   print-issued-lines: true
   print-linter-name: true
 
 linters:
   enable:
-    - deadcode
     - errcheck
-    - goimports
+    - goconst
+    - gocyclo
     - gofmt
-    - golint
+    - goimports
+    - gosec
     - govet
     - ineffassign
     - misspell
-    - structcheck
-    - unconvert
-    - varcheck
-    - interfacer
-    - unparam
-    - depguard
-    - goconst
-    - gocyclo
-    - gosec
-    - maligned
     - prealloc
-  disable:
-    # - nakedret
-    # - gosimple
-    # - staticcheck
-    # - stylecheck
-    # - unused
-    # - dupl
-    # - gochecknoinits
-    # - gochecknoglobals
-    # - lll
-    # - typecheck
+    - revive
+    - unconvert
+    - unparam
+    - unused
   enable-all: false
   disable-all: true

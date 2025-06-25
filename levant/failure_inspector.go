@@ -15,7 +15,7 @@ import (
 // checkFailedDeployment helps log information about deployment failures.
 func (l *levantDeployment) checkFailedDeployment(depID *string) {
 
-	var allocIDS []string
+	var allocIDs []string
 
 	allocs, _, err := l.nomad.Deployments().Allocations(*depID, nil)
 	if err != nil {
@@ -29,7 +29,7 @@ func (l *levantDeployment) checkFailedDeployment(depID *string) {
 		for _, task := range alloc.TaskStates {
 			// we need to test for success both for service style jobs and for batch style jobs
 			if task.State != "started" {
-				allocIDS = append(allocIDS, alloc.ID)
+				allocIDs = append(allocIDs, alloc.ID)
 				// once we add the allocation we don't need to add it again
 				break
 			}
@@ -39,10 +39,10 @@ func (l *levantDeployment) checkFailedDeployment(depID *string) {
 	// Setup a waitgroup so the function doesn't return until all allocations have
 	// been inspected.
 	var wg sync.WaitGroup
-	wg.Add(+len(allocIDS))
+	wg.Add(+len(allocIDs))
 
 	// Inspect each allocation.
-	for _, id := range allocIDS {
+	for _, id := range allocIDs {
 		log.Debug().Msgf("levant/failure_inspector: launching allocation inspector for alloc %v", id)
 		go l.allocInspector(id, &wg)
 	}

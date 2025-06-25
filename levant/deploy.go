@@ -316,9 +316,8 @@ func (l *levantDeployment) deploymentWatcher(depID string) (success bool) {
 
 		if cont {
 			continue
-		} else {
-			return true
 		}
+		return true
 	}
 }
 
