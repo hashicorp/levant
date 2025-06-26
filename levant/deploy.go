@@ -5,7 +5,6 @@ package levant
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -40,10 +39,6 @@ type DeployConfig struct {
 func newLevantDeployment(config *DeployConfig, nomadClient *nomad.Client) (*levantDeployment, error) {
 
 	var err error
-	if config.Deploy.EnvVault {
-		config.Deploy.VaultToken = os.Getenv("VAULT_TOKEN")
-	}
-
 	dep := &levantDeployment{}
 	dep.config = config
 
@@ -120,8 +115,6 @@ func (l *levantDeployment) preDeployValidate() (success bool) {
 func (l *levantDeployment) deploy() (success bool) {
 
 	log.Info().Msgf("levant/deploy: triggering a deployment")
-
-	l.config.Template.Job.VaultToken = &l.config.Deploy.VaultToken
 
 	eval, _, err := l.nomad.Jobs().Register(l.config.Template.Job, nil)
 	if err != nil {
@@ -323,9 +316,8 @@ func (l *levantDeployment) deploymentWatcher(depID string) (success bool) {
 
 		if cont {
 			continue
-		} else {
-			return true
 		}
+		return true
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"reflect"
 	"strconv"
@@ -86,7 +87,7 @@ func funcMap(consulClient *consul.Client) template.FuncMap {
 const SprigVersion = "3.1.0"
 
 func sprigVersionFunc() func(string) (string, error) {
-	return func(s string) (string, error) {
+	return func(_ string) (string, error) {
 		return SprigVersion, nil
 	}
 }
@@ -315,7 +316,11 @@ func add(b, a interface{}) (interface{}, error) {
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 			return av.Int() + bv.Int(), nil
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			return av.Int() + int64(bv.Uint()), nil
+			ub := bv.Uint()
+			if ub > math.MaxInt {
+				return nil, fmt.Errorf("uint value overflows int")
+			}
+			return av.Int() + int64(ub), nil
 		case reflect.Float32, reflect.Float64:
 			return float64(av.Int()) + bv.Float(), nil
 		default:
@@ -324,7 +329,11 @@ func add(b, a interface{}) (interface{}, error) {
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		switch bv.Kind() {
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			return int64(av.Uint()) + bv.Int(), nil
+			ua := av.Uint()
+			if ua > math.MaxInt {
+				return nil, fmt.Errorf("uint value overflows int")
+			}
+			return int64(ua) + bv.Int(), nil
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 			return av.Uint() + bv.Uint(), nil
 		case reflect.Float32, reflect.Float64:
@@ -358,7 +367,11 @@ func subtract(b, a interface{}) (interface{}, error) {
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 			return av.Int() - bv.Int(), nil
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			return av.Int() - int64(bv.Uint()), nil
+			ub := bv.Uint()
+			if ub > math.MaxInt {
+				return nil, fmt.Errorf("uint value overflows int")
+			}
+			return av.Int() - int64(ub), nil
 		case reflect.Float32, reflect.Float64:
 			return float64(av.Int()) - bv.Float(), nil
 		default:
@@ -367,7 +380,11 @@ func subtract(b, a interface{}) (interface{}, error) {
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		switch bv.Kind() {
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			return int64(av.Uint()) - bv.Int(), nil
+			ua := av.Uint()
+			if ua > math.MaxInt {
+				return nil, fmt.Errorf("uint value overflows int")
+			}
+			return int64(ua) - bv.Int(), nil
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 			return av.Uint() - bv.Uint(), nil
 		case reflect.Float32, reflect.Float64:
@@ -401,7 +418,11 @@ func multiply(b, a interface{}) (interface{}, error) {
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 			return av.Int() * bv.Int(), nil
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			return av.Int() * int64(bv.Uint()), nil
+			ub := bv.Uint()
+			if ub > math.MaxInt {
+				return nil, fmt.Errorf("uint value overflows int")
+			}
+			return av.Int() * int64(ub), nil
 		case reflect.Float32, reflect.Float64:
 			return float64(av.Int()) * bv.Float(), nil
 		default:
@@ -410,7 +431,11 @@ func multiply(b, a interface{}) (interface{}, error) {
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		switch bv.Kind() {
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			return int64(av.Uint()) * bv.Int(), nil
+			ua := av.Uint()
+			if ua > math.MaxInt {
+				return nil, fmt.Errorf("uint value overflows int")
+			}
+			return int64(ua) * bv.Int(), nil
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 			return av.Uint() * bv.Uint(), nil
 		case reflect.Float32, reflect.Float64:
@@ -444,7 +469,11 @@ func divide(b, a interface{}) (interface{}, error) {
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 			return av.Int() / bv.Int(), nil
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			return av.Int() / int64(bv.Uint()), nil
+			ub := bv.Uint()
+			if ub > math.MaxInt {
+				return nil, fmt.Errorf("uint value overflows int")
+			}
+			return av.Int() / int64(ub), nil
 		case reflect.Float32, reflect.Float64:
 			return float64(av.Int()) / bv.Float(), nil
 		default:
@@ -453,7 +482,11 @@ func divide(b, a interface{}) (interface{}, error) {
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		switch bv.Kind() {
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			return int64(av.Uint()) / bv.Int(), nil
+			ua := av.Uint()
+			if ua > math.MaxInt {
+				return nil, fmt.Errorf("uint value overflows int")
+			}
+			return int64(ua) / bv.Int(), nil
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 			return av.Uint() / bv.Uint(), nil
 		case reflect.Float32, reflect.Float64:
@@ -487,14 +520,22 @@ func modulo(b, a interface{}) (interface{}, error) {
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 			return av.Int() % bv.Int(), nil
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			return av.Int() % int64(bv.Uint()), nil
+			ub := bv.Uint()
+			if ub > math.MaxInt {
+				return nil, fmt.Errorf("uint value overflows int")
+			}
+			return av.Int() % int64(ub), nil
 		default:
 			return nil, fmt.Errorf("modulo: unknown type for %q (%T)", bv, b)
 		}
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		switch bv.Kind() {
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			return int64(av.Uint()) % bv.Int(), nil
+			ua := av.Uint()
+			if ua > math.MaxInt {
+				return nil, fmt.Errorf("uint value overflows int")
+			}
+			return int64(ua) % bv.Int(), nil
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 			return av.Uint() % bv.Uint(), nil
 		default:

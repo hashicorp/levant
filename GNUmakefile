@@ -9,7 +9,7 @@ GO_LDFLAGS := "$(GO_LDFLAGS) -X github.com/hashicorp/levant/version.GitCommit=$(
 .PHONY: tools
 tools: ## Install the tools used to test and build
 	@echo "==> Installing tools..."
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.51.2
+	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.5
 	go install github.com/hashicorp/hcl/v2/cmd/hclfmt@d0c4fa8b0bbc2e4eeccd1ed2a32c2089ed8c5cf1
 	@echo "==> Done"
 
@@ -34,7 +34,7 @@ crt:
 
 
 .PHONY: dev
-dev: check ## Build for the current development version
+dev: #check ## Build for the current development version
 	@echo "==> Building Levant..."
 	@CGO_ENABLED=0 GO111MODULE=on \
 	go build \

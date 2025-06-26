@@ -1,5 +1,12 @@
 ## UNRELEASED
 
+__BACKWARDS INCOMPATIBILITIES:__
+* cli: Levant no longer supports the deprecated Vault token workflow.
+
+IMPROVEMENT:
+* build: Now builds with Go v1.24
+* deps: Updated Nomad API to v1.10.2
+
 ## 0.3.3 (October 5, 2023)
 
 IMPROVEMENTS:
@@ -102,7 +109,7 @@ IMPROVEMENTS:
  * JSON can now be used as a variable file format [GH-210](https://github.com/jrasell/levant/pull/210)
  * The template funcs now include numerous parse functions to provide greater flexibility [GH-212](https://github.com/jrasell/levant/pull/212)
  * Ability to configure allow-stale Nomad setting when performing calls to help in environments with high network latency [GH-185](https://github.com/jrasell/levant/pull/185)
- 
+
 BUG FIXES:
  * Update vendored package of Nomad to fix failures when interacting with jobs configured with update progress_deadline params [GH-216](https://github.com/jrasell/levant/pull/216)
 
@@ -124,7 +131,7 @@ IMPROVEMENTS:
  * Use govvv for builds and to supply additional version information in the version command output [GH-151](https://github.com/jrasell/levant/pull/151)
  * Levant will now run Nomad plan before deployments to log the plan diff [GH-153](https://github.com/jrasell/levant/pull/153)
  * Logging can now be output in JSON format and uses contextual data for better processing ability [GH-157](https://github.com/jrasell/levant/pull/157)
- 
+
 BUG FIXES:
  * Fix occasional panic when performing deployment check of a batch job deployment [GH-150](https://github.com/jrasell/levant/pull/150)
 
@@ -132,13 +139,13 @@ BUG FIXES:
 
 IMPROVEMENTS:
  * New 'dispatch' command which allows Levant to dispatch Nomad jobs which will go through Levants additional job checking [GH-128](https://github.com/jrasell/levant/pull/128)
- * New 'force-batch' deploy flag which allows users to trigger a periodic run on deployment independent of the schedule [GH-110](https://github.com/jrasell/levant/pull/110) 
+ * New 'force-batch' deploy flag which allows users to trigger a periodic run on deployment independent of the schedule [GH-110](https://github.com/jrasell/levant/pull/110)
  * Enhanced job status checking for non-service type jobs [GH-96](https://github.com/jrasell/levant/pull/96), [GH-109](https://github.com/jrasell/levant/pull/109)
  * Implement config struct for Levant to track config during run [GH-102](https://github.com/jrasell/levant/pull/102)
  * Test and build Levant with Go version 1.10 [GH-119](https://github.com/jrasell/levant/pull/119), [GH-116](https://github.com/jrasell/levant/pull/116)
  * Add a catchall for unhandled failure cases to log more useful information for the operator [GH-138](https://github.com/jrasell/levant/pull/138)
  * Updated vendored dependancy of Nomad to 0.8.0 [GH-137](https://github.com/jrasell/levant/pull/137)
- 
+
 BUG FIXES:
  * Service jobs that don't have an update stanza do not produce deployments and should skip the deployment watcher [GH-99](https://github.com/jrasell/levant/pull/99)
  * Ensure the count updater ignores jobs that are in stopped state [GH-106](https://github.com/jrasell/levant/pull/106)

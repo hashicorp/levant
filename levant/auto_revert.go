@@ -37,11 +37,11 @@ func (l *levantDeployment) autoRevert(dep *nomad.Deployment) {
 		if success {
 			log.Info().Msgf("levant/auto_revert: auto-revert of job %s was successful", dep.JobID)
 			break
-		} else {
-			log.Error().Msgf("levant/auto_revert: auto-revert of job %s failed; POTENTIAL OUTAGE SITUATION", dep.JobID)
-			l.checkFailedDeployment(&revertDep.ID)
-			break
 		}
+
+		log.Error().Msgf("levant/auto_revert: auto-revert of job %s failed; POTENTIAL OUTAGE SITUATION", dep.JobID)
+		l.checkFailedDeployment(&revertDep.ID)
+		break
 	}
 
 	// At this point we have not been able to get the latest deploymentID that
