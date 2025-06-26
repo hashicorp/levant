@@ -13,7 +13,7 @@ import (
 	"github.com/hashicorp/levant/client"
 	"github.com/hashicorp/levant/helper"
 	nomad "github.com/hashicorp/nomad/api"
-	"github.com/hashicorp/nomad/jobspec"
+	"github.com/hashicorp/nomad/jobspec2"
 	"github.com/hashicorp/terraform/configs"
 	"github.com/hashicorp/terraform/configs/hcl2shim"
 	"github.com/rs/zerolog/log"
@@ -29,7 +29,7 @@ func RenderJob(templateFile string, variableFiles []string, addr string, flagVar
 		return
 	}
 
-	return jobspec.Parse(tpl)
+	return jobspec2.Parse("", tpl)
 }
 
 // RenderTemplate is the main entry point to render the template based on the
