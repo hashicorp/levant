@@ -1,5 +1,7 @@
 # Levant
 
+_Levant v0.4.0 is the final release of Levant. All users are encouraged to migrate to [Nomad Pack](https://github.com/hashicorp/nomad-pack)._
+
 [![Build Status](https://circleci.com/gh/hashicorp/levant.svg?style=svg)](https://circleci.com/gh/hashicorp/levant) [![Discuss](https://img.shields.io/badge/discuss-nomad-00BC7F?style=flat)](https://discuss.hashicorp.com/c/nomad)
 
 Levant is an open source templating and deployment tool for [HashiCorp Nomad][] jobs that provides
