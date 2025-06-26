@@ -1,4 +1,4 @@
-## UNRELEASED
+## 0.4.0 (June 26, 2025)
 
 __BACKWARDS INCOMPATIBILITIES:__
 * cli: Levant no longer supports the deprecated Vault token workflow.
