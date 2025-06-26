@@ -91,7 +91,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           GO_LDFLAGS: ${{ needs.generate-ldflags.outputs.ldflags }}
           CGO_ENABLED: "0"
-          BIN_PATH: pkg/${{ matrix.goos }}_${{ matrix.goarch }}/levant
+          BIN_PATH: dist/levant
         uses: hashicorp/actions-go-build@37358f6098ef21b09542d84a9814ebb843aa4e3e # v1.0.0
         with:
           product_name: ${{ env.PKG_NAME }}
@@ -112,7 +112,7 @@ jobs:
           maintainer: "HashiCorp"
           homepage: "https://github.com/hashicorp/levant"
           license: "MPL-2.0"
-          binary: "pkg/${{ matrix.goos }}_${{ matrix.goarch }}/levant"
+          binary: "dist/levant"
           deb_depends: "openssl"
           rpm_depends: "openssl"
       - if: ${{ matrix.goos == 'linux' }}
