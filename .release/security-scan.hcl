@@ -27,6 +27,8 @@ binary {
     suppress {
       vulnerabilities = [
         "GHSA-rx97-6c62-55mf", // https://github.com/github/advisory-database/pull/5759 TODO(dduzgun): remove when dep updated.
+        "CVE-2025-46394",      // busybox@1.37.0-r18 TODO(dduzgun): remove when dep updated.
+        "CVE-2024-58251",      // busybox@1.37.0-r18 TODO(dduzgun): remove when dep updated.
       ]
     }
   }
