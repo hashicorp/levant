@@ -85,15 +85,13 @@ jobs:
         uses: actions/setup-go@f111f3307d8850f501ac008e886eec1fd1932a34 # v5.3.0
         with:
           go-version-file: ".go-version"
-      - name: Determine artifact basename
-        run: echo "ARTIFACT_BASENAME=${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}.zip" >> "$GITHUB_ENV"
       - name: Build Levant
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           GO_LDFLAGS: ${{ needs.generate-ldflags.outputs.ldflags }}
           CGO_ENABLED: "0"
-          BIN_PATH: ${{ env.PKG_NAME }}_${{ needs.get-product-version.outputs.product-version }}_${{ matrix.goos }}_${{ matrix.goarch }}
+          BIN_PATH: pkg/${{ matrix.goos }}_${{ matrix.goarch }}/levant
         uses: hashicorp/actions-go-build@37358f6098ef21b09542d84a9814ebb843aa4e3e # v1.0.0
         with:
           product_name: ${{ env.PKG_NAME }}
@@ -114,7 +112,7 @@ jobs:
           maintainer: "HashiCorp"
           homepage: "https://github.com/hashicorp/levant"
           license: "MPL-2.0"
-          binary: out/${{ env.ARTIFACT_BASENAME }}
+          binary: "pkg/${{ matrix.goos }}_${{ matrix.goarch }}/levant"
           deb_depends: "openssl"
           rpm_depends: "openssl"
       - if: ${{ matrix.goos == 'linux' }}
