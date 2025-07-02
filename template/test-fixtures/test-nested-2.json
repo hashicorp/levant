@@ -1,0 +1,11 @@
+{
+  "config": {
+    "database": {
+      "username": "admin",
+      "password": "secret"
+    },
+    "logging": {
+      "level": "debug"
+    }
+  }
+}
