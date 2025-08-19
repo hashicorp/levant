@@ -4,6 +4,7 @@
 package template
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -25,11 +26,11 @@ import (
 
 // funcMap builds the template functions and passes the consulClient where this
 // is required.
-func funcMap(consulClient *consul.Client) template.FuncMap {
+func funcMap(t *tmpl) template.FuncMap {
 	r := template.FuncMap{
-		"consulKey":          consulKeyFunc(consulClient),
-		"consulKeyExists":    consulKeyExistsFunc(consulClient),
-		"consulKeyOrDefault": consulKeyOrDefaultFunc(consulClient),
+		"consulKey":          consulKeyFunc(t.consulClient),
+		"consulKeyExists":    consulKeyExistsFunc(t.consulClient),
+		"consulKeyOrDefault": consulKeyOrDefaultFunc(t.consulClient),
 		"env":                envFunc(),
 		"fileContents":       fileContents(),
 		"loop":               loop,
@@ -44,6 +45,9 @@ func funcMap(consulClient *consul.Client) template.FuncMap {
 		"timeNowTimezone":    timeNowTimezoneFunc(),
 		"toLower":            toLower,
 		"toUpper":            toUpper,
+
+		//Nested templates.
+		"include": includeFunc(t),
 
 		// Maths.
 		"add":      add,
@@ -303,6 +307,37 @@ func fileContents() func(string) (string, error) {
 			return "", err
 		}
 		return string(contents), nil
+	}
+}
+
+func includeFunc(t *tmpl) func(string, interface{}) (string, error) {
+	return func(tmplPath string, data interface{}) (string, error) {
+		if tmplPath == "" {
+			return "", fmt.Errorf("include: empty template path")
+		}
+		if t.callStackContains(tmplPath) {
+			stack := strings.Join(append(t.callStack, tmplPath), "\n  calls: ")
+			return "", fmt.Errorf("include: cyclic include detected in template '%s':\n%s", tmplPath, stack)
+		}
+
+		tmplContents, err := ioutil.ReadFile(tmplPath)
+		if err != nil {
+			return "", err
+		}
+		innerTmpl, err := t.newTemplate().Parse(string(tmplContents))
+		if err != nil {
+			return "", fmt.Errorf("include: unable to parse template '%s': %w", tmplPath, err)
+		}
+
+		t.pushCall(tmplPath)
+		defer t.popCall()
+
+		var out bytes.Buffer
+		err = innerTmpl.Execute(&out, data)
+		if err != nil {
+			return "", fmt.Errorf("include: unable to execute template '%s': %w", tmplPath, err)
+		}
+		return out.String(), nil
 	}
 }
 
